@@ -1,19 +1,251 @@
 import numpy as np
 
+
+def EvalPhenoSarrahV3(j, data, paramITK, paramVariete): 
+  
+  """
+  Traduit depuis phenologie.pas
+
+  Cette procédure est appelée en début de journée et fait évoluer les phases
+  phénologiques. Pour celà, elle incrémente les numéro de phase et change la
+  valeur du seuil de somme de degré jours de la phase suivante.
+  ChangePhase est un booléen permettant d'informer le modéle pour connaître
+  si un jour est un jour de changement
+  de phase. Celé permets d'initialiser les variables directement dans les
+  modules spécifiques.
+  Méthode générique pour le test de fin de la phase photopériodique.
+  PhasePhotoper = 0 en fin de la phase photoper et = 1 en debut de la phase
+
+  --> Stades phénologiques pour les céréales:
+  // 0 : du jour de semis au début des conditions favorables pour la germination et de la récolte é la fin de simulation (pas de culture)
+  // 1 : du début des conditions favorables pour la germination au jour de la levée
+  // 2 : du jour de la levée au début de la phase photopériodique
+  // 3 : du début de la phase photopériodique au début de la phase reproductive
+  // 4 : du début de la phase reproductive au début de la maturation (seulement pour le mais et riz) Pas pris en compte ici!
+  //      sousphase1  de début RPR é RPR/4
+  //      sousphase2  de RPR/4 é RPR/2
+  //      sousphase3 de RPR/2 é 3/4 RPR
+  //      sousphase4 de 3/4 RPR é fin RPR
+  // 5 : du début de la maturation au stade grain laiteux
+  // 6 : du début du stade grain laiteux au jour de récolte
+  // 7 : le jour de la récolte
+  Dans le cas des simulations pluriannuelles en continue, on ne réinitialise pas les réservoirs, é la récolte on met le front d'humectation é la profndeur du réservoir de surface
+  Cela permet de garder le phénoméne de contrainte d'enracinement pour la saison suivante s'il y a peu de pluie
+  tout en ayant le stock d'eau en profondeur restant de la saison précédente.
+
+  Args:
+      j (int): numéro du jour depuis le début de la simulation
+      data (dict): dictionnaire de matrices numpy
+      paramITK (dict): dictionnaire de float
+
+  Returns:
+      dict: dictionnaire de matrices numpy
+  """
+
+  # arrivés au stade 7, on remet les variables phénologiques principales à zero
+  data["changePhase"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["changePhase"][:,:,j])
+  data["sdj"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["sdj"][:,:,j])
+  data["ruRac"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["numPhase"][:,:,j])
+  data["nbJourCompte"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["numPhase"][:,:,j])
+  data["startLock"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 1, data["startLock"][:,:,j])
+  # on laisse cette condition en dernier...
+  data["numPhase"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["numPhase"][:,:,j])
+
+  
+
+  ###### Initialisation - test phase 0 - germination
+  # on teste si on est à la phase 0 et que la quantité d'eau est suffisante
+  condition = \
+    (data["numPhase"][:,:,j] == 0) & \
+    (data["stRuSurf"][:,:,j] - data["ruSurf"][:,:,j] / 10 >= paramITK["seuilEauSemis"]) & \
+    (data["startLock"][:,:,j] == 0)
+    # (data["stSurf"][:,:,j] - data["ruSurf"][:,:,j] / 10 >= paramITK["seuilEauSemis"])
+    # on remplace par la variable correcte
+    
+  
+  # on force alors le numéro de phase sur 1
+  data["numPhase"][:,:,j:] = np.where(condition, 1, data["numPhase"][:,:,j])
+
+  # on flag un changement de phase,
+  # ce qui permet de déclencher la mise à jour de la somme de températures de la phase suivante
+  data["changePhase"][:,:,j] = np.where(condition, 1, data["changePhase"][:,:,j])
+
+  # on force la somme de températures de la phase suivante sur le paramètre SDJ levée
+  data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
+    condition,
+    paramVariete["SDJLevee"],
+    data["seuilTempPhaseSuivante"][:,:,j],
+  )
+
+  # on flag ce changement de phase comme étant celui de l'initiation
+  # ce qui permet plus tard de bypasser l'incrémentation du numéro de phase
+  data["initPhase"] = data["numPhase"].copy() * 0
+  data["initPhase"][:,:,j:] = np.where(
+    condition,
+    1,
+    data["initPhase"][:,:,j]
+  )
+  
+ 
+
+  ###### Marquage des dates de changement de phase
+  ### Test phase 2
+  condition = \
+    (data["numPhase"][:,:,j] == 2) & \
+    (data["sdj"][:,:,j] >= data["seuilTempPhaseSuivante"][:,:,j])
+
+  data["changePhase"][:,:,j] = np.where(condition, 1, data["changePhase"][:,:,j])
+
+  ### Test phases 1, 4, 5, 6
+  condition = \
+    (data["numPhase"][:,:,j] != 0) & \
+    (data["numPhase"][:,:,j] != 2) & \
+    (data["numPhase"][:,:,j] != 3) & \
+    (data["sdj"][:,:,j] >= data["seuilTempPhaseSuivante"][:,:,j])
+
+  data["changePhase"][:,:,j] = np.where(condition, 1, data["changePhase"][:,:,j])
+
+  ### test phase 3
+  condition = \
+    (data["numPhase"][:,:,j] == 3) & \
+    (data["phasePhotoper"][:,:,j] == 0)
+
+  data["changePhase"][:,:,j] = np.where(condition, 1, data["changePhase"][:,:,j])
+
+  
+  
+  ###### incrémentation de la phase
+  condition = \
+    (data["numPhase"][:,:,j] != 0) & \
+    (data["changePhase"][:,:,j] == 1) & \
+    (data["initPhase"][:,:,j] != 1)  
+
+  data["numPhase"][:,:,j:] = np.where(
+    condition,
+    data["numPhase"][:,:,j] + 1 ,
+    data["numPhase"][:,:,j],
+  )
+
+  # on enregistre les sdj de la phase précédente
+  data["sommeDegresJourPhasePrec"][:,:,j:] = np.where(
+      condition,
+      data["seuilTempPhaseSuivante"][:,:,j],
+      data["sommeDegresJourPhasePrec"][:,:,j],
+  )
+
+
+
+  ### on met à jour les températures de changement de phase
+  # phase 1
+  condition = \
+    (data["numPhase"][:,:,j] == 1) & \
+    (data["changePhase"][:,:,j] == 1)
+
+  data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
+      condition,
+      paramVariete["SDJLevee"],
+      data["seuilTempPhaseSuivante"][:,:,j]
+  )
+
+  # phase 2
+  condition = \
+    (data["numPhase"][:,:,j] == 2) & \
+    (data["changePhase"][:,:,j] == 1)
+
+  data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
+      condition,
+      data["seuilTempPhaseSuivante"][:,:,j] + paramVariete["SDJBVP"],
+      data["seuilTempPhaseSuivante"][:,:,j]
+  )
+
+  # phase 3
+  condition = \
+    (data["numPhase"][:,:,j] == 3) & \
+    (data["changePhase"][:,:,j] == 1)
+
+  data["phasePhotoper"][:,:,j] = np.where(
+      condition,
+      1,
+      data["phasePhotoper"][:,:,j],
+  )  
+
+  # phase 4
+  condition = \
+    (data["numPhase"][:,:,j] == 4) & \
+    (data["changePhase"][:,:,j] == 1)
+
+  data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
+      condition,
+      data["sdj"][:,:,j] + paramVariete["SDJRPR"],
+      data["seuilTempPhaseSuivante"][:,:,j]
+  ) 
+
+  # phase 5
+  condition = \
+    (data["numPhase"][:,:,j] == 5) & \
+    (data["changePhase"][:,:,j] == 1)
+
+  data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
+      condition,
+      data["seuilTempPhaseSuivante"][:,:,j] + paramVariete["SDJMatu1"],
+      data["seuilTempPhaseSuivante"][:,:,j]
+  )
+
+  # phase 6
+  condition = \
+    (data["numPhase"][:,:,j] == 6) & \
+    (data["changePhase"][:,:,j] == 1)
+
+  data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
+      condition,
+      data["seuilTempPhaseSuivante"][:,:,j] + paramVariete["SDJMatu2"],
+      data["seuilTempPhaseSuivante"][:,:,j]
+  )                                                    
+
+
+
+
+  return data
+
+
+
+
 def EvalDegresJourSarrahV3(j, data, paramVariete):
     
+    """
+    depuis phenologie.pas 
+    
+    Pb de méthode !?
+    v1:= ((Max(TMin,TBase)+Min(TOpt1,TMax))/2 -TBase )/( TOpt1 - TBase);
+    v2:= (TL - max(TMax,TOpt2)) / (TL - TOpt2);
+    v:= (v1 * (min(TMax,TOpt1) - TMin)+(min(TOpt2,max(TOpt1,TMax)) - TOpt1) + v2 * (max(TOpt2,TMax)-TOpt2))/( TMax- TMin);
+    DegresDuJour:= v * (TOpt1-TBase);
+
+    Returns:
+        _type_: _description_
+    """
+
+    #     If Tmoy <= Topt2 then
+    #      DegresDuJour:= max(min(TOpt1,TMoy),TBase)-Tbase
+    #   else
+    #      DegresDuJour := (TOpt1-TBase) * (1 - ( (min(TL, TMoy) - TOpt2 )/(TL -TOpt2)));
+    #    If (Numphase >=1) then
+    #         SomDegresJour := SomDegresJour + DegresDuJour
+    #    else SomDegresJour := 0;
+
+
     # calcul des degrés jour
     data["ddj"][:,:,j] = np.where(
         data["tpMoy"][:,:,j] <= paramVariete["TOpt2"],
         np.maximum(np.minimum(paramVariete["TOpt1"], data["tpMoy"][:,:,j]), paramVariete["TBase"]) - paramVariete["TBase"],
-        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], data["tpMoy"][:,:,j]) - paramVariete["TOpt2"])
-            / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
+        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], data["tpMoy"][:,:,j]) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
     )  
 
     # calcul de la somme de degré jour
-    data["sdj"][:,:,j] = np.where(
+    # dans sarra-h quand on passe le stade 7, on retombe à 0 et le sdj arrête de cumuler
+    data["sdj"][:,:,j:] = np.where(
         data["numPhase"][:,:,j] >= 1,
-        data["sdj"][:,:,j-1] + data["ddj"][:,:,j],
+        data["sdj"][:,:,j] + data["ddj"][:,:,j],
         0,
     )
 
@@ -21,251 +253,163 @@ def EvalDegresJourSarrahV3(j, data, paramVariete):
 
 
 
-def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
-    """	    
-    EvolPhenoSarrahV3
-	7 phases déterminent les processus de développement de la plante. 
-	Elles sont déterminées en fonction d'un seuil de somme de degrés jours uiltempphasesuivante) et,pour la phase 3, de la photopériode.
-	ChangePhase=1 si la phase a changé le jour même, sinon 0.
-	modification 28/07/2015 retire rusurf/10 dans test semis	
-    """
-
-    ### détermination des dates de changement de phase
-
-    # test phase 0 - germination
-    condition = (data["numPhase"][:,:,j]==0) & (data["stockSurface"][:,:,j] - data["ruSurf"][:,:,j] / 10 >= paramITK["seuilEauSemis"])
-    data["changePhase"][:,:,j] = np.where(condition, 1, data["changePhase"][:,:,j])
-    data["seuilTempPhaseSuivante"][:,:,j:] = np.where(condition, paramVariete["SDJLevee"], data["seuilTempPhaseSuivante"][:,:,j])
-
-    # test phase 1 (identique test phase 4 et +)
-    condition = (data["numPhase"][:,:,j]==1) & (data["sdj"][:,:,j] >= data["seuilTempPhaseSuivante"][:,:,j])
-    data["changePhase"][:,:,j] = np.where(condition, 1, data["changePhase"][:,:,j])
-
-    # test phase 2
-    condition = (data["numPhase"][:,:,j]==2) & (data["sdj"][:,:,j] >= data["seuilTempPhaseSuivante"][:,:,j])
-    data["changePhase"][:,:,j] = np.where(condition, 1, data["changePhase"][:,:,j])
-
-    # test phase 3
-    condition = (data["numPhase"][:,:,j]==3) & (data["phasePhotoper"][:,:,j] == 0)
-    data["changePhase"][:,:,j] = np.where(condition, 1, data["changePhase"][:,:,j])
-
-    # test phase 4 et +
-    condition = (data["numPhase"][:,:,j]>=4) & (data["sdj"][:,:,j] >= data["seuilTempPhaseSuivante"][:,:,j])
-    data["changePhase"][:,:,j] = np.where(condition, 1, data["changePhase"][:,:,j])
 
 
+def EvalVitesseRacSarraV3(j, data, paramVariete):
+    # d'après phenologie.pas
 
-    ### la phase a changé, on met à jour les seuils de test de changement de phase
-    
-    data["sommeDegresJourPhasePrec"][:,:,j:] = np.where(
-        data["changePhase"][:,:,j] == 1,
-        data["seuilTempPhaseSuivante"][:,:,j],
-        data["sommeDegresJourPhasePrec"][:,:,j],
-    )
-
-    data["numPhase"][:,:,j:] = np.where(
-        data["changePhase"][:,:,j] == 1,
-        data["numPhase"][:,:,j] + 1 ,
-        data["numPhase"][:,:,j],
-    )
+    # EvalVitesseRacSarraV3
 
     # phase 1
-    data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
-        (data["changePhase"][:,:,j]==1) & (data["numPhase"][:,:,j]==1),
-        paramVariete["SDJLevee"],
-        data["seuilTempPhaseSuivante"][:,:,j]
+    data["vRac"][:,:,j:] = np.where(
+        data["numPhase"][:,:,j] == 1,
+        paramVariete['VRacLevee'],
+        data["vRac"][:,:,j],
     )
 
     # phase 2
-    data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
-        (data["changePhase"][:,:,j]==1) & (data["numPhase"][:,:,j]==2),
-        data["seuilTempPhaseSuivante"][:,:,j] + paramVariete["SDJBVP"],
-        data["seuilTempPhaseSuivante"][:,:,j]
-    )  
+    data["vRac"][:,:,j:] = np.where(
+        data["numPhase"][:,:,j] == 2,
+        paramVariete['VRacBVP'],
+        data["vRac"][:,:,j],
+    )
+
+    # phase 3
+    data["vRac"][:,:,j:] = np.where(
+        data["numPhase"][:,:,j] == 3,
+        paramVariete['VRacPSP'],
+        data["vRac"][:,:,j],
+    )
 
     # phase 4
-    data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
-        (data["changePhase"][:,:,j]==1) & (data["numPhase"][:,:,j]==4),
-        data["sdj"][:,:,j] + paramVariete["SDJRPR"],
-        data["seuilTempPhaseSuivante"][:,:,j]
-    ) 
+    data["vRac"][:,:,j:] = np.where(
+        data["numPhase"][:,:,j] == 4,
+        paramVariete['VRacRPR'],
+        data["vRac"][:,:,j],
+    )
 
     # phase 5
-    data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
-        (data["changePhase"][:,:,j]==1) & (data["numPhase"][:,:,j]==5),
-        data["seuilTempPhaseSuivante"][:,:,j] + paramVariete["SDJMatu1"],
-        data["seuilTempPhaseSuivante"][:,:,j]
-    )
-
-    # phase 6
-    data["seuilTempPhaseSuivante"][:,:,j:] = np.where(
-        (data["changePhase"][:,:,j]==1) & (data["numPhase"][:,:,j]==6),
-        data["seuilTempPhaseSuivante"][:,:,j] + paramVariete["SDJMatu2"],
-        data["seuilTempPhaseSuivante"][:,:,j]
-    )                                                    
-
-
-
-    data["phasePhotoper"][:,:,j] = np.where(
-        (data["changePhase"][:,:,j]==1) & (data["numPhase"][:,:,j]==3),
-        1,
-        data["phasePhotoper"][:,:,j],
-    )           
-
-    data["nbjStress"][:,:,j:] = np.where(
-        (data["changePhase"][:,:,j]==1) & (data["numPhase"][:,:,j]==7),
-        paramVariete["seuilCstrMortality"] + 1,
-        data["nbjStress"][:,:,j],
-    )
-
-    data["dateRecolte"][:,:,j] = np.where(
-        (data["changePhase"][:,:,j]==1) & (data["numPhase"][:,:,j]==7),
-        j,
-        data["dateRecolte"][:,:,j],
+    data["vRac"][:,:,j:] = np.where(
+        data["numPhase"][:,:,j] == 5,
+        paramVariete['VRacMatu1'],
+        data["vRac"][:,:,j],
     )
     
-    return data                            
-
-
-
-
-def PPTmoySarrahV3(j, data, paramVariete, paramITK):
-    """
-	PPTmoySarrahV3
-	Remplace photopériode: à partir de la fin de la saison des pluies on estime la durée de photopériode
-	on déduit de la date de fin de saison la date de fin de la phase photoper fn (Somme degrés Jours phases Matu + RPR, TmoyMatu), 
-	on estime donc des variétés virtuelles
-    """
-
-    # on calcule le jour de la fin de la photopériode
-    data["jourFinPP"][:,:,j:] = np.where(
-        data["phasePhotoper"][:,:,j] == 1,
-        paramITK["dateFin"] - ((paramVariete["SDJMatu1"] + paramVariete["SDJMatu2"] + paramVariete["SDJRPR"]) / (data["TMoyMatu"][:,:,j] - paramVariete["TBase"])),
-        data["jourFinPP"][:,:,j],
+    # phase 6
+    data["vRac"][:,:,j:] = np.where(
+        data["numPhase"][:,:,j] == 6,
+        paramVariete['VRacMatu2'],
+        data["vRac"][:,:,j],
     )
 
-    # on corrige les dates inférieures à 0 en rajoutant 365 j
-    data["jourFinPP"][:,:,j] = np.where(
-        (data["phasePhotoper"][:,:,j] == 1) & (data["jourFinPP"][:,:,j]<0),
-        365 + data["jourFinPP"][:,:,j],
-        data["jourFinPP"][:,:,j],
+    # phase 0 ou 7
+    #     else
+    #  VitesseRacinaire := 0
+    #
+    data["vRac"][:,:,j:] = np.where(
+        (data["numPhase"][:,:,j] == 0) | (data["numPhase"][:,:,j] == 7),
+        0,
+        data["vRac"][:,:,j],
     )
-
-    data["phasePhotoper"][:,:,j] = np.where(
-                                    (data["phasePhotoper"][:,:,j] == 1),
-                                    np.where(
-                                        j > data["jourFinPP"][:,:,j],
-                                        0,
-                                        data["phasePhotoper"][:,:,j],
-                                    ) if paramVariete["PPSens"] <= 1 else 0,
-                                    data["phasePhotoper"][:,:,j],
-                                    )
-
-    data["changePhase"][:,:,j] = np.where(
-                                    (data["phasePhotoper"][:,:,j] == 1),
-                                    np.where(
-                                        j > data["jourFinPP"][:,:,j],
-                                        1,
-                                        data["changePhase"][:,:,j],
-                                    ) if paramVariete["PPSens"] <= 1 else 0,
-                                    data["changePhase"][:,:,j],
-                                    )
 
     return data
 
 
 
 
+def PhotoperSarrahV3(j, data, paramVariete):
+    # depuis phenologie.pas
+    """
+        {Procedure speciale Vaksman Dingkuhn valable pour tous types de sensibilite
+    photoperiodique et pour les varietes non photoperiodique.
+    PPsens varie de 0,4 a 1,2. Pour PPsens > 2,5 = variété non photoperiodique.
+    SeuilPP = 13.5
+    PPcrit = 12
+    SumPP est dans ce cas une variable quotidienne (et non un cumul)}
+    """
 
-def MortaliteSarraV3(j, data, paramITK):
+    data["sumPP"][:,:,j] = np.where(
+        (data["numPhase"][:,:,j] == 3) & (data["changePhase"][:,:,j] == 1),
+        100,
+        data["sumPP"][:,:,j],
+    )
+
+    data["sumPP"][:,:,j] = np.where(
+        (data["numPhase"][:,:,j] == 3),
+        (1000 / np.maximum(0.01, data["sdj"][:,:,j] - data ["seuilTempPhasePrec"][:,:,j]) ** paramVariete["PPExp"]) * np.maximum(0, (data["dureeDuJour"][:,:,j] - paramVariete["PPCrit"])) / (paramVariete["SeuilPP"] - paramVariete["PPCrit"]),
+        data["sumPP"][:,:,j],
+    )
+
+    data["phasePhotoper"][:,:,j:] = np.where(
+        (data["numPhase"][:,:,j] == 3) & (data["sumPP"][:,:,j] < paramVariete["PPsens"]),
+        0,
+        data["phasePhotoper"][:,:,j],
+    )
+
+    return data
+
+
+
+
+def MortaliteSarraV3(j, data, paramITK, paramVariete):
 
     # test de mortalité juvénile
+    #     {
+    # Test sur 20 jours
+    # D�s que le delta est n�gatif sur 10 jours
+    # }
+
+    condition = (data["numPhase"][:,:,j] >= 2) & (data["numPhase"][:,:,j] == 2) & (data["changePhase"][:,:,j] == 1)
 
     data['nbJourCompte'][:,:,j:] = np.where(
-        data["numPhase"][:,:,j] == 2,
+        condition,
+        0,
+        data['nbJourCompte'][:,:,j],
+    )
+
+    data['nbjStress'][:,:,j:] = np.where(
+        condition,
+        0,
+        data['nbjStress'][:,:,j],
+    )
+
+
+    condition = (data["numPhase"][:,:,j] >= 2)
+
+    data['nbJourCompte'][:,:,j:] = np.where(
+        condition,
         data['nbJourCompte'][:,:,j] + 1,
         data['nbJourCompte'][:,:,j],
     )
 
+
+    condition = (data["numPhase"][:,:,j] >= 2) & (data["nbJourCompte"][:,:,j] < paramITK["nbjTestSemis"]) & (data["deltaBiomasseAerienne"][:,:,j] < 0)
+
     data["nbjStress"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] == 2) & (data["nbJourCompte"][:,:,j] < paramITK["nbjTestSemis"]) & (data["deltaBiomasseAerienne"][:,:,j] < 0),
+        condition,
         data["nbjStress"][:,:,j] + 1,
         data["nbjStress"][:,:,j],                           
     )
 
-    data["nbJourCompte"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] == 2) & (data["nbjStress"][:,:,j] == paramITK["seuilCstrMortality"]),
-        0,
-        data["nbJourCompte"][:,:,j],
-    )
+
+    condition = (data["numPhase"][:,:,j] >= 2) & (data["nbjStress"][:,:,j] == paramVariete["seuilCstrMortality"])
 
     data["numPhase"][:,:,j] = np.where(
-        (data["numPhase"][:,:,j] == 2) & (data["nbjStress"][:,:,j] == paramITK["seuilCstrMortality"]),
+        condition,
         0,
         data["numPhase"][:,:,j],
     )
 
-    data["ruRac"][:,:,j] = np.where(
-        (data["numPhase"][:,:,j] == 2) & (data["nbjStress"][:,:,j] == paramITK["seuilCstrMortality"]),
+    data["stRurMax"][:,:,j] = np.where(
+        condition,
         0,
-        data["ruRac"][:,:,j],
+        data["stRurMax"][:,:,j],
     )
 
     data["nbjStress"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] == 2) & (data["nbjStress"][:,:,j] == paramITK["seuilCstrMortality"]),
+        condition,
         0,
         data["nbjStress"][:,:,j],
     )
-
-    return data
-                                    
-
-
-
-
-
-def bilanPheno(j, data, paramITK, paramTypeSol, paramVariete):
-	
-
-    data['numPhase'][:,:,j:] = np.where(
-                                    data['numPhase'][:,:,j]==7,
-                                    0,
-                                    data['numPhase'][:,:,j],
-                                    )
-
-
-    data['ruRac'][:,:,j:] = np.where(
-                                    data['numPhase'][:,:,j]==7,
-                                    0,
-                                    data['ruRac'][:,:,j],
-                                    )
-
-    data['nbJourCompte'][:,:,j:] = np.where(
-                                    data['numPhase'][:,:,j]==7,
-                                    0,
-                                    data['nbJourCompte'][:,:,j],
-                                    )
-
-    
-    # for variable in list(data) :
-    #     data[variable][:,:,j:] = np.where(
-    #         data["nbjStress"][:,:,j] > paramVariete['seuilCstrMortality'],
-    #         0,
-    #         data[variable][:,:,j],
-    #     )
-    
-    # if (j >= (dateDebut + varDateSemis) && nbjStress < paramVariete.seuilCstrMortality ){
-	
-
-    data = EvalDegresJourSarrahV3(j, data, paramVariete)
-    data = EvalPhenoSarrahV3(j, data, paramITK, paramVariete)
-    data = PPTmoySarrahV3(j, data, paramVariete, paramITK)
-    data = MortaliteSarraV3(j, data, paramITK)
-
-    # bilan carbo
-
-    # else 
-
-    # bilan hydro
 
     return data
