@@ -494,7 +494,8 @@ def rempliRes(j, data):
 
     data["stRuPrec"][:,:,j:] = np.where(
         condition,
-        data["stRu"][:,:,j] - data["stRurSurf"][:,:,j],
+        # data["stRu"][:,:,j] - data["stRurSurf"][:,:,j],
+        data["stTot"][:,:,j] - data["stRurSurf"][:,:,j], # essai stTot
         data["stRuPrec"][:,:,j],
     )
 
@@ -539,29 +540,38 @@ def rempliRes(j, data):
     # on met à jour le stock d'eau total sur l'ensemble des réservoirs
     # en ajoutant l'eau transpirable
     # on transmet donc la valeur sur j
-    data["stRu"][:,:,j:] = (data["stRu"][:,:,j] + data["eauTranspi"][:,:,j]).copy()
 
+    # data["stRu"][:,:,j:] = (data["stRu"][:,:,j] + data["eauTranspi"][:,:,j]).copy()
+    # essai stTot
+    data["stTot"][:,:,j:] = (data["stTot"][:,:,j] + data["eauTranspi"][:,:,j]).copy()
     
     #// modif 10/06/2015 Resilience stock eau cas simul pluri en continue
-    data["stRuVar"][:,:,j] = np.maximum(0, data["stRu"][:,:,j] - data["stRuPrec"][:,:,j])
+    # data["stRuVar"][:,:,j] = np.maximum(0, data["stRu"][:,:,j] - data["stRuPrec"][:,:,j])
+    # essais stTot
+    data["stRuVar"][:,:,j] = np.maximum(0, data["stTot"][:,:,j] - data["stRuPrec"][:,:,j])
 
 
     condition_1 = (data["stRuVar"][:,:,j] > data["hum"][:,:,j])
     condition_2 = (data["hum"][:,:,j] <= data["stRurMaxPrec"][:,:,j])
     condition_3 = (data["hum"][:,:,j] < data["humPrec"][:,:,j])
 
-    data["stRu"][:,:,j:] = np.where(
+    # essais stTot
+    # data["stRu"][:,:,j:] = np.where(
+    data["stTot"][:,:,j:] = np.where(
         condition_1,
         np.where(
             condition_2,
-            data["stRu"][:,:,j] + (data["stRuVar"][:,:,j] - data["hum"][:,:,j]) * data["stRurPrec"][:,:,j],
+            # data["stRu"][:,:,j] + (data["stRuVar"][:,:,j] - data["hum"][:,:,j]) * data["stRurPrec"][:,:,j],
+            data["stTot"][:,:,j] + (data["stRuVar"][:,:,j] - data["hum"][:,:,j]) * data["stRurPrec"][:,:,j],
             np.where(
                 condition_3,
                 data["stRuVar"][:,:,j],
-                data["stRu"][:,:,j],
+                # data["stRu"][:,:,j],
+                data["stTot"][:,:,j],
             ),
         ),
-        data["stRu"][:,:,j],
+        # data["stRu"][:,:,j],
+        data["stTot"][:,:,j],
     )
 
     data["stRuPrec"][:,:,j:] = np.where(
@@ -601,26 +611,38 @@ def rempliRes(j, data):
     data["hum"][:,:,j:] = np.minimum(data["stRuMax"][:,:,j], data["hum"][:,:,j])
 
 
-    condition = (data["stRu"][:,:,j] > data["stRuMax"][:,:,j])
+    # condition = (data["stRu"][:,:,j] > data["stRuMax"][:,:,j])
+    # essais stTot
+    condition = (data["stTot"][:,:,j] > data["stRuMax"][:,:,j])
 
+    # essais stTot
     data["dr"][:,:,j] = np.where(
         condition,
-        data["stRu"][:,:,j] - data["stRuMax"][:,:,j],
+        # data["stRu"][:,:,j] - data["stRuMax"][:,:,j],
+        data["stTot"][:,:,j] - data["stRuMax"][:,:,j],
         0,
     )
 
-    data["stRu"][:,:,j] = np.where(
+    # essais stTot
+    # data["stRu"][:,:,j] = np.where(
+    data["stTot"][:,:,j] = np.where(   
         condition,
         data["stRuMax"][:,:,j],
-        data["stRu"][:,:,j],
+        # data["stRu"][:,:,j],
+        data["stTot"][:,:,j],
     )
 
+
     # // avant modif 10/06/2015
-    data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stRu"][:,:,j])
+    # data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stRu"][:,:,j])
+    # essais stTot
+    data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stTot"][:,:,j])
 
     # // Rempli res racines
     data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j] + data["eauTranspi"][:,:,j], data["stRurMax"][:,:,j])
-    data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j], data["stRu"][:,:,j])
+    # essais stTot
+    # data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j], data["stRu"][:,:,j])
+    data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j], data["stTot"][:,:,j])
     
 
     return data
@@ -794,8 +816,6 @@ def EvalKcTot(j, data):
     return data
 
 
-
-
 def CstrPFactor(j, data, paramVariete):
 
     # d'après bileau.pas
@@ -869,7 +889,9 @@ def ConsoResSep(j, data):
         data["evap"][:,:,j],
     )
 
-    data["stRu"][:,:,j:] = np.maximum(0, data["stRu"][:,:,j] - data["consoRur"][:,:,j])
+    # data["stRu"][:,:,j:] = np.maximum(0, data["stRu"][:,:,j] - data["consoRur"][:,:,j])
+    # essais stTot
+    data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["consoRur"][:,:,j])
 
     # // fraction d'eau evapore sur la part transpirable qd les racines sont moins
     # // profondes que le reservoir de surface, mise a jour des stocks transpirables
@@ -897,7 +919,9 @@ def ConsoResSep(j, data):
 
 
     data["stRur"][:,:,j:] = np.maximum(0, data["stRur"][:,:,j] - data["tr"][:,:,j])
-    data["stRu"][:,:,j:] = np.maximum(0, data["stRu"][:,:,j] - data["tr"][:,:,j])
+    # data["stRu"][:,:,j:] = np.maximum(0, data["stRu"][:,:,j] - data["tr"][:,:,j])
+    # essais stTot
+    data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["tr"][:,:,j])
     data["etr"][:,:,j:] = (data["tr"][:,:,j] + data["evap"][:,:,j]).copy()
     data["etm"][:,:,j:] = (data["trPot"][:,:,j] + data["evapPot"][:,:,j]).copy()
 
