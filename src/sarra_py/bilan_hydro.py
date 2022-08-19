@@ -12,7 +12,7 @@ def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
     # data["stSurf"] = np.full((grid_width, grid_height, duration), paramTypeSol["stockIniSurf"])
 
     # Ltr := 1;
-    data["ltr"] = np.full((grid_width, grid_height, duration), 1)
+    data["ltr"] = np.full((grid_width, grid_height, duration), 1.0)
 
     # StRurMax := Ru * ProfRacIni / 1000;
     data["stRurMax"] = np.full((grid_width, grid_height, duration), (paramTypeSol["ru"] * paramITK["profRacIni"] / 1000))
@@ -398,15 +398,19 @@ def EvolRurCstr2(j, data, paramITK):
     )
         
     #stockrac
+    print("stRur 1",data["stRur"][:,:,j])
     data["stRur"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j] > 0) & np.invert((data["changePhase"][:,:,j] == 1) & (data["numPhase"][:,:,j] == 1)),
         np.where(
             (data["stRurMax"][:,:,j] > data["ruSurf"][:,:,j]),
             data["stRur"][:,:,j] + data["deltaRur"][:,:,j],
-            np.maximum((data["stRur"][:,:,j] - data["ruSurf"][:,:,j] / 10) * (data["stRurMax"][:,:,j] / data["ruSurf"][:,:,j]), 0),
+            # np.maximum((data["stRur"][:,:,j] - data["ruSurf"][:,:,j] / 10) * (data["stRurMax"][:,:,j] / data["ruSurf"][:,:,j]), 0),
+            np.maximum((data["stRuSurf"][:,:,j] - data["ruSurf"][:,:,j] / 10) * (data["stRurMax"][:,:,j] / data["ruSurf"][:,:,j]), 0),
         ),
         data["stRur"][:,:,j],
     )
+    
+    print("stRur 2",data["stRur"][:,:,j])
     
 
     return data
@@ -514,10 +518,12 @@ def rempliRes(j, data):
     # par l'eau disponible, borné au max par 110% de la réserve utile de surface.
     # on transmet donc la valeur sur j
     # ConsoResSep agit aussi sur cette variable
+    print("stRuSurf 1",data["stRuSurf"][:,:,j])
     data["stRuSurf"][:,:,j:] = np.minimum(
         data["stRuSurf"][:,:,j] + data["eauDispo"][:,:,j],
         data["ruSurf"][:,:,j] + data["ruSurf"][:,:,j] / 10
     )
+    print("stRuSurf 2",data["stRuSurf"][:,:,j])
 
 
     # // enleve la qte d'eau remplissant la partie uniquement evaporable
@@ -640,9 +646,11 @@ def rempliRes(j, data):
 
     # // Rempli res racines
     data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j] + data["eauTranspi"][:,:,j], data["stRurMax"][:,:,j])
+    print("stRur 3",data["stRur"][:,:,j])
     # essais stTot
     # data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j], data["stRu"][:,:,j])
     data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j], data["stTot"][:,:,j])
+    print("stRur 4",data["stRur"][:,:,j])
     
 
     return data
@@ -880,7 +888,7 @@ def ConsoResSep(j, data):
 
     # // qte d'eau evapore a consommer sur le reservoir de surface
     data["stRuSurf"][:,:,j] = np.maximum(0, data["stRuSurf"][:,:,j] - data["evap"][:,:,j])
-
+    print("stRuSurf 3",data["stRuSurf"][:,:,j])
 
     # // qte d'eau evapore a retirer sur la part transpirable
     data["consoRur"][:,:,j] = np.where(
@@ -902,6 +910,7 @@ def ConsoResSep(j, data):
     )
 
     data["stRur"][:,:,j:] = np.maximum(0, data["stRur"][:,:,j] - data["consoRur"][:,:,j])
+    print("stRur 5",data["stRur"][:,:,j])
 
     # // reajustement de la qte transpirable considerant que l'evap a eu lieu avant
     # // mise a jour des stocks transpirables  
@@ -916,9 +925,11 @@ def ConsoResSep(j, data):
         np.maximum(data["stRuSurf"][:,:,j] - (data["tr"][:,:,j] * np.minimum(data["trSurf"][:,:,j]/data["stRur"][:,:,j], 1)), 0),
         data["stRuSurf"][:,:,j],
     )
+    print("stRuSurf 4",data["stRuSurf"][:,:,j])
 
 
     data["stRur"][:,:,j:] = np.maximum(0, data["stRur"][:,:,j] - data["tr"][:,:,j])
+    print("stRur 6",data["stRur"][:,:,j])
     # data["stRu"][:,:,j:] = np.maximum(0, data["stRu"][:,:,j] - data["tr"][:,:,j])
     # essais stTot
     data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["tr"][:,:,j])
