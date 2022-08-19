@@ -71,7 +71,7 @@ def InitSup(data, grid_width, grid_height, duration, df_weather, paramTypeSol, p
         #"stockSurface",
         "stRuSurfPrec",
         "eauTranspi",
-        "stockTotal",
+        #"stockTotal",
         "dr",
         "fesw",
         "kce",
@@ -168,7 +168,11 @@ def EvolKcpKcIni(j, data, paramVariete):
     # d'après biomasse.pas : 
     # kcp := max ( 0.3,KcMax * (1 - Ltr));
 
-    data["kcp"][:,:,j:] = np.maximum(0.3, paramVariete["kcMax"] * (1 - data["ltr"][:,:,j]))
+    data["kcp"][:,:,j:] = np.where(
+        data["numPhase"][:,:,j] >= 1,
+        np.maximum(0.3, paramVariete["kcMax"] * (1 - data["ltr"][:,:,j])),
+        data["kcp"][:,:,j],
+    )
     
     return data
 
@@ -273,33 +277,22 @@ def BiomDensOptSarV42(j, data, paramITK, paramVariete):
 
         data["rapDensite"] = paramVariete["densiteA"] + paramVariete["densiteP"] * np.exp(-(paramITK["densite"] / ( paramVariete["densOpti"]/- np.log((1 - paramVariete['densiteA'])/ paramVariete["densiteP"]))))
         
-        print("rdt avt",data["rdt"][:,:,j])
         data["rdt"][:,:,j:] = data["rdt"][:,:,j] * data["rapDensite"]
-        print("rdt apres",data["rdt"][:,:,j])
 
-        print("rdtpot avt",data["rdtPot"][:,:,j])
         data["rdtPot"][:,:,j:] = data["rdtPot"][:,:,j] * data["rapDensite"]
-        print("rdtpot après",data["rdtPot"][:,:,j])
 
         data["biomasseRacinaire"][:,:,j:] = data["biomasseRacinaire"][:,:,j] * data["rapDensite"]
         data["biomasseTige"][:,:,j:] = data["biomasseTige"][:,:,j] * data["rapDensite"]
         data["biomasseFeuille"][:,:,j:] = data["biomasseFeuille"][:,:,j] * data["rapDensite"]
 
-        print("biomasseAerienne avt",data["biomasseAerienne"][:,:,j])
         data["biomasseAerienne"][:,:,j:] = data["biomasseTige"][:,:,j] + data["biomasseFeuille"][:,:,j] + data["rdt"][:,:,j]
         #data["biomasseAerienne"][:,:,j:] = data["biomasseAerienne"][:,:,j] * data["rapDensite"]
-        print("biomasseAerienne après",data["biomasseAerienne"][:,:,j])
         
         data["lai"][:,:,j:]  = data["biomasseFeuille"][:,:,j] * data["sla"][:,:,j]
         #data["lai"][:,:,j:]  = data["lai"][:,:,j:]  * data["rapDensite"]
-        print("lai 2",data["lai"][:,:,j])
-        
-        print("biomasseTotale avt",data["biomasseTotale"][:,:,j])
+
         data["biomasseTotale"][:,:,j:] = data["biomasseAerienne"][:,:,j] + data["biomasseRacinaire"][:,:,j]
         #data["biomasseTotale"][:,:,j:] = data["biomasseTotale"][:,:,j:] * data["rapDensite"]
-        print("biomasseTotale apres",data["biomasseTotale"][:,:,j])
-        # print 1
-        print("biomasseTotale 1",data["biomasseTotale"][:,:,j])
     
     return data
 
@@ -385,7 +378,7 @@ def EvalRespMaintSarrahV3(j, data, paramVariete):
     # on cast sur j
     # kRespMaint = txRespMaint ?
     # dRespMaint = respMaint ?
-    data["respMaint"][:,:,j:] =  ((paramVariete["kRespMaint"] * data["biomasseTotale"][:,:,j] * (2**(data["tpMoy"][:,:,j] - paramVariete["tempMaint"]) / 10))) + (paramVariete["kRespMaint"] * data["biomasseFeuille"][:,:,j] * (2**(data["tpMoy"][:,:,j] -  paramVariete["tempMaint"]) / 10))
+    data["respMaint"][:,:,j:] =  ((paramVariete["kRespMaint"] * data["biomasseTotale"][:,:,j] * (2**((data["tpMoy"][:,:,j] - paramVariete["tempMaint"]) / 10)))) + (paramVariete["kRespMaint"] * data["biomasseFeuille"][:,:,j] * (2**((data["tpMoy"][:,:,j] -  paramVariete["tempMaint"]) / 10)))
     print("biomasseTotale 2",data["biomasseTotale"][:,:,j])
 
     # Question pourquoi > 4 tous le s !!! si pas de feuilles mort !!! 
@@ -422,12 +415,7 @@ def EvolBiomTotSarrahV4(j, data, paramVariete, paramITK):
     data["biomasseTotale"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j]==2) & (data["changePhase"][:,:,j]==1),
         paramITK["densite"] *  np.maximum(1,paramVariete['densOpti']/paramITK['densite']) * paramVariete["txResGrain"] *  paramVariete["poidsSecGrain"] / 1000,
-        # celui dans bilan carbon avec l'erreur
-        #paramITK["densite"] *  np.maximum(1,70000/paramITK['densite']) * paramVariete["txResGrain"] *  paramVariete["poidsSecGrain"] / 1000,
-        
-        # 86500 * max(1,85000/86500) * 0.55 * 0.38/1000
-        #seule explication qui permet de comprendre pourquoi les résultats ne sont pas réplicables : la méthode des densités modifie les résultats
-
+        # paramITK["densite"] *  np.maximum(1,70000/paramITK['densite']) * paramVariete["txResGrain"] *  paramVariete["poidsSecGrain"] / 1000,
         data["biomasseTotale"][:,:,j]  + (data["assim"][:,:,j] - data["respMaint"][:,:,j]),
     )
     print("test biomasseTotale",(data["numPhase"][:,:,j]==2) & (data["changePhase"][:,:,j]==1))
@@ -490,13 +478,13 @@ def EvalRdtPotRespSarV42(j, data, paramVariete):
 
     # d'après bilancarbonsarra.pas
 
-    
+    # à quoi ça sert ce truc ?
     data["biomTotStadeIp"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j] == 4) & (data["changePhase"][:,:,j] == 1),
         data["biomasseTotale"][:,:,j],
         data["biomTotStadeIp"][:,:,j],
     )
-    print("biomasseTotale 4",data["biomasseTotale"][:,:,j])
+
 
     data["biomTotStadeFloraison"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j] == 5) & (data["changePhase"][:,:,j] == 1),
@@ -628,17 +616,12 @@ def EvalFeuilleTigeSarrahV4(j, data, paramVariete):
     # si deltaBiomasseAerienne < 0
     condition = (data["numPhase"][:,:,j] > 1) & \
         (data["deltaBiomasseAerienne"][:,:,j] < 0)
-    print("condition 1",condition)
 
     data["biomasseFeuille"][:,:,j:] = np.where(
         condition,
         np.maximum(0.00000001, data["biomasseFeuille"][:,:,j] - (- data["deltaBiomasseAerienne"][:,:,j] + data["reallocation"][:,:,j]) * paramVariete["pcReallocFeuille"]),
         data["biomasseFeuille"][:,:,j],
     )
-    print("biomasseFeuille 1",data["biomasseFeuille"][:,:,j])
-    
-
-
 
     data["biomasseTige"][:,:,j:] = np.where(
         condition,

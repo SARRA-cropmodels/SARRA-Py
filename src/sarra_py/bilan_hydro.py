@@ -24,8 +24,11 @@ def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
     # //    StTot := StockIniSurf - PfTranspi/2 + StockIniProf;
 
     # StTot := StockIniSurf  + StockIniProf;
-    data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniSurf"] + paramTypeSol["stockIniProf"]))
+    #data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniSurf"] + paramTypeSol["stockIniProf"]))
+    #! modifié pour faire correspondre les résultats de simulation, à remettre en place pour un calcul correct dès que possible
+    data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniProf"]))
     
+
     # ProfRU := EpaisseurSurf + EpaisseurProf;
     data["profRu"] = np.full((grid_width, grid_height, duration), (paramTypeSol["epaisseurSurf"] + paramTypeSol["epaisseurProf"]))
 
@@ -396,7 +399,8 @@ def EvolRurCstr2(j, data, paramITK):
         ),
         data["stRurMax"][:,:,j],
     )
-        
+    
+    
     #stockrac
     print("stRur 1",data["stRur"][:,:,j])
     data["stRur"][:,:,j:] = np.where(
@@ -466,6 +470,8 @@ def rempliRes(j, data):
 
     # reset
     # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
+
+
     condition = (data["numPhase"][:,:,j] == 7) & (data["changePhase"][:,:,j] == 1)
 
 
@@ -476,12 +482,13 @@ def rempliRes(j, data):
     )
 
     
-
+    print("hum 1",data["hum"][:,:,j])
     data["hum"][:,:,j:] = np.where(
         condition,
         data["ruSurf"][:,:,j],
-        data["humPrec"][:,:,j],
+        data["hum"][:,:,j],
     )
+    print("hum 2",data["hum"][:,:,j])
 
 
     data["stRurMaxPrec"][:,:,j:] = np.where(
@@ -506,7 +513,7 @@ def rempliRes(j, data):
 
 
     # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
-    data["stRuMax"][:,:,j] = (data["ru"][:,:,j] * data["profRu"][:,:,j] / 1000).copy()
+    data["stRuMax"][:,:,j:] = (data["ru"][:,:,j] * data["profRu"][:,:,j] / 1000).copy()
     
     # Rempli Res surface
     # on met à jour le stock de surface
@@ -532,7 +539,7 @@ def rempliRes(j, data):
     # entre 1/10e de la réserve utile de surface et le stock de surface, bornée au minimum par 0,
     # sinon la quantité d'eau transpirable est égale à l'eau disponible
         # on cast sur j
-    data["eauTranspi"][:,:,j] = np.where(
+    data["eauTranspi"][:,:,j:] = np.where(
         data["stRuSurfPrec"][:,:,j] < data["ruSurf"][:,:,j]/10,
         np.maximum(
             0,
@@ -549,12 +556,12 @@ def rempliRes(j, data):
 
     # data["stRu"][:,:,j:] = (data["stRu"][:,:,j] + data["eauTranspi"][:,:,j]).copy()
     # essai stTot
-    data["stTot"][:,:,j:] = (data["stTot"][:,:,j] + data["eauTranspi"][:,:,j]).copy()
+    data["stTot"][:,:,j:] = (data["stTot"][:,:,j] + data["eauTranspi"][:,:,j]).copy() ## ok
     
     #// modif 10/06/2015 Resilience stock eau cas simul pluri en continue
     # data["stRuVar"][:,:,j] = np.maximum(0, data["stRu"][:,:,j] - data["stRuPrec"][:,:,j])
     # essais stTot
-    data["stRuVar"][:,:,j] = np.maximum(0, data["stTot"][:,:,j] - data["stRuPrec"][:,:,j])
+    data["stRuVar"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["stRuPrec"][:,:,j])
 
 
     condition_1 = (data["stRuVar"][:,:,j] > data["hum"][:,:,j])
@@ -610,12 +617,12 @@ def rempliRes(j, data):
 
     
     data["hum"][:,:,j:] = np.maximum(data["stRuVar"][:,:,j], data["hum"][:,:,j])
-
+    print("hum 3",data["hum"][:,:,j])
     # // modif 10/06/2015 Resilience stock eau cas simul pluri en continue
     # // modif 27/07/2016 Hum ne peut �tre au dessus de stRu (stocktotal)
 
     data["hum"][:,:,j:] = np.minimum(data["stRuMax"][:,:,j], data["hum"][:,:,j])
-
+    print("hum 4",data["hum"][:,:,j])
 
     # condition = (data["stRu"][:,:,j] > data["stRuMax"][:,:,j])
     # essais stTot
@@ -631,7 +638,7 @@ def rempliRes(j, data):
 
     # essais stTot
     # data["stRu"][:,:,j] = np.where(
-    data["stTot"][:,:,j] = np.where(   
+    data["stTot"][:,:,j:] = np.where(   
         condition,
         data["stRuMax"][:,:,j],
         # data["stRu"][:,:,j],
@@ -643,13 +650,13 @@ def rempliRes(j, data):
     # data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stRu"][:,:,j])
     # essais stTot
     data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stTot"][:,:,j])
-
+    print("hum 5",data["hum"][:,:,j])
     # // Rempli res racines
-    data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j] + data["eauTranspi"][:,:,j], data["stRurMax"][:,:,j])
+    data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j] + data["eauTranspi"][:,:,j], data["stRurMax"][:,:,j])
     print("stRur 3",data["stRur"][:,:,j])
     # essais stTot
     # data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j], data["stRu"][:,:,j])
-    data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j], data["stTot"][:,:,j])
+    data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j], data["stTot"][:,:,j])
     print("stRur 4",data["stRur"][:,:,j])
     
 
@@ -814,9 +821,9 @@ def DemandePlante(j, data):
 
 def EvalKcTot(j, data):
     # d'après bileau.pas
-
+    # added a condition on 19/08/22 to match SARRA-H original behavior
     data["kcTot"][:,:,j:] = np.where(
-        data["kcp"][:,:,j] == 0,
+        data["kcp"][:,:,j] == 0.0,
         data["kce"][:,:,j],
         data["kce"][:,:,j] + data["kcp"][:,:,j],
     )
@@ -932,7 +939,7 @@ def ConsoResSep(j, data):
     print("stRur 6",data["stRur"][:,:,j])
     # data["stRu"][:,:,j:] = np.maximum(0, data["stRu"][:,:,j] - data["tr"][:,:,j])
     # essais stTot
-    data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["tr"][:,:,j])
+    data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["tr"][:,:,j]) ## ok
     data["etr"][:,:,j:] = (data["tr"][:,:,j] + data["evap"][:,:,j]).copy()
     data["etm"][:,:,j:] = (data["trPot"][:,:,j] + data["evapPot"][:,:,j]).copy()
 
