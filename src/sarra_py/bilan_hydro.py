@@ -350,17 +350,25 @@ def EvolRurCstr2(j, data, paramITK):
     # une réserve utile racinaire maximale supérieure à la réserve utile de surface,
     # la vitesse racinaire est définie comme vRac modulée par le cstr modifié
     # 
-    # donc une fois que la racine a une réserve utile maximale plus importante que le réservoir de surface, sa vitesse de croissance racinaire est modulée par le stress hydrique.
+    # donc une fois que la racine a une réserve utile maximale plus importante que le réservoir de surface, 
+    # sa vitesse de croissance racinaire est modulée par le stress hydrique.
     #? pourquoi est ce qu'on a un bornage en [0.3,1] ? 
     condition = (data["numPhase"][:,:,j] > 0) & \
-            np.invert((data["numPhase"][:,:,j] == 1) & (data["changePhase"][:,:,j] == 1)) & \
-            (data["stRurMax"][:,:,j] > data["ruSurf"][:,:,j])
+            np.invert((data["numPhase"][:,:,j] == 1) & (data["changePhase"][:,:,j] == 1))
+            
 
-    # bornage : d'apres CB ; quand on a de l'eau, la racine s'enfonce ; hypothèse lors d'un fort stress, la plante pousse plutôt sur les racines que sur le reste. en plus en faisant 0.3 et 1, cela reviet à dire que jusqu'à 70% de cstr; pas d'effet sur l'enracinement. on décale donc l'effet de cstr en regard des connaissances que l'on a sur l'impact fort sur la plante. 
+    # bornage : d'apres CB ; quand on a de l'eau, la racine s'enfonce ; hypothèse lors d'un fort stress, 
+    # la plante pousse plutôt sur les racines que sur le reste. en plus en faisant 0.3 et 1, 
+    # cela reviet à dire que jusqu'à 70% de cstr; pas d'effet sur l'enracinement. 
+    # on décale donc l'effet de cstr en regard des connaissances que l'on a sur l'impact fort sur la plante. 
     data["dayVrac"][:,:,j] = np.where(
         condition,
-        (data["vRac"][:,:,j] * np.minimum(data["cstr"][:,:,j] + 0.3, 1.0)) / 1000 * data["ru"][:,:,j],
-        data["vRac"][:,:,j] / 1000 * data["ru"][:,:,j], 
+        np.where(
+            (data["stRurMax"][:,:,j] > data["ruSurf"][:,:,j]),
+            (data["vRac"][:,:,j] * np.minimum(data["cstr"][:,:,j] + 0.3, 1.0)) / 1000 * data["ru"][:,:,j],
+            data["vRac"][:,:,j] / 1000 * data["ru"][:,:,j],
+        ),
+        data["dayVrac"][:,:,j],
     )
     
     
@@ -370,11 +378,10 @@ def EvolRurCstr2(j, data, paramITK):
     # maximale est inférieure à la vitesse de croissance racinaire,
     # on définit la variation de réserve utile racinaire comme étant 
     # la différence entre le front d'humectation et la réserve utile racinaire maximale
-    # sinon, si 
+    # sinon, on la définit comme la vitesse de croissance racinaire
     condition = (data["numPhase"][:,:,j] > 0) & \
             np.invert((data["numPhase"][:,:,j] == 1) & (data["changePhase"][:,:,j] == 1))
 
-    
     
     data["deltaRur"][:,:,j:] = np.where(
         condition,   
@@ -386,10 +393,13 @@ def EvolRurCstr2(j, data, paramITK):
         data["deltaRur"][:,:,j],
     )
 
-    # print(j, "result test",(data["numPhase"][:,:,j] > 0) & \
-    #         np.invert((data["numPhase"][:,:,j] == 1) & (data["changePhase"][:,:,j] == 1)), (data["hum"][:,:,j] - data["stRurMax"][:,:,j]) < data["dayVrac"][:,:,j], "if true",data["hum"][:,:,j] - data["stRurMax"][:,:,j],"if false", data["dayVrac"][:,:,j], "result", data["deltaRur"][:,:,j])
-    
-    # rurac2
+
+    # rurac/stRurMax partie 2
+    # réserve utile racinaire maximale hors initialisation
+    # pour des phases différentes de zéro et hors jour d'initialisation, on définit la 
+    # réserve utile racinaire maximale comme étant la réserve utile racinaire maximale précédente
+    # que l'on incrémente de la variation de réserve utile racinaire deltaRur
+
     data["stRurMax"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j] > 0),
         np.where(
@@ -401,14 +411,24 @@ def EvolRurCstr2(j, data, paramITK):
     )
     
     
-    #stockrac
+    # stockrac/stRur
+    # stock d'eau racinaire
+    # pour des phases différentes de zéro et hors jour d'initialisation,
+    # et si la réserve utile racinaire maximale est supérieure à la réserve utile de surface,
+    # (donc si les racines vont au delà du stock de surface)
+    # le stock d'eau racinaire est incrémenté de la variation de réserve utile racinaire deltaRur
+    # sinon, si la réserve utile racinaire maximale est inférieure à la réserve utile de surface
+    # (donc si les racines restent dans les limites du stock de surface)
+    # le stock d'eau racinaire prend pour valeur le stock d'eau de surface moins 1/10e de la réserve utile de surface,
+    # multiplié par le rapport entre le stock racinaire maximal et la réserve utile de surface
+    # ("on prend au prorata de la profondeur et du stock de surface")
+
     print("stRur 1",data["stRur"][:,:,j])
     data["stRur"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j] > 0) & np.invert((data["changePhase"][:,:,j] == 1) & (data["numPhase"][:,:,j] == 1)),
         np.where(
             (data["stRurMax"][:,:,j] > data["ruSurf"][:,:,j]),
             data["stRur"][:,:,j] + data["deltaRur"][:,:,j],
-            # np.maximum((data["stRur"][:,:,j] - data["ruSurf"][:,:,j] / 10) * (data["stRurMax"][:,:,j] / data["ruSurf"][:,:,j]), 0),
             np.maximum((data["stRuSurf"][:,:,j] - data["ruSurf"][:,:,j] / 10) * (data["stRurMax"][:,:,j] / data["ruSurf"][:,:,j]), 0),
         ),
         data["stRur"][:,:,j],
@@ -470,7 +490,7 @@ def rempliRes(j, data):
 
     # reset
     # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
-
+    # lorsque l'on est à l phase 7, on reset les compteurs
 
     condition = (data["numPhase"][:,:,j] == 7) & (data["changePhase"][:,:,j] == 1)
 
@@ -511,34 +531,34 @@ def rempliRes(j, data):
     )
 
 
-
+    # stRuMax
+    # stock d'eau maximal dans la réserve utile ; capacité maximale de la réserve utile
+    # redéfinie à chaque boucle comme étant le produit de la réserve utile (mm/m de sol) et 
+    # de la profondeur maximale de sol
     # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
     data["stRuMax"][:,:,j:] = (data["ru"][:,:,j] * data["profRu"][:,:,j] / 1000).copy()
     
+    # stRuSurfPrec
     # Rempli Res surface
-    # on met à jour le stock de surface
-        # on cast sur j
-
+    # on enregistre le stock d'eau de surface précédent 
     data["stRuSurfPrec"][:,:,j] = data["stRuSurf"][:,:,j].copy()
     
-    # on met à jour le stock d'eau en surface pour qu'il corresponde au stock de surface mis à jour
-    # par l'eau disponible, borné au max par 110% de la réserve utile de surface.
-    # on transmet donc la valeur sur j
-    # ConsoResSep agit aussi sur cette variable
-    print("stRuSurf 1",data["stRuSurf"][:,:,j])
+    # stRuSurf
+    # on met à jour le stock d'eau en surface pour qu'il corresponde au stock de surface incrémenté
+    # de la valeur d'eau disponible eauDispo ; 
+    # on borne cependant cette valeur à 110% de la réserve utile de surface.
     data["stRuSurf"][:,:,j:] = np.minimum(
         data["stRuSurf"][:,:,j] + data["eauDispo"][:,:,j],
         data["ruSurf"][:,:,j] + data["ruSurf"][:,:,j] / 10
     )
-    print("stRuSurf 2",data["stRuSurf"][:,:,j])
 
-
-    # // enleve la qte d'eau remplissant la partie uniquement evaporable
-    # si le stock de surface à j-1 est inférieur à 10% de la réserve utile de surface, 
-    # la quantité d'eau transpirable correspond à l'eau disponible moins la différence 
-    # entre 1/10e de la réserve utile de surface et le stock de surface, bornée au minimum par 0,
-    # sinon la quantité d'eau transpirable est égale à l'eau disponible
-        # on cast sur j
+    # eauTranspi
+    # quantité d'eau transpirable
+    # si le stock de surface avant mise à jour est inférieur à 10% de la réserve utile de surface, 
+    # la quantité d'eau transpirable correspond à l'apport d'eau du jour (eauDispo), moins la différence 
+    # entre 1/10e de la réserve utile de surface et le stock de surface avant mise à jour, bornée au minimum par 0,
+    # (autrement dit, une partie de l'apport d'eau du jour est considérée comme liée au réservoir de surface)
+    # sinon la quantité d'eau transpirable est égale à l'apport d'eau du jour (eauDispo)
     data["eauTranspi"][:,:,j:] = np.where(
         data["stRuSurfPrec"][:,:,j] < data["ruSurf"][:,:,j]/10,
         np.maximum(
@@ -548,19 +568,17 @@ def rempliRes(j, data):
         data["eauDispo"][:,:,j],
     )
 
-    #// remplissage des autres r�servoirs
-    #// rempli res en eau, estime drainage, et evolution du front d'humectation
-    # on met à jour le stock d'eau total sur l'ensemble des réservoirs
-    # en ajoutant l'eau transpirable
-    # on transmet donc la valeur sur j
 
-    # data["stRu"][:,:,j:] = (data["stRu"][:,:,j] + data["eauTranspi"][:,:,j]).copy()
-    # essai stTot
+
+    # stRu/stTot étape 1
+    # stock d'eau total sur l'ensemble du réservoir
+    # on incrémente le stock d'eau total de la quantité d'eau transpirable
     data["stTot"][:,:,j:] = (data["stTot"][:,:,j] + data["eauTranspi"][:,:,j]).copy() ## ok
-    
-    #// modif 10/06/2015 Resilience stock eau cas simul pluri en continue
-    # data["stRuVar"][:,:,j] = np.maximum(0, data["stRu"][:,:,j] - data["stRuPrec"][:,:,j])
-    # essais stTot
+
+
+    # stRuVar
+    # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
+    # différence entre stock total et stRuPrec (non défini clairement ?), borné au minimum en 0
     data["stRuVar"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["stRuPrec"][:,:,j])
 
 
@@ -568,8 +586,14 @@ def rempliRes(j, data):
     condition_2 = (data["hum"][:,:,j] <= data["stRurMaxPrec"][:,:,j])
     condition_3 = (data["hum"][:,:,j] < data["humPrec"][:,:,j])
 
-    # essais stTot
-    # data["stRu"][:,:,j:] = np.where(
+
+    # stRu/stTot étape 1
+    # stock d'eau total sur l'ensemble du réservoir
+    # si l'évolution du stock total stRuVar est supérieure à la quantité d'eau maximum jusqu'au front d'humectation hum,
+    # et que la quantité d'eau jusqu'au front d'humectation est inférieure au stock d'eau racinaire maximal,
+    # le stock total est incrémenté de la différence entre l'évolution du stock total et hum,
+    # multiplié par le stock racinaire précédent (?)
+
     data["stTot"][:,:,j:] = np.where(
         condition_1,
         np.where(
@@ -615,17 +639,15 @@ def rempliRes(j, data):
         data["stRuVar"][:,:,j],
     )
 
-    
+    # hum
+    # front d'humectation mis à jour sur la base du delta maximal de stock d'eau total
+    # dans l'intervalle [stRuVar, stRuMax]
+    # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
+    # modif 27/07/2016 Hum ne peut �tre au dessus de stRu (stocktotal)
     data["hum"][:,:,j:] = np.maximum(data["stRuVar"][:,:,j], data["hum"][:,:,j])
-    print("hum 3",data["hum"][:,:,j])
-    # // modif 10/06/2015 Resilience stock eau cas simul pluri en continue
-    # // modif 27/07/2016 Hum ne peut �tre au dessus de stRu (stocktotal)
-
     data["hum"][:,:,j:] = np.minimum(data["stRuMax"][:,:,j], data["hum"][:,:,j])
-    print("hum 4",data["hum"][:,:,j])
 
-    # condition = (data["stRu"][:,:,j] > data["stRuMax"][:,:,j])
-    # essais stTot
+
     condition = (data["stTot"][:,:,j] > data["stRuMax"][:,:,j])
 
     # essais stTot
@@ -650,6 +672,7 @@ def rempliRes(j, data):
     # data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stRu"][:,:,j])
     # essais stTot
     data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stTot"][:,:,j])
+    #! en conflit avec le calcul précédent de hum
     print("hum 5",data["hum"][:,:,j])
     # // Rempli res racines
     data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j] + data["eauTranspi"][:,:,j], data["stRurMax"][:,:,j])
@@ -663,6 +686,89 @@ def rempliRes(j, data):
     return data
 
 
+def rempliRes_alt(j, data):
+
+
+   
+
+
+    # stRuMax
+    # stock d'eau maximal dans la réserve utile ; capacité maximale de la réserve utile
+    # redéfinie à chaque boucle comme étant le produit de la réserve utile (mm/m de sol) et 
+    # de la profondeur maximale de sol
+    # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
+    data["stRuMax"][:,:,j:] = (data["ru"][:,:,j] * data["profRu"][:,:,j] / 1000).copy()
+    
+    # stRuSurfPrec
+    # Rempli Res surface
+    # on enregistre le stock d'eau de surface précédent 
+    data["stRuSurfPrec"][:,:,j] = data["stRuSurf"][:,:,j].copy()
+    
+    # stRuSurf
+    # on met à jour le stock d'eau en surface pour qu'il corresponde au stock de surface incrémenté
+    # de la valeur d'eau disponible eauDispo ; 
+    # on borne cependant cette valeur à 110% de la réserve utile de surface.
+    data["stRuSurf"][:,:,j:] = np.minimum(
+        data["stRuSurf"][:,:,j] + data["eauDispo"][:,:,j],
+        data["ruSurf"][:,:,j] + data["ruSurf"][:,:,j] / 10
+    )
+
+    # eauTranspi
+    # quantité d'eau transpirable
+    # si le stock de surface avant mise à jour est inférieur à 10% de la réserve utile de surface, 
+    # la quantité d'eau transpirable correspond à l'apport d'eau du jour (eauDispo), moins la différence 
+    # entre 1/10e de la réserve utile de surface et le stock de surface avant mise à jour, bornée au minimum par 0,
+    # (autrement dit, une partie de l'apport d'eau du jour est considérée comme liée au réservoir de surface)
+    # sinon la quantité d'eau transpirable est égale à l'apport d'eau du jour (eauDispo)
+    data["eauTranspi"][:,:,j:] = np.where(
+        data["stRuSurfPrec"][:,:,j] < data["ruSurf"][:,:,j]/10,
+        np.maximum(
+            0,
+            data["eauDispo"][:,:,j] - (data["ruSurf"][:,:,j]/10 - data["stRuSurfPrec"][:,:,j])
+            ),
+        data["eauDispo"][:,:,j],
+    )
+
+
+
+    # stRu/stTot étape 1
+    # stock d'eau total sur l'ensemble du réservoir
+    # on incrémente le stock d'eau total de la quantité d'eau transpirable
+    data["stTot"][:,:,j:] = (data["stTot"][:,:,j] + data["eauTranspi"][:,:,j]).copy() ## ok
+
+
+
+
+    condition = (data["stTot"][:,:,j] > data["stRuMax"][:,:,j])
+
+    # essais stTot
+    data["dr"][:,:,j] = np.where(
+        condition,
+        # data["stRu"][:,:,j] - data["stRuMax"][:,:,j],
+        data["stTot"][:,:,j] - data["stRuMax"][:,:,j],
+        0,
+    )
+
+    # essais stTot
+    # data["stRu"][:,:,j] = np.where(
+    data["stTot"][:,:,j:] = np.where(   
+        condition,
+        data["stRuMax"][:,:,j],
+        # data["stRu"][:,:,j],
+        data["stTot"][:,:,j],
+    )
+
+
+
+    data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stTot"][:,:,j])
+
+    data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j] + data["eauTranspi"][:,:,j], data["stRurMax"][:,:,j])
+    data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j], data["stTot"][:,:,j])
+
+
+
+
+    return data
 
 
 def EvalFESW(j, data):
@@ -890,15 +996,15 @@ def ConsoResSep(j, data):
     etm : mm
     """
 
-    # // part transpirable sur le reservoir de surface
-    data["trSurf"][:,:,j] = np.maximum(0, data["stRuSurf"][:,:,j] - data["ruSurf"][:,:,j] / 10)
+    # part transpirable sur le reservoir de surface
+    data["trSurf"][:,:,j:] = np.maximum(0, data["stRuSurf"][:,:,j] - data["ruSurf"][:,:,j] / 10)
 
-    # // qte d'eau evapore a consommer sur le reservoir de surface
-    data["stRuSurf"][:,:,j] = np.maximum(0, data["stRuSurf"][:,:,j] - data["evap"][:,:,j])
+    # qte d'eau evapore a consommer sur le reservoir de surface
+    data["stRuSurf"][:,:,j:] = np.maximum(0, data["stRuSurf"][:,:,j] - data["evap"][:,:,j])
     print("stRuSurf 3",data["stRuSurf"][:,:,j])
 
     # // qte d'eau evapore a retirer sur la part transpirable
-    data["consoRur"][:,:,j] = np.where(
+    data["consoRur"][:,:,j:] = np.where(
         data["evap"][:,:,j] > data["trSurf"][:,:,j],
         data["trSurf"][:,:,j],
         data["evap"][:,:,j],
@@ -908,8 +1014,8 @@ def ConsoResSep(j, data):
     # essais stTot
     data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["consoRur"][:,:,j])
 
-    # // fraction d'eau evapore sur la part transpirable qd les racines sont moins
-    # // profondes que le reservoir de surface, mise a jour des stocks transpirables
+    #  fraction d'eau evapore sur la part transpirable qd les racines sont moins
+    #  profondes que le reservoir de surface, mise a jour des stocks transpirables
     data["consoRur"][:,:,j:] = np.where(
         data["stRurMax"][:,:,j] < data["ruSurf"][:,:,j],
         data["evap"][:,:,j] * data["stRur"][:,:,j] / data["ruSurf"][:,:,j],

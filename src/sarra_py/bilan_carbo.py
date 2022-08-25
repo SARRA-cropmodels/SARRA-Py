@@ -418,6 +418,7 @@ def EvolBiomTotSarrahV4(j, data, paramVariete, paramITK):
         # paramITK["densite"] *  np.maximum(1,70000/paramITK['densite']) * paramVariete["txResGrain"] *  paramVariete["poidsSecGrain"] / 1000,
         data["biomasseTotale"][:,:,j]  + (data["assim"][:,:,j] - data["respMaint"][:,:,j]),
     )
+    print("biomassetotale calc")
     print("test biomasseTotale",(data["numPhase"][:,:,j]==2) & (data["changePhase"][:,:,j]==1))
     # print 2
     print("biomasseTotale 3",data["biomasseTotale"][:,:,j])
@@ -493,28 +494,35 @@ def EvalRdtPotRespSarV42(j, data, paramVariete):
     )
     print("biomasseTotale 5",data["biomasseTotale"][:,:,j])
 
+
     data["rdtPot"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j] == 5) & (data["changePhase"][:,:,j] == 1),
         (paramVariete["KRdtPotA"] * (data["biomTotStadeFloraison"][:,:,j] - data["biomTotStadeIp"][:,:,j]) + paramVariete["KRdtPotB"]) + paramVariete["KRdtBiom"] * data["biomTotStadeFloraison"][:,:,j],
         data["rdtPot"][:,:,j],
     )
+    print("rdtpot calc")
 
     
-    data["rdtPot"][:,:,j] = np.where(
+    data["rdtPot"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j] == 5) & (data["changePhase"][:,:,j] == 1) & (data["rdtPot"][:,:,j] > data["biomasseTige"][:,:,j] * 2) & (data["phaseDevVeg"][:,:,j] < 6),
         data["biomasseTige"][:,:,j] * 2,
         data["rdtPot"][:,:,j],
     )
 
     # dRdtPot = rdtPotDuJour
-    data["dRdtPot"][:,:,j] = np.where(
-        (data["numPhase"][:,:,j] == 5) & (data["trPot"][:,:,j]>0),
-        np.maximum(
-            data["rdtPot"][:,:,j] * (data["ddj"][:,:,j] / paramVariete["SDJMatu1"]) * (data["tr"][:,:,j] / data["trPot"][:,:,j]),
-            data["respMaint"][:,:,j] * 0.15,
+    data["dRdtPot"][:,:,j:] = np.where(
+        (data["numPhase"][:,:,j] == 5),
+        np.where(
+            (data["trPot"][:,:,j]>0),
+            np.maximum(
+                data["rdtPot"][:,:,j] * (data["ddj"][:,:,j] / paramVariete["SDJMatu1"]) * (data["tr"][:,:,j] / data["trPot"][:,:,j]),
+                data["respMaint"][:,:,j] * 0.15,
+            ),
+            0,
         ),
-        0,
+        data["dRdtPot"][:,:,j],
     )
+    print("drdtpot calc")
     
     return data
 
@@ -539,6 +547,7 @@ def EvolBiomAeroSarrahV3(j, data, paramVariete):
         np.minimum(0.9, paramVariete["aeroTotPente"] * data["biomasseTotale"][:,:,j] + paramVariete["aeroTotBase"]) * data["biomasseTotale"][:,:,j],
         data["biomasseAerienne"][:,:,j] + data["deltaBiomasseTotale"][:,:,j],
     )
+    print("biomasseaerienne calc")
     print("biomasseTotale 6",data["biomasseTotale"][:,:,j])
     print("biomasseAerienne 1",data["biomasseAerienne"][:,:,j])
 
@@ -847,6 +856,7 @@ def EvolDayRdtSarraV3(j, data):
         data["rdt"][:,:,j] + np.minimum(data["dRdtPot"][:,:,j],  np.maximum(0.0, data["deltaBiomasseAerienne"][:,:,j]) + data['reallocation'][:,:,j]),
         data["rdt"][:,:,j],
     )
+    print("rdt calc")
 
     return data
 
