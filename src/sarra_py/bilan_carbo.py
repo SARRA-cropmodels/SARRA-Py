@@ -479,12 +479,12 @@ def EvalRdtPotRespSarV42(j, data, paramVariete):
 
     # d'après bilancarbonsarra.pas
 
-    # à quoi ça sert ce truc ?
-    data["biomTotStadeIp"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] == 4) & (data["changePhase"][:,:,j] == 1),
-        data["biomasseTotale"][:,:,j],
-        data["biomTotStadeIp"][:,:,j],
-    )
+    #! biomTotStadeIp laissé à 0 ?
+    # data["biomTotStadeIp"][:,:,j:] = np.where(
+    #     (data["numPhase"][:,:,j] == 4) & (data["changePhase"][:,:,j] == 1),
+    #     data["biomasseTotale"][:,:,j],
+    #     data["biomTotStadeIp"][:,:,j],
+    # )
 
 
     data["biomTotStadeFloraison"][:,:,j:] = np.where(
@@ -502,7 +502,7 @@ def EvalRdtPotRespSarV42(j, data, paramVariete):
     )
     print("rdtpot calc")
 
-    
+    #! phaseDevVeg pas utilisé ?
     data["rdtPot"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j] == 5) & (data["changePhase"][:,:,j] == 1) & (data["rdtPot"][:,:,j] > data["biomasseTige"][:,:,j] * 2) & (data["phaseDevVeg"][:,:,j] < 6),
         data["biomasseTige"][:,:,j] * 2,
@@ -515,6 +515,7 @@ def EvalRdtPotRespSarV42(j, data, paramVariete):
         np.where(
             (data["trPot"][:,:,j]>0),
             np.maximum(
+                #! pourquoi est ce que c'est un rapport de ddj sur sdj, et pas sdj sur sdj ?
                 data["rdtPot"][:,:,j] * (data["ddj"][:,:,j] / paramVariete["SDJMatu1"]) * (data["tr"][:,:,j] / data["trPot"][:,:,j]),
                 data["respMaint"][:,:,j] * 0.15,
             ),
@@ -826,7 +827,8 @@ def EvolLAIPhases(j, data):
     # d'après milbilancarbone.pas
 
     data["lai"][:,:,j:] = np.where(
-        data["numPhase"][:,:,j] <= 1,
+        #(data["numPhase"][:,:,j] <= 1),
+        (data["numPhase"][:,:,j] <= 1) | (data["startLock"][:,:,j] == 1),
         0,
         np.where(
             data["numPhase"][:,:,j] <= 6,
@@ -910,8 +912,8 @@ def BiomDensiteSarraV42(j, data, paramITK, paramVariete):
         print("biomasseAerienne apres",data["biomasseAerienne"][:,:,j])
 
         #? conflit avec fonction evolLAIphase ?
-        data["lai"][:,:,j:]  = data["biomasseFeuille"][:,:,j] * data["sla"][:,:,j]
-        #data["lai"][:,:,j:]  = data["lai"][:,:,j:]  / data["rapDensite"]
+        #data["lai"][:,:,j:]  = data["biomasseFeuille"][:,:,j] * data["sla"][:,:,j]
+        data["lai"][:,:,j:]  = data["lai"][:,:,j:]  / data["rapDensite"]
 
         print("biomasseTotale avt",data["biomasseTotale"][:,:,j])
         data["biomasseTotale"][:,:,j:] = data["biomasseAerienne"][:,:,j] + data["biomasseRacinaire"][:,:,j]
