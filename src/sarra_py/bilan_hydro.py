@@ -1003,7 +1003,7 @@ def ConsoResSep(j, data):
     data["stRuSurf"][:,:,j:] = np.maximum(0, data["stRuSurf"][:,:,j] - data["evap"][:,:,j])
     print("stRuSurf 3",data["stRuSurf"][:,:,j])
 
-    # // qte d'eau evapore a retirer sur la part transpirable
+    # qte d'eau evapore a retirer sur la part transpirable
     data["consoRur"][:,:,j:] = np.where(
         data["evap"][:,:,j] > data["trSurf"][:,:,j],
         data["trSurf"][:,:,j],
