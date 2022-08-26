@@ -144,11 +144,9 @@ def InitSup(data, grid_width, grid_height, duration, df_weather, paramTypeSol, p
     for variable in variables :
         data[variable] = np.zeros(shape=(grid_width, grid_height, duration))
 
-    data["tpMoy"] = df_weather["TEMP"].copy().values.reshape(grid_width, grid_height, duration)
-    data["rain"] = df_weather["RAIN"].copy().values.reshape(grid_width, grid_height, duration)
-    data["ET0"] = df_weather["ET0"].copy().values.reshape(grid_width, grid_height, duration)
-    data["rg"] = df_weather["IRRAD"].copy().values.reshape(grid_width, grid_height, duration)
-    data["irrigation"] = df_weather["Irrigation"].copy().values.reshape(grid_width, grid_height, duration)
+
+    #data["irrigation"] = df_weather["Irrigation"].copy().values.reshape(grid_width, grid_height, duration)
+    data["irrigation"] = np.tile(df_weather["Irrigation"].values,(grid_width,grid_height,1))
 
     data["ru"] = np.full((grid_width, grid_height, duration), paramTypeSol["ru"])
     data["irrigAuto"] = np.full((grid_width, grid_height, duration), paramITK["irrigAuto"])
@@ -160,7 +158,12 @@ def InitSup(data, grid_width, grid_height, duration, df_weather, paramTypeSol, p
     return data
 
 
-
+def InitSup2(data, grid_width, grid_height, duration, df_weather):
+    data["tpMoy"] = df_weather["TEMP"].copy().values.reshape(grid_width, grid_height, duration)
+    data["rain"] = df_weather["RAIN"].copy().values.reshape(grid_width, grid_height, duration)
+    data["ET0"] = df_weather["ET0"].copy().values.reshape(grid_width, grid_height, duration)
+    data["rg"] = df_weather["IRRAD"].copy().values.reshape(grid_width, grid_height, duration)
+    return data
 
 def EvolKcpKcIni(j, data, paramVariete):
 
