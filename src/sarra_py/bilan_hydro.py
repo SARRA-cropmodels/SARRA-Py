@@ -258,7 +258,7 @@ def RempliMc(j, data, paramITK):
     )
 
     # on retranche également à l'eau dispo la lame de ruissellement dans EvalRunOff
-    data["eauDispo"][:,:,j:] =  np.maximum(data["eauDispo"][:,:,j] - data["eauCaptee"][:,:,j], 0)
+    data["eauDispo"][:,:,j:] =  np.maximum(data["eauDispo"][:,:,j] - data["eauCaptee"][:,:,j], 0)[...,np.newaxis]
     
     # il est possible que le stockMc soit nul en fin de boucle car stockMc est aussi
     # mobilisé lors de l'évaporation
