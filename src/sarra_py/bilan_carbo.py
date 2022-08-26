@@ -165,6 +165,13 @@ def InitSup2(data, grid_width, grid_height, duration, df_weather):
     data["rg"] = df_weather["IRRAD"].copy().values.reshape(grid_width, grid_height, duration)
     return data
 
+
+def EvalPar(data):
+    #depuis meteo.par
+    kpar = 0.5
+    data["par"] = kpar * data["rg"]
+    return data
+
 def EvolKcpKcIni(j, data, paramVariete):
 
     # //manque   Numphase := trunc(NoPhase); ??
