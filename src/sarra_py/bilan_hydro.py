@@ -423,7 +423,7 @@ def EvolRurCstr2(j, data, paramITK):
     # multiplié par le rapport entre le stock racinaire maximal et la réserve utile de surface
     # ("on prend au prorata de la profondeur et du stock de surface")
 
-    print("stRur 1",data["stRur"][:,:,j])
+
     data["stRur"][:,:,j:] = np.where(
         (data["numPhase"][:,:,j] > 0) & np.invert((data["changePhase"][:,:,j] == 1) & (data["numPhase"][:,:,j] == 1)),
         np.where(
@@ -434,7 +434,7 @@ def EvolRurCstr2(j, data, paramITK):
         data["stRur"][:,:,j],
     )
     
-    print("stRur 2",data["stRur"][:,:,j])
+
     
 
     return data
@@ -502,13 +502,13 @@ def rempliRes(j, data):
     )
 
     
-    print("hum 1",data["hum"][:,:,j])
+
     data["hum"][:,:,j:] = np.where(
         condition,
         data["ruSurf"][:,:,j],
         data["hum"][:,:,j],
     )
-    print("hum 2",data["hum"][:,:,j])
+
 
 
     data["stRurMaxPrec"][:,:,j:] = np.where(
@@ -673,14 +673,14 @@ def rempliRes(j, data):
     # essais stTot
     data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stTot"][:,:,j])
     #! en conflit avec le calcul précédent de hum
-    print("hum 5",data["hum"][:,:,j])
-    # // Rempli res racines
+
+    # Rempli res racines
     data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j] + data["eauTranspi"][:,:,j], data["stRurMax"][:,:,j])
-    print("stRur 3",data["stRur"][:,:,j])
+
     # essais stTot
     # data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j], data["stRu"][:,:,j])
     data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j], data["stTot"][:,:,j])
-    print("stRur 4",data["stRur"][:,:,j])
+
     
 
     return data
@@ -1001,7 +1001,7 @@ def ConsoResSep(j, data):
 
     # qte d'eau evapore a consommer sur le reservoir de surface
     data["stRuSurf"][:,:,j:] = np.maximum(0, data["stRuSurf"][:,:,j] - data["evap"][:,:,j])
-    print("stRuSurf 3",data["stRuSurf"][:,:,j])
+
 
     # qte d'eau evapore a retirer sur la part transpirable
     data["consoRur"][:,:,j:] = np.where(
@@ -1023,7 +1023,7 @@ def ConsoResSep(j, data):
     )
 
     data["stRur"][:,:,j:] = np.maximum(0, data["stRur"][:,:,j] - data["consoRur"][:,:,j])
-    print("stRur 5",data["stRur"][:,:,j])
+
 
     # // reajustement de la qte transpirable considerant que l'evap a eu lieu avant
     # // mise a jour des stocks transpirables  
@@ -1038,11 +1038,11 @@ def ConsoResSep(j, data):
         np.maximum(data["stRuSurf"][:,:,j] - (data["tr"][:,:,j] * np.minimum(data["trSurf"][:,:,j]/data["stRur"][:,:,j], 1)), 0),
         data["stRuSurf"][:,:,j],
     )
-    print("stRuSurf 4",data["stRuSurf"][:,:,j])
+
 
 
     data["stRur"][:,:,j:] = np.maximum(0, data["stRur"][:,:,j] - data["tr"][:,:,j])
-    print("stRur 6",data["stRur"][:,:,j])
+
     # data["stRu"][:,:,j:] = np.maximum(0, data["stRu"][:,:,j] - data["tr"][:,:,j])
     # essais stTot
     data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["tr"][:,:,j]) ## ok
