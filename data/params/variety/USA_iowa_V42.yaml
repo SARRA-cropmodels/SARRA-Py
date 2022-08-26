@@ -1,0 +1,56 @@
+# paramètres depuis Ag3 USA Hars v42_12_ p4 irr
+# récupérés depuis HV42 parameters
+# variete mais iowa USA V42
+
+AGauss: 1.0
+KRdtBiom: 0.0
+KRdtPotA: 0.8
+KRdtPotB: 200.0
+LGauss: 1.0
+NIYo: 1.0
+NIp: 0.0
+PFactor: 0.45
+PPCrit: 11.0
+PPExp: 0.0
+PPsens: 5.0
+SDJBVP: 320.0
+SDJLevee: 90.0
+SDJMatu1: 560.0
+SDJMatu2: 200.0
+SDJRPR: 500
+SeuilPP: 13.6
+TBase: 8.0
+TLim: 44.0
+TOpt1: 26.0
+TOpt2: 34.0
+VRacBVP: 15.0
+VRacLevee: 30.0
+VRacMatu1: 12.0
+VRacMatu2: 12.0
+VRacPSP: 15.0
+VRacRPR: 15.0
+aeroTotBase: 0.6
+aeroTotPente: 5.0e-05
+densOpti: 85000.0
+densiteA: 0.7
+densiteP: 4.5
+feuilAeroBase: 0.55
+feuilAeroPente: -5.0e-05
+kRespMaint: 0.01
+kcMax: 1.25
+kdf: 0.4
+pcReallocFeuille: 0.7
+phaseDevVeg: 0
+poidsSecGrain: 0.38
+senCO2: 10.0
+seuilCstrMortality: 3.0
+slaMax: 0.005
+slaMin: 0.0016
+slaPente: 0.4
+tempMaint: 25.0
+txAssimBVP: 1.0
+txAssimMatu1: 0.9
+txAssimMatu2: 0.1
+txConversion: 5.8
+txRealloc: 0.4
+txResGrain: 0.55
