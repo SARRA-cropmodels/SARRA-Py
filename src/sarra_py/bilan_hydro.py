@@ -262,7 +262,7 @@ def RempliMc(j, data, paramITK):
     
     # il est possible que le stockMc soit nul en fin de boucle car stockMc est aussi
     # mobilisé lors de l'évaporation
-    data["stockMc"][:,:,j:] = (data["stockMc"][:,:,j] + data["eauCaptee"][:,:,j]).copy()
+    data["stockMc"][:,:,j:] = (data["stockMc"][:,:,j] + data["eauCaptee"][:,:,j]).copy()[...,np.newaxis]
 
     return data
 
@@ -288,7 +288,7 @@ def EvalRunOff(j, data, paramTypeSol):
         data["lr"][:,:,j],
     )
 
-    data["eauDispo"][:,:,j:] = (data["eauDispo"][:,:,j] - data["lr"][:,:,j]).copy()
+    data["eauDispo"][:,:,j:] = (data["eauDispo"][:,:,j] - data["lr"][:,:,j]).copy()[...,np.newaxis]
 
     return data
 
@@ -342,7 +342,7 @@ def EvolRurCstr2(j, data, paramITK):
         (data["changePhase"][:,:,j] == 1) & (data["numPhase"][:,:,j] == 1),
         paramITK["profRacIni"] / 1000 * data["ru"][:,:,j],
         data["stRurMax"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     # dayVrac
     # on met à jour la vitesse de croissance racinaire
@@ -391,7 +391,7 @@ def EvolRurCstr2(j, data, paramITK):
             data["dayVrac"][:,:,j],
         ),
         data["deltaRur"][:,:,j],
-    )
+    )[...,np.newaxis]
 
 
     # rurac/stRurMax partie 2
@@ -408,7 +408,7 @@ def EvolRurCstr2(j, data, paramITK):
             data["stRurMax"][:,:,j],
         ),
         data["stRurMax"][:,:,j],
-    )
+    )[...,np.newaxis]
     
     
     # stockrac/stRur
@@ -432,7 +432,7 @@ def EvolRurCstr2(j, data, paramITK):
             np.maximum((data["stRuSurf"][:,:,j] - data["ruSurf"][:,:,j] / 10) * (data["stRurMax"][:,:,j] / data["ruSurf"][:,:,j]), 0),
         ),
         data["stRur"][:,:,j],
-    )
+    )[...,np.newaxis]
     
 
     
@@ -499,7 +499,7 @@ def rempliRes(j, data):
         condition,
         np.maximum(data["hum"][:,:,j], data["ruSurf"][:,:,j]),
         data["humPrec"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     
 
@@ -507,7 +507,7 @@ def rempliRes(j, data):
         condition,
         data["ruSurf"][:,:,j],
         data["hum"][:,:,j],
-    )
+    )[...,np.newaxis]
 
 
 
@@ -515,20 +515,20 @@ def rempliRes(j, data):
         condition,
         data["stRurMax"][:,:,j],
         data["stRurMaxPrec"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     data["stRurPrec"][:,:,j:] = np.where(
         condition,
         data["stRur"][:,:,j]/data["stRurMax"][:,:,j],
         data["stRurPrec"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     data["stRuPrec"][:,:,j:] = np.where(
         condition,
         # data["stRu"][:,:,j] - data["stRurSurf"][:,:,j],
         data["stTot"][:,:,j] - data["stRurSurf"][:,:,j], # essai stTot
         data["stRuPrec"][:,:,j],
-    )
+    )[...,np.newaxis]
 
 
     # stRuMax
@@ -536,7 +536,7 @@ def rempliRes(j, data):
     # redéfinie à chaque boucle comme étant le produit de la réserve utile (mm/m de sol) et 
     # de la profondeur maximale de sol
     # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
-    data["stRuMax"][:,:,j:] = (data["ru"][:,:,j] * data["profRu"][:,:,j] / 1000).copy()
+    data["stRuMax"][:,:,j:] = (data["ru"][:,:,j] * data["profRu"][:,:,j] / 1000).copy()[...,np.newaxis]
     
     # stRuSurfPrec
     # Rempli Res surface
@@ -550,7 +550,7 @@ def rempliRes(j, data):
     data["stRuSurf"][:,:,j:] = np.minimum(
         data["stRuSurf"][:,:,j] + data["eauDispo"][:,:,j],
         data["ruSurf"][:,:,j] + data["ruSurf"][:,:,j] / 10
-    )
+    )[...,np.newaxis]
 
     # eauTranspi
     # quantité d'eau transpirable
@@ -566,20 +566,20 @@ def rempliRes(j, data):
             data["eauDispo"][:,:,j] - (data["ruSurf"][:,:,j]/10 - data["stRuSurfPrec"][:,:,j])
             ),
         data["eauDispo"][:,:,j],
-    )
+    )[...,np.newaxis]
 
 
 
     # stRu/stTot étape 1
     # stock d'eau total sur l'ensemble du réservoir
     # on incrémente le stock d'eau total de la quantité d'eau transpirable
-    data["stTot"][:,:,j:] = (data["stTot"][:,:,j] + data["eauTranspi"][:,:,j]).copy() ## ok
+    data["stTot"][:,:,j:] = (data["stTot"][:,:,j] + data["eauTranspi"][:,:,j]).copy()[...,np.newaxis] ## ok
 
 
     # stRuVar
     # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
     # différence entre stock total et stRuPrec (non défini clairement ?), borné au minimum en 0
-    data["stRuVar"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["stRuPrec"][:,:,j])
+    data["stRuVar"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["stRuPrec"][:,:,j])[...,np.newaxis]
 
 
     condition_1 = (data["stRuVar"][:,:,j] > data["hum"][:,:,j])
@@ -609,7 +609,7 @@ def rempliRes(j, data):
         ),
         # data["stRu"][:,:,j],
         data["stTot"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     data["stRuPrec"][:,:,j:] = np.where(
         condition_1,
@@ -623,7 +623,7 @@ def rempliRes(j, data):
             ),
         ),
         data["stRuPrec"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     data["stRuVar"][:,:,j:] = np.where(
         condition_1,
@@ -637,15 +637,15 @@ def rempliRes(j, data):
             ),
         ),
         data["stRuVar"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     # hum
     # front d'humectation mis à jour sur la base du delta maximal de stock d'eau total
     # dans l'intervalle [stRuVar, stRuMax]
     # modif 10/06/2015 Resilience stock eau cas simul pluri en continue
     # modif 27/07/2016 Hum ne peut �tre au dessus de stRu (stocktotal)
-    data["hum"][:,:,j:] = np.maximum(data["stRuVar"][:,:,j], data["hum"][:,:,j])
-    data["hum"][:,:,j:] = np.minimum(data["stRuMax"][:,:,j], data["hum"][:,:,j])
+    data["hum"][:,:,j:] = np.maximum(data["stRuVar"][:,:,j], data["hum"][:,:,j])[...,np.newaxis]
+    data["hum"][:,:,j:] = np.minimum(data["stRuMax"][:,:,j], data["hum"][:,:,j])[...,np.newaxis]
 
 
     condition = (data["stTot"][:,:,j] > data["stRuMax"][:,:,j])
@@ -665,21 +665,21 @@ def rempliRes(j, data):
         data["stRuMax"][:,:,j],
         # data["stRu"][:,:,j],
         data["stTot"][:,:,j],
-    )
+    )[...,np.newaxis]
 
 
     # // avant modif 10/06/2015
     # data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stRu"][:,:,j])
     # essais stTot
-    data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stTot"][:,:,j])
+    data["hum"][:,:,j:] = np.maximum(data["hum"][:,:,j], data["stTot"][:,:,j])[...,np.newaxis]
     #! en conflit avec le calcul précédent de hum
 
     # Rempli res racines
-    data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j] + data["eauTranspi"][:,:,j], data["stRurMax"][:,:,j])
+    data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j] + data["eauTranspi"][:,:,j], data["stRurMax"][:,:,j])[...,np.newaxis]
 
     # essais stTot
     # data["stRur"][:,:,j] = np.minimum(data["stRur"][:,:,j], data["stRu"][:,:,j])
-    data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j], data["stTot"][:,:,j])
+    data["stRur"][:,:,j:] = np.minimum(data["stRur"][:,:,j], data["stTot"][:,:,j])[...,np.newaxis]
 
     
 
@@ -833,7 +833,7 @@ def DemandeSol(j, data):
     OUT:
     evapPot : mm
     """
-    data["evapPot"][:,:,j:] = (data["ET0"][:,:,j] * data["kce"][:,:,j]).copy()
+    data["evapPot"][:,:,j:] = (data["ET0"][:,:,j] * data["kce"][:,:,j]).copy()[...,np.newaxis]
 
     return data
 
@@ -860,7 +860,7 @@ def EvapMc(j, data, paramITK):
     data["stockMc"][:,:,j:] = np.maximum(
         0,
         data["stockMc"][:,:,j] - data["ltr"][:,:,j] * data["ET0"][:,:,j] * data["FEMcW"][:,:,j]**2,
-    )
+    )[...,np.newaxis]
 
     return data
 
@@ -881,7 +881,7 @@ def EvapRuSurf(j, data):
     evap : mm
     """
 
-    data["evap"][:,:,j:] = np.minimum(data["evapPot"][:,:,j] * data["fesw"][:,:,j]**2, data["stRuSurf"][:,:,j])
+    data["evap"][:,:,j:] = np.minimum(data["evapPot"][:,:,j] * data["fesw"][:,:,j]**2, data["stRuSurf"][:,:,j])[...,np.newaxis]
 
     return data
 
@@ -907,7 +907,7 @@ def EvalFTSW(j, data):
         data["stRurMax"][:,:,j] > 0,
         data["stRur"][:,:,j] / data["stRurMax"][:,:,j],
         0,
-    )
+    )[...,np.newaxis]
 
     return data
 
@@ -918,7 +918,7 @@ def DemandePlante(j, data):
     # d'près bileau.pas
     # TrPot := Kcp * ETo;
     # attention, séparation de ETp et ET0 dans les formules
-    data["trPot"][:,:,j:] = (data["kcp"][:,:,j] * data["ET0"][:,:,j]).copy()
+    data["trPot"][:,:,j:] = (data["kcp"][:,:,j] * data["ET0"][:,:,j]).copy()[...,np.newaxis]
     
     return data
 
@@ -932,7 +932,7 @@ def EvalKcTot(j, data):
         data["kcp"][:,:,j] == 0.0,
         data["kce"][:,:,j],
         data["kce"][:,:,j] + data["kcp"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     return data
 
@@ -941,11 +941,11 @@ def CstrPFactor(j, data, paramVariete):
 
     # d'après bileau.pas
 
-    data["pFact"][:,:,j:] = paramVariete["PFactor"] + 0.04 * (5 - np.maximum(data["kcp"][:,:,j], 1) * data["ET0"][:,:,j])
-    data["pFact"][:,:,j:] = np.minimum(np.maximum(0.1, data["pFact"][:,:,j]), 0.8)
+    data["pFact"][:,:,j:] = paramVariete["PFactor"] + 0.04 * (5 - np.maximum(data["kcp"][:,:,j], 1) * data["ET0"][:,:,j])[...,np.newaxis]
+    data["pFact"][:,:,j:] = np.minimum(np.maximum(0.1, data["pFact"][:,:,j]), 0.8)[...,np.newaxis]
 
-    data["cstr"][:,:,j:] = np.minimum((data["ftsw"][:,:,j] / (1 - data["pFact"][:,:,j])), 1)
-    data["cstr"][:,:,j:] = np.maximum(0, data["cstr"][:,:,j])
+    data["cstr"][:,:,j:] = np.minimum((data["ftsw"][:,:,j] / (1 - data["pFact"][:,:,j])), 1)[...,np.newaxis]
+    data["cstr"][:,:,j:] = np.maximum(0, data["cstr"][:,:,j])[...,np.newaxis]
 
     return data
 
@@ -955,7 +955,7 @@ def CstrPFactor(j, data, paramVariete):
 def EvalTranspi(j, data):
     # d'après bileau.pas
     
-    data["tr"][:,:,j:] = (data["trPot"][:,:,j] * data["cstr"][:,:,j]).copy()
+    data["tr"][:,:,j:] = (data["trPot"][:,:,j] * data["cstr"][:,:,j]).copy()[...,np.newaxis]
     return data
 
 
@@ -997,10 +997,10 @@ def ConsoResSep(j, data):
     """
 
     # part transpirable sur le reservoir de surface
-    data["trSurf"][:,:,j:] = np.maximum(0, data["stRuSurf"][:,:,j] - data["ruSurf"][:,:,j] / 10)
+    data["trSurf"][:,:,j:] = np.maximum(0, data["stRuSurf"][:,:,j] - data["ruSurf"][:,:,j] / 10)[...,np.newaxis]
 
     # qte d'eau evapore a consommer sur le reservoir de surface
-    data["stRuSurf"][:,:,j:] = np.maximum(0, data["stRuSurf"][:,:,j] - data["evap"][:,:,j])
+    data["stRuSurf"][:,:,j:] = np.maximum(0, data["stRuSurf"][:,:,j] - data["evap"][:,:,j])[...,np.newaxis]
 
 
     # qte d'eau evapore a retirer sur la part transpirable
@@ -1008,11 +1008,11 @@ def ConsoResSep(j, data):
         data["evap"][:,:,j] > data["trSurf"][:,:,j],
         data["trSurf"][:,:,j],
         data["evap"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     # data["stRu"][:,:,j:] = np.maximum(0, data["stRu"][:,:,j] - data["consoRur"][:,:,j])
     # essais stTot
-    data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["consoRur"][:,:,j])
+    data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["consoRur"][:,:,j])[...,np.newaxis]
 
     #  fraction d'eau evapore sur la part transpirable qd les racines sont moins
     #  profondes que le reservoir de surface, mise a jour des stocks transpirables
@@ -1020,9 +1020,9 @@ def ConsoResSep(j, data):
         data["stRurMax"][:,:,j] < data["ruSurf"][:,:,j],
         data["evap"][:,:,j] * data["stRur"][:,:,j] / data["ruSurf"][:,:,j],
         data["consoRur"][:,:,j],
-    )
+    )[...,np.newaxis]
 
-    data["stRur"][:,:,j:] = np.maximum(0, data["stRur"][:,:,j] - data["consoRur"][:,:,j])
+    data["stRur"][:,:,j:] = np.maximum(0, data["stRur"][:,:,j] - data["consoRur"][:,:,j])[...,np.newaxis]
 
 
     # // reajustement de la qte transpirable considerant que l'evap a eu lieu avant
@@ -1031,22 +1031,22 @@ def ConsoResSep(j, data):
         data["tr"][:,:,j] > data["stRur"][:,:,j],
         np.maximum(data["stRur"][:,:,j] - data["tr"][:,:,j], 0),
         data["tr"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     data["stRuSurf"][:,:,j:] = np.where(
         data["stRur"][:,:,j] > 0,
         np.maximum(data["stRuSurf"][:,:,j] - (data["tr"][:,:,j] * np.minimum(data["trSurf"][:,:,j]/data["stRur"][:,:,j], 1)), 0),
         data["stRuSurf"][:,:,j],
-    )
+    )[...,np.newaxis]
 
 
 
-    data["stRur"][:,:,j:] = np.maximum(0, data["stRur"][:,:,j] - data["tr"][:,:,j])
+    data["stRur"][:,:,j:] = np.maximum(0, data["stRur"][:,:,j] - data["tr"][:,:,j])[...,np.newaxis]
 
     # data["stRu"][:,:,j:] = np.maximum(0, data["stRu"][:,:,j] - data["tr"][:,:,j])
     # essais stTot
-    data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["tr"][:,:,j]) ## ok
-    data["etr"][:,:,j:] = (data["tr"][:,:,j] + data["evap"][:,:,j]).copy()
-    data["etm"][:,:,j:] = (data["trPot"][:,:,j] + data["evapPot"][:,:,j]).copy()
+    data["stTot"][:,:,j:] = np.maximum(0, data["stTot"][:,:,j] - data["tr"][:,:,j])[...,np.newaxis] ## ok
+    data["etr"][:,:,j:] = (data["tr"][:,:,j] + data["evap"][:,:,j]).copy()[...,np.newaxis]
+    data["etm"][:,:,j:] = (data["trPot"][:,:,j] + data["evapPot"][:,:,j]).copy()[...,np.newaxis]
 
     return data
