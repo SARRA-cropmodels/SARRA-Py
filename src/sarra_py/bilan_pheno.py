@@ -1,7 +1,10 @@
 import numpy as np
+import copy
 
 
-def EvalPhenoSarrahV3(j, data, paramITK, paramVariete): 
+
+
+def EvalPhenoSarrahV3(j, data_2, paramITK, paramVariete): 
   
   """
   Traduit depuis phenologie.pas
@@ -42,14 +45,16 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
       dict: dictionnaire de matrices numpy
   """
 
+  data = copy.deepcopy(data_2)
+
   # arrivés au stade 7, on remet les variables phénologiques principales à zero
-  data["changePhase"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["changePhase"][:,:,j])
-  data["sdj"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["sdj"][:,:,j])
-  data["ruRac"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["numPhase"][:,:,j])
-  data["nbJourCompte"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["numPhase"][:,:,j])
-  data["startLock"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 1, data["startLock"][:,:,j])
+  data["changePhase"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["changePhase"][:,:,j])[...,np.newaxis]
+  data["sdj"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["sdj"][:,:,j])[...,np.newaxis]
+  data["ruRac"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["numPhase"][:,:,j])[...,np.newaxis]
+  data["nbJourCompte"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["numPhase"][:,:,j])[...,np.newaxis]
+  data["startLock"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 1, data["startLock"][:,:,j])[...,np.newaxis]
   # on laisse cette condition en dernier...
-  data["numPhase"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["numPhase"][:,:,j])
+  data["numPhase"][:,:,j:] = np.where(data["numPhase"][:,:,j] == 7, 0, data["numPhase"][:,:,j])[...,np.newaxis]
 
   
 
@@ -64,7 +69,7 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
     
   
   # on force alors le numéro de phase sur 1
-  data["numPhase"][:,:,j:] = np.where(condition, 1, data["numPhase"][:,:,j])
+  data["numPhase"][:,:,j:] = np.where(condition, 1, data["numPhase"][:,:,j])[...,np.newaxis]
 
   # on flag un changement de phase,
   # ce qui permet de déclencher la mise à jour de la somme de températures de la phase suivante
@@ -75,7 +80,7 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
     condition,
     paramVariete["SDJLevee"],
     data["seuilTempPhaseSuivante"][:,:,j],
-  )
+  )[...,np.newaxis]
 
   # on flag ce changement de phase comme étant celui de l'initiation
   # ce qui permet plus tard de bypasser l'incrémentation du numéro de phase
@@ -84,7 +89,7 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
     condition,
     1,
     data["initPhase"][:,:,j]
-  )
+  )[...,np.newaxis]
   
  
 
@@ -124,14 +129,14 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
     condition,
     data["numPhase"][:,:,j] + 1 ,
     data["numPhase"][:,:,j],
-  )
+  )[...,np.newaxis]
 
   # on enregistre les sdj de la phase précédente
   data["sommeDegresJourPhasePrec"][:,:,j:] = np.where(
       condition,
       data["seuilTempPhaseSuivante"][:,:,j],
       data["sommeDegresJourPhasePrec"][:,:,j],
-  )
+  )[...,np.newaxis]
 
 
 
@@ -145,7 +150,7 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
       condition,
       paramVariete["SDJLevee"],
       data["seuilTempPhaseSuivante"][:,:,j]
-  )
+  )[...,np.newaxis]
 
   # phase 2
   condition = \
@@ -156,7 +161,7 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
       condition,
       data["seuilTempPhaseSuivante"][:,:,j] + paramVariete["SDJBVP"],
       data["seuilTempPhaseSuivante"][:,:,j]
-  )
+  )[...,np.newaxis]
 
   # phase 3
   condition = \
@@ -178,7 +183,7 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
       condition,
       data["sdj"][:,:,j] + paramVariete["SDJRPR"],
       data["seuilTempPhaseSuivante"][:,:,j]
-  ) 
+  )[...,np.newaxis]
 
   # phase 5
   condition = \
@@ -189,7 +194,7 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
       condition,
       data["seuilTempPhaseSuivante"][:,:,j] + paramVariete["SDJMatu1"],
       data["seuilTempPhaseSuivante"][:,:,j]
-  )
+  )[...,np.newaxis]
 
   # phase 6
   condition = \
@@ -200,7 +205,7 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
       condition,
       data["seuilTempPhaseSuivante"][:,:,j] + paramVariete["SDJMatu2"],
       data["seuilTempPhaseSuivante"][:,:,j]
-  )                                                    
+  )[...,np.newaxis]                                                    
 
 
 
@@ -247,7 +252,7 @@ def EvalDegresJourSarrahV3(j, data, paramVariete):
         data["numPhase"][:,:,j] >= 1,
         data["sdj"][:,:,j] + data["ddj"][:,:,j],
         0,
-    )
+    )[...,np.newaxis]
 
     return data
 
@@ -265,42 +270,42 @@ def EvalVitesseRacSarraV3(j, data, paramVariete):
         data["numPhase"][:,:,j] == 1,
         paramVariete['VRacLevee'],
         data["vRac"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     # phase 2
     data["vRac"][:,:,j:] = np.where(
         data["numPhase"][:,:,j] == 2,
         paramVariete['VRacBVP'],
         data["vRac"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     # phase 3
     data["vRac"][:,:,j:] = np.where(
         data["numPhase"][:,:,j] == 3,
         paramVariete['VRacPSP'],
         data["vRac"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     # phase 4
     data["vRac"][:,:,j:] = np.where(
         data["numPhase"][:,:,j] == 4,
         paramVariete['VRacRPR'],
         data["vRac"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     # phase 5
     data["vRac"][:,:,j:] = np.where(
         data["numPhase"][:,:,j] == 5,
         paramVariete['VRacMatu1'],
         data["vRac"][:,:,j],
-    )
+    )[...,np.newaxis]
     
     # phase 6
     data["vRac"][:,:,j:] = np.where(
         data["numPhase"][:,:,j] == 6,
         paramVariete['VRacMatu2'],
         data["vRac"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     # phase 0 ou 7
     #     else
@@ -310,7 +315,7 @@ def EvalVitesseRacSarraV3(j, data, paramVariete):
         (data["numPhase"][:,:,j] == 0) | (data["numPhase"][:,:,j] == 7),
         0,
         data["vRac"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     return data
 
@@ -344,7 +349,7 @@ def PhotoperSarrahV3(j, data, paramVariete):
         (data["numPhase"][:,:,j] == 3) & (data["sumPP"][:,:,j] < paramVariete["PPsens"]),
         0,
         data["phasePhotoper"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     return data
 
@@ -365,13 +370,13 @@ def MortaliteSarraV3(j, data, paramITK, paramVariete):
         condition,
         0,
         data['nbJourCompte'][:,:,j],
-    )
+    )[...,np.newaxis]
 
     data['nbjStress'][:,:,j:] = np.where(
         condition,
         0,
         data['nbjStress'][:,:,j],
-    )
+    )[...,np.newaxis]
 
 
     condition = (data["numPhase"][:,:,j] >= 2)
@@ -380,7 +385,7 @@ def MortaliteSarraV3(j, data, paramITK, paramVariete):
         condition,
         data['nbJourCompte'][:,:,j] + 1,
         data['nbJourCompte'][:,:,j],
-    )
+    )[...,np.newaxis]
 
 
     condition = (data["numPhase"][:,:,j] >= 2) & (data["nbJourCompte"][:,:,j] < paramITK["nbjTestSemis"]) & (data["deltaBiomasseAerienne"][:,:,j] < 0)
@@ -389,7 +394,7 @@ def MortaliteSarraV3(j, data, paramITK, paramVariete):
         condition,
         data["nbjStress"][:,:,j] + 1,
         data["nbjStress"][:,:,j],                           
-    )
+    )[...,np.newaxis]
 
 
     condition = (data["numPhase"][:,:,j] >= 2) & (data["nbjStress"][:,:,j] == paramVariete["seuilCstrMortality"])
@@ -410,6 +415,6 @@ def MortaliteSarraV3(j, data, paramITK, paramVariete):
         condition,
         0,
         data["nbjStress"][:,:,j],
-    )
+    )[...,np.newaxis]
 
     return data
