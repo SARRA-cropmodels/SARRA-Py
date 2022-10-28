@@ -15,10 +15,12 @@ def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
     data["ltr"] = np.full((grid_width, grid_height, duration), 1.0)
 
     # StRurMax := Ru * ProfRacIni / 1000;
-    data["stRurMax"] = np.full((grid_width, grid_height, duration), (paramTypeSol["ru"] * paramITK["profRacIni"] / 1000))
+    # data["stRurMax"] = np.full((grid_width, grid_height, duration), (paramTypeSol["ru"] * paramITK["profRacIni"] / 1000))
+    data["stRurMax"] = data["ru"] * paramITK["profRacIni"] / 1000
 
     # RuSurf := EpaisseurSurf / 1000 * Ru;
-    data["ruSurf"] = np.full((grid_width, grid_height, duration), (paramTypeSol["epaisseurSurf"] / 1000 * paramTypeSol["ru"]))
+    # data["ruSurf"] = np.full((grid_width, grid_height, duration), (paramTypeSol["epaisseurSurf"] / 1000 * paramTypeSol["ru"]))
+    data["ruSurf"] = data["epaisseurSurf"] / 1000 * data["ru"]
     
     # //    PfTranspi := EpaisseurSurf * HumPf;
     # //    StTot := StockIniSurf - PfTranspi/2 + StockIniProf;
@@ -26,11 +28,14 @@ def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
     # StTot := StockIniSurf  + StockIniProf;
     #data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniSurf"] + paramTypeSol["stockIniProf"]))
     #! modifié pour faire correspondre les résultats de simulation, à remettre en place pour un calcul correct dès que possible
-    data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniProf"]))
+    # data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniProf"]))
+    data["stTot"] = data["stockIniProf"]
     
 
     # ProfRU := EpaisseurSurf + EpaisseurProf;
-    data["profRu"] = np.full((grid_width, grid_height, duration), (paramTypeSol["epaisseurSurf"] + paramTypeSol["epaisseurProf"]))
+    # data["profRu"] = np.full((grid_width, grid_height, duration), (paramTypeSol["epaisseurSurf"] + paramTypeSol["epaisseurProf"]))
+    data["profRu"] = data["epaisseurProf"] + data["epaisseurSurf"]
+
 
     # // modif 10/06/2015  resilience stock d'eau
     # // Front d'humectation egal a RuSurf trop de stress initial
@@ -283,8 +288,10 @@ def EvalRunOff(j, data, paramTypeSol):
 
     # lr est reset a zéro en début de calcul, on ne broadcast pas les valeurs
     data["lr"][:,:,j] = np.where(
-        data["rain"][:,:,j] > paramTypeSol["seuilRuiss"],
-        (data["eauDispo"][:,:,j]  - paramTypeSol["seuilRuiss"]) *  paramTypeSol["pourcRuiss"],
+        # data["rain"][:,:,j] > paramTypeSol["seuilRuiss"],
+        # (data["eauDispo"][:,:,j]  - paramTypeSol["seuilRuiss"]) *  paramTypeSol["pourcRuiss"],
+        data["rain"][:,:,j] > data["seuilRuiss"][:,:,j],
+        (data["eauDispo"][:,:,j]  - data["seuilRuiss"][:,:,j]) *  data["pourcRuiss"][:,:,j],
         data["lr"][:,:,j],
     )
 

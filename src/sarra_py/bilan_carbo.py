@@ -148,7 +148,7 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
     #data["irrigation"] = df_weather["Irrigation"].copy().values.reshape(grid_width, grid_height, duration)
     #data["irrigation"] = np.tile(df_weather["Irrigation"].values,(grid_width,grid_height,1))
 
-    data["ru"] = np.full((grid_width, grid_height, duration), paramTypeSol["ru"])
+    # data["ru"] = np.full((grid_width, grid_height, duration), paramTypeSol["ru"])
     data["irrigAuto"] = np.full((grid_width, grid_height, duration), paramITK["irrigAuto"])
 
 
