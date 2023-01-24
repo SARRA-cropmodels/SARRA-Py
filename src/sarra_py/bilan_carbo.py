@@ -1,158 +1,161 @@
 import numpy as np
 
-def InitiationCulture(data, grid_width, grid_height, duration, paramVariete): # depuis MilBilanCarbone.pas
-    
+def InitiationCulture(data, grid_width, grid_height, duration, paramVariete):
+    """
+    Initializes variables related to crop growth in the data xarray dataset.
+    This code has been adapted from the original InitiationCulture procedure, MilBilanCarbone.pas code.
+    Comments with tab indentation are from the original code.
+    As the rain is the first variable to be initialized in the data xarray dataset, its dimensions are used
+    to initialize the other variables.
+    """    
 
-    # SommeDegresJourMaximale := SeuilTempLevee + SeuilTempBVP + SeuilTempRPR + SeuilTempMatu1 + SeuilTempMatu2;
-    data["sommeDegresJourMaximale"] = np.full(
-        (grid_width, grid_height, duration),
+    # Maximum thermal time (°C.j)
+    # Somme de degré-jour maximale (°C.j)
+    #   SommeDegresJourMaximale := SeuilTempLevee + SeuilTempBVP + SeuilTempRPR + SeuilTempMatu1 + SeuilTempMatu2;
+    data["sommeDegresJourMaximale"] = (data["rain"].dims, np.full(
+        (duration, grid_width, grid_height),
         (paramVariete["SDJLevee"] + paramVariete["SDJBVP"] + paramVariete["SDJRPR"] + paramVariete["SDJMatu1"] + paramVariete["SDJMatu2"])
-    )
+    ))
+    data["sommeDegresJourMaximale"].attrs = {"units":"°C.j", "long_name":"Maximum thermal time"}
 
-    # NumPhase := 0;
-    # SommeDegresJour := 0;
-    # BiomasseAerienne := 0;
-    # BiomasseVegetative := 0;
-    # BiomasseTotale := 0;
-    # BiomasseTiges := 0;
-    # BiomasseRacinaire := 0;
-    # BiomasseFeuilles := 0;
-    # DeltaBiomasseTotale := 0;
-    # SeuilTempPhaseSuivante:=0;
-    # Lai := 0;
-
-    variables = [
-        "numPhase",
-        "sdj",
-        "biomasseAerienne",
-        "biomasseVegetative",
-        "biomasseTotale",
-        "biomasseTige",
-        "biomasseRacinaire",
-        "biomasseFeuille",
-        "deltaBiomasseTotale",
-        "seuilTempPhaseSuivante",
-        "lai",
+    
+    # Other variables to be initialized at 0
+    # Autres variables à initialiser à 0
+    #   NumPhase := 0;
+    #   SommeDegresJour := 0;
+    #   BiomasseAerienne := 0;
+    #   BiomasseVegetative := 0;
+    #   BiomasseTotale := 0;
+    #   BiomasseTiges := 0;
+    #   BiomasseRacinaire := 0;
+    #   BiomasseFeuilles := 0;
+    #   DeltaBiomasseTotale := 0;
+    #   SeuilTempPhaseSuivante:=0;
+    #   Lai := 0;
+    variables = {
+        "numPhase":"arbitrary units",
+        "sdj":"°C.j",
+        "biomasseAerienne":"kg/ha",
+        "biomasseVegetative":"kg/ha",
+        "biomasseTotale":"kg/ha",
+        "biomasseTige":"kg/ha",
+        "biomasseRacinaire":"kg/ha",
+        "biomasseFeuille":"kg/ha",
+        "deltaBiomasseTotale":"kg/ha",
+        "seuilTempPhaseSuivante":"°C.j",
+        "lai":"m2/m2",
+    }
         
-    ]
-
     for variable in variables :
-        data[variable] = np.zeros(shape=(grid_width, grid_height, duration))
+        data[variable] = (data["rain"].dims, np.zeros(shape=(duration, grid_width, grid_height)))
+        data[variable].attrs = {"units":variables[variable], "long_name":variable}
 
     return data
 
 
 
 
+
 def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
+    """
+    Initializes supplementary variables needed for computations.
+    As the rain is the first variable to be initialized in the data xarray dataset, its dimensions are used
+    to initialize the other variables.
+    """   
 
-    variables = [
-        "ddj",
-        "phasePhotoper",
-        "changePhase",
+    data = data.copy(deep=True)
 
-        
-        "correctedIrrigation",
-        "stockIrr",
-        "ruIrr",
-        "irrigTotDay",
-        "eauDispo",
-        "sommeIrrig",
-        "stockMc",
-        "eauCaptee",
-        "lr",
-        "ruRac",
-        "vRac",
-        "cstr",
-        "dayVrac",
-        "deltaRur",
-        "stockRac",
-        "stRuMax",
-        #"stockSurface",
-        "stRuSurfPrec",
-        "eauTranspi",
-        #"stockTotal",
-        "dr",
-        "fesw",
-        "kce",
-        "evapPot",
-        "FEMcW",
-        "evap",
-        "ftsw",
-        "kcp",
-        "trPot",
-        "pFact",
-        "tr",
-        "trSurf",
-        "consoRur",
-        "KAssim",
-        "sommeDegresJourPhasePrec",
-        "conv",
-        "rdt",
-        #"biomasseTige",
-        #"biomasseFeuille",
-        "sla",
-        #"parIntercepte",
-        "assimPot",
-        "assim",
-        #"dRespMaint",
-        "biomTotStadeIp",
-        "biomTotStadeFloraison",
-        "rdtPot",
-        "respMaint",
-        "dRdtPot",
-        "deltaBiomasseAerienne",
-        "manqueAssim",
-        "reallocation",
-        "dayBiomLeaf",
-        "deltaBiomasseFeuilles",
-        # "partFeuillesTiges",
-        "bM",
-        "cM",
-        "sumPP",
-        "seuilTempPhasePrec",
-        "dureeDuJour",
-        "nbJourCompte",
-        "nbjStress",
-        "rapDensite",
-        "stRuSurf",
-        "stRur",
-        # "humPrec",
-        "stRurMaxPrec",
-        "stRurPrec",
-        "stRu",
-        "stRurSurf",
-        #"stRuPrec",
-        "stRuVar",
-        "etp",
-        "kcTot",
-        "etr",
-        "etm",
-        #"txConversion",
-        "kRespMaint",
-        "phaseDevVeg",
-        "NbUBT",
-        "UBTCulture",
-        "LitFeuille",
-        "FeuilleUp",
-        "TigeUp",
-        "startLock",
+    variables = {
+        "assim": ["",""],
+        "assimPot": ["",""],
+        "biomTotStadeFloraison": ["",""],
+        "biomTotStadeIp": ["",""],
+        "bM": ["",""],
+        "changePhase" : ["indicator of phase transition","binary"],
+        "cM": ["",""],
+        "consoRur": ["",""],
+        "conv": ["",""],
+        "correctedIrrigation" : ["corrected irrigation","mm"],
+        "cstr" : ["drought stress coefficient", "arbitrary unit"],
+        "dayBiomLeaf": ["",""],
+        "dayVrac" : ["modulated daily root growth","mm/day"],
+        "ddj": ["daily thermal time","°C"],
+        "deltaBiomasseAerienne": ["",""],
+        "deltaBiomasseFeuilles": ["",""],
+        "deltaRur": ["change in root system water reserve","mm"],
+        "dr": ["",""],
+        "dRdtPot": ["",""],
+        "dureeDuJour": ["",""],
+        "eauCaptee" : ["water captured by the mulch in one day","mm"],
+        "eauDispo" : ["available water, sum of rainfall and total irrigation for the day","mm"],
+        "eauTranspi": ["",""],
+        "etm": ["",""],
+        "etp": ["",""],
+        "etr": ["",""],
+        "evap": ["",""],
+        "evapPot": ["",""],
+        "FEMcW": ["",""],
+        "fesw": ["",""],
+        "FeuilleUp": ["",""],
+        "ftsw": ["",""],
+        "initPhase": ["",""],
+        "irrigTotDay" : ["total irrigation for the day","mm"],
+        "KAssim": ["",""],
+        "kce": ["",""],
+        "kcp": ["",""],
+        "kcTot": ["",""],
+        "kRespMaint": ["",""],
+        "LitFeuille": ["",""],
+        "lr" : ["daily water runoff","mm"],
+        "manqueAssim": ["",""],
+        "nbJourCompte": ["",""],
+        "nbjStress": ["",""],
+        "NbUBT": ["",""],
+        "pFact": ["",""],
+        "phaseDevVeg": ["",""],
+        "phasePhotoper": ["photoperiodic phase indicator","binary"],
+        "rapDensite": ["",""],
+        "rdt": ["",""],
+        "rdtPot": ["",""],
+        "reallocation": ["",""],
+        "respMaint": ["",""],
+        "ruIrr" : ["?","mm"],
+        "ruRac": ["Water column that can potentially be strored in soil volume explored by root system","mm"],
+        "seuilTempPhasePrec": ["",""],
+        "sla": ["",""],
+        "sommeDegresJourPhasePrec": ["",""],
+        "startLock": ["",""],
+        "stockIrr" : ["?","mm"],
+        "stockMc" : ["water stored in crop residues (mulch)","mm"],
+        "stockRac": ["",""],
+        "stRu": ["",""],
+        "stRuMax": ["",""],
+        "stRur": ["",""],
+        "stRurMaxPrec": ["",""],
+        "stRurPrec": ["",""],
+        "stRurSurf": ["",""],
+        "stRuSurf": ["",""],
+        "stRuSurfPrec": ["",""],
+        "stRuVar": ["",""],
+        "sumPP": ["",""],
+        "TigeUp": ["",""],
+        "tr": ["",""],
+        "trPot": ["",""],
+        "trSurf": ["",""],
+        "UBTCulture": ["",""],
+        "vRac" : ["reference daily root growth","mm/day"],
+    }
         
 
-    ]
+
 
     for variable in variables :
-        data[variable] = np.zeros(shape=(grid_width, grid_height, duration))
+        data[variable] = (data["rain"].dims, np.zeros(shape=(duration, grid_width, grid_height)))
+        data[variable].attrs = {"units":variables[variable][1], "long_name":variables[variable][0]}
 
 
-    #data["irrigation"] = df_weather["Irrigation"].copy().values.reshape(grid_width, grid_height, duration)
-    #data["irrigation"] = np.tile(df_weather["Irrigation"].values,(grid_width,grid_height,1))
-
-    # data["ru"] = np.full((grid_width, grid_height, duration), paramTypeSol["ru"])
-    data["irrigAuto"] = np.full((grid_width, grid_height, duration), paramITK["irrigAuto"])
-
-
-    
+    data["irrigAuto"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["irrigAuto"]))
+    data["irrigAuto"].attrs = {"units":"binary", "long_name":"automatic irrigation indicator"}
 
 
     return data
@@ -170,7 +173,10 @@ def EvalPar(data):
     #depuis meteo.par
     kpar = 0.5
     data["par"] = kpar * data["rg"]
+    data["par"].attrs = {"units":"MJ/m2", "long_name":"par"}
     return data
+
+    
 
 def EvolKcpKcIni(j, data, paramVariete):
 
