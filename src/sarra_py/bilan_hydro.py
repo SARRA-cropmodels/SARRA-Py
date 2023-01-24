@@ -1,50 +1,79 @@
 import numpy as np
 
-def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration): # depuis Bileau.pas
-    
-    # BiomMc := BiomIniMc;
-    data["biomMc"] = np.full((grid_width, grid_height, duration), paramITK["biomIniMc"])
-    
-    # LitTiges := BiomIniMc;
-    data["LitTige"] = np.full((grid_width, grid_height, duration), paramITK["biomIniMc"])
+def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
+    """
+    Initializes variables related to crop residues boimass (mulch) in the data xarray dataset.
+    This code has been adapted from the original InitPlotMc procedure, Bileau.pas code.
+    Comments with tab indentation are from the original code.
+    As the rain is the first variable to be initialized in the data xarray dataset, its dimensions are used
+    to initialize the other variables.
+    """
 
-    # StSurf := StockIniSurf;
+    # Initial biomass of crop residues (mulch) (kg/ha)
+    # Biomasse initiale des résidus de culture (mulch) (kg/ha)
+    #   BiomMc := BiomIniMc;
+    data["biomMc"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
+    data["biomMc"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of crop residues (mulch)"}
+
+
+    # Initial biomass of stem residues as litter (kg/ha)
+    # Biomasse initiale des résidus de tiges sous forme de litière (kg/ha)
+    #   LitTiges := BiomIniMc;
+    data["LitTige"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
+    data["LitTige"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of stem residues as litter"}
+
+
+    # ?
+    #   StSurf := StockIniSurf;
     # data["stSurf"] = np.full((grid_width, grid_height, duration), paramTypeSol["stockIniSurf"])
 
-    # Ltr := 1;
-    data["ltr"] = np.full((grid_width, grid_height, duration), 1.0)
 
-    # StRurMax := Ru * ProfRacIni / 1000;
-    # data["stRurMax"] = np.full((grid_width, grid_height, duration), (paramTypeSol["ru"] * paramITK["profRacIni"] / 1000))
+    # ?
+    #   Ltr := 1;
+    data["ltr"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), 1.0))
+
+
+    # Soil maximum water storage capacity (mm)
+    # Capacité maximale de la RU (mm)
+    #   StRurMax := Ru * ProfRacIni / 1000;
     data["stRurMax"] = data["ru"] * paramITK["profRacIni"] / 1000
+    data["stRurMax"].attrs = {"units": "mm", "long_name": "Soil maximum water storage capacity"}
 
-    # RuSurf := EpaisseurSurf / 1000 * Ru;
-    # data["ruSurf"] = np.full((grid_width, grid_height, duration), (paramTypeSol["epaisseurSurf"] / 1000 * paramTypeSol["ru"]))
+
+    # Maximum water capacity of surface tank (mm)
+    # Reserve utile de l'horizon de surface (mm)
+    #   RuSurf := EpaisseurSurf / 1000 * Ru;
     data["ruSurf"] = data["epaisseurSurf"] / 1000 * data["ru"]
+    data["ruSurf"].attrs = {"units": "mm", "long_name": "Maximum water capacity of surface tank"}
     
-    # //    PfTranspi := EpaisseurSurf * HumPf;
-    # //    StTot := StockIniSurf - PfTranspi/2 + StockIniProf;
 
-    # StTot := StockIniSurf  + StockIniProf;
-    #data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniSurf"] + paramTypeSol["stockIniProf"]))
+    # ?
+    #   //    PfTranspi := EpaisseurSurf * HumPf;
+    #   //    StTot := StockIniSurf - PfTranspi/2 + StockIniProf;
+    #   StTot := StockIniSurf  + StockIniProf;
+    # data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniSurf"] + paramTypeSol["stockIniProf"]))
     #! modifié pour faire correspondre les résultats de simulation, à remettre en place pour un calcul correct dès que possible
     # data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniProf"]))
     data["stTot"] = data["stockIniProf"]
+    data["stTot"].attrs = {"units": "mm", "long_name": "?"}
     
 
-    # ProfRU := EpaisseurSurf + EpaisseurProf;
-    # data["profRu"] = np.full((grid_width, grid_height, duration), (paramTypeSol["epaisseurSurf"] + paramTypeSol["epaisseurProf"]))
+    # Soil maximal depth (mm)
+    # Profondeur maximale de sol (mm)
+    #   ProfRU := EpaisseurSurf + EpaisseurProf;
     data["profRu"] = data["epaisseurProf"] + data["epaisseurSurf"]
+    data["profRu"].attrs = {"units": "mm", "long_name": "Soil maximal depth"}
 
 
-    # // modif 10/06/2015  resilience stock d'eau
-    # // Front d'humectation egal a RuSurf trop de stress initial
-    # //    Hum := max(StTot, StRurMax);
-    
-    # Hum := max(RuSurf, StRurMax);
-    # // Hum mis a profRuSurf
-    # Hum := max(StTot, Hum);
-    data["hum"] = np.full((grid_width, grid_height, duration),
+    # Maximum water capacity to humectation front (mm)
+    # Quantité d'eau maximum jusqu'au front d'humectation (mm)
+    #   // modif 10/06/2015  resilience stock d'eau
+    #   // Front d'humectation egal a RuSurf trop de stress initial
+    #   //    Hum := max(StTot, StRurMax);
+    #   Hum := max(RuSurf, StRurMax);
+    #   // Hum mis a profRuSurf
+    #   Hum := max(StTot, Hum);
+    data["hum"] = (data["rain"].dims, np.full((duration, grid_width, grid_height),
         np.maximum(
             np.maximum(
                 data["ruSurf"],
@@ -52,17 +81,25 @@ def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
             ),
             data["stTot"],
         )
-    )
- 
-    
-    data["humPrec"] = np.copy(data["hum"])
+    ))
+    data["hum"].attrs = {"units": "mm", "long_name": "Maximum water capacity to humectation front"}
 
+
+    # Previous value for Maximum water capacity to humectation front (mm)
+    #  HumPrec := Hum;
+    data["humPrec"] = data["hum"]
     
-    # HumPrec := Hum;
-    # StRurPrec := 0;
-    # StRurMaxPrec := 0;
-    data["stRuPrec"] = np.copy(data["stTot"])
-    # //modif 10/06/2015 resilience stock d'eau
+    
+    # ?
+    #   StRurPrec := 0;
+
+
+    # Previous value for stTot
+    #   StRurMaxPrec := 0;
+    #   //modif 10/06/2015 resilience stock d'eau
+    data["stRuPrec"] =  data["stTot"]
+    
+
 
     return data
 
@@ -110,14 +147,15 @@ def MeteoEToFAO():# pas indispensable
 
 def EvalIrrigPhase(j, data, paramITK):
     """
-    depuis bileau.pas
-
-    CB 2014
-Modification due � la prise en compte effet Mulch
-  Soit on a une irrigation observ�e, soit on calcul la dose d'irrigation
-  Elle est calcul�e en fonvtion d'un seuil d'humidit� (IrrigAutoTarget)
-  et de possibilit� technique ou choix (MaxIrrig, Precision)
-  Dans cette gestion d'irrigation la pluie du jour n'est pas prise en compte
+    Translated from the procedure EvalIrrigPhase, of the original Pascal codes bileau.pas and exmodules2.pas
+    
+    
+    Notes from CB, 2014 : 
+    Modification due � la prise en compte effet Mulch
+    Soit on a une irrigation observ�e, soit on calcul la dose d'irrigation
+    Elle est calcul�e en fonvtion d'un seuil d'humidit� (IrrigAutoTarget)
+    et de possibilit� technique ou choix (MaxIrrig, Precision)
+    Dans cette gestion d'irrigation la pluie du jour n'est pas prise en compte
 
     """
     # EnPlus : Double;
@@ -142,7 +180,7 @@ Modification due � la prise en compte effet Mulch
     data["stockIrr"][:,:,j] = np.where(
         condition,
         np.where(
-            (data["stRurMax"][:,:,j] < data["ruSurf"][:,:,j]),
+            (data["stRurMax"][:,:,j] < data["ruSurf"]),
             data["stRuSurf"][:,:,j],
             data["stRur"][:,:,j],
             ),
@@ -155,7 +193,7 @@ Modification due � la prise en compte effet Mulch
     data["ruIrr"][:,:,j] = np.where(
         condition,
         np.where(
-            (data["stRurMax"][:,:,j] < data["ruSurf"][:,:,j]),
+            (data["stRurMax"][:,:,j] < data["ruSurf"]),
             data["ruSurf"][:,:,j],
             data["stRurMax"][:,:,j],
             ),
