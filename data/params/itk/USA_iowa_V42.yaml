@@ -1,23 +1,27 @@
-DateSemis: 2012-4-28
+DateSemis: 2022-2-1
 KI: 0.0
 KNLit: 0.0
 KNUp: 0.0
 KT: 0.0
 NI: .nan
-biomIniMc: 0.0
 coefMc: 0.0
 dateFin: 300.0
 densite: 86500.0
-humSatMc: 0.0
-irrigAuto: false
-irrigAutoTarget: 0.0
-maxIrrig: 0.0
-mulch: 100.0
 nbjTestSemis: 0
 precision: 0.0
 profRacIni: 0.0
-seuilEauSemis: 0.0
-surfMc: 0.0
+seuilEauSemis: 5.0
+
+# irrigation related
+irrigAuto: false
+irrigAutoTarget: 0.0
+maxIrrig: 0.0
+
+# mulch related
+surfMc: 1.0 # overing capacity of the mulch (ha/t)
+biomIniMc: 0.0 # initial mulch biomass (kg/ha)
+humSatMc: 0.0 # saturation point of mulch, kg H2O/kg biomass (% m/m)
+mulch: 100.0 # inutilisé ?
 
 # non utilisés dans le modèle python
 DisMc: 0

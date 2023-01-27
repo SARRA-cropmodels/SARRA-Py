@@ -82,11 +82,15 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         "ddj": ["daily thermal time","°C"],
         "deltaBiomasseAerienne": ["",""],
         "deltaBiomasseFeuilles": ["",""],
-        "deltaRur": ["change in root system water reserve","mm"],
+        #! renaming deltaRur with delta_root_tank_capacity
+        #// "deltaRur": ["change in root system water reserve","mm"],
+        "delta_root_tank_capacity": ["change in root system water reserve","mm"],
         "dr": ["",""],
         "dRdtPot": ["",""],
         "dureeDuJour": ["",""],
-        "eauCaptee" : ["water captured by the mulch in one day","mm"],
+        #! replacing eauCaptee by water_gathered_by_mulch
+        #// "eauCaptee" : ["water captured by the mulch in one day","mm"],
+        "water_gathered_by_mulch" : ["water captured by the mulch in one day","mm"],
         "eauDispo" : ["available water, sum of rainfall and total irrigation for the day","mm"],
         "eauTranspi": ["",""],
         "etm": ["",""],
@@ -119,22 +123,34 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         "rdtPot": ["",""],
         "reallocation": ["",""],
         "respMaint": ["",""],
-        "ruIrr" : ["?","mm"],
+
+        #! renaming ruIrr to irrigation_tank_capacity
+        #//"ruIrr" : ["?","mm"],
+        "irrigation_tank_capacity" : ["irrigation tank capacity","mm"],
         "ruRac": ["Water column that can potentially be strored in soil volume explored by root system","mm"],
         "seuilTempPhasePrec": ["",""],
         "sla": ["",""],
         "sommeDegresJourPhasePrec": ["",""],
         "startLock": ["",""],
-        "stockIrr" : ["?","mm"],
-        "stockMc" : ["water stored in crop residues (mulch)","mm"],
+        #! renaming stockIrr to irrigation_tank_stock
+        #// "stockIrr" : ["?","mm"],
+        "irrigation_tank_stock" : ["?","mm"],
+        #! renaming stockMc to mulch_water_stock
+        #// "stockMc" : ["water stored in crop residues (mulch)","mm"],
+        "mulch_water_stock" : ["water stored in crop residues (mulch)","mm"],
         "stockRac": ["",""],
-        "stRu": ["",""],
+        # renaming stRu to root_tank_stock
+        #// "stRu": ["",""],
+        "root_tank_stock": ["",""],
         "stRuMax": ["",""],
+        # renaming stRur to 
         "stRur": ["",""],
         "stRurMaxPrec": ["",""],
         "stRurPrec": ["",""],
         "stRurSurf": ["",""],
-        "stRuSurf": ["",""],
+        #! renaming stRuSurf to surface_tank_stock
+        #// "stRuSurf": ["",""],
+        "surface_tank_stock": ["",""],
         "stRuSurfPrec": ["",""],
         "stRuVar": ["",""],
         "sumPP": ["",""],
@@ -145,8 +161,7 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         "UBTCulture": ["",""],
         "vRac" : ["reference daily root growth","mm/day"],
     }
-        
-
+    
 
 
     for variable in variables :
@@ -179,16 +194,17 @@ def EvalPar(data):
     
 
 def EvolKcpKcIni(j, data, paramVariete):
-
+    # group 50
+    
     # //manque   Numphase := trunc(NoPhase); ??
     # d'après biomasse.pas : 
     # kcp := max ( 0.3,KcMax * (1 - Ltr));
 
-    data["kcp"][:,:,j:] = np.where(
-        data["numPhase"][:,:,j] >= 1,
-        np.maximum(0.3, paramVariete["kcMax"] * (1 - data["ltr"][:,:,j])),
-        data["kcp"][:,:,j],
-    )[...,np.newaxis]
+    data["kcp"][j:,:,:] = np.where(
+        data["numPhase"][j,:,:] >= 1,
+        np.maximum(0.3, paramVariete["kcMax"] * (1 - data["ltr"][j,:,:])),
+        data["kcp"][j,:,:],
+    )#[...,np.newaxis]
     
     return data
 
@@ -196,11 +212,12 @@ def EvolKcpKcIni(j, data, paramVariete):
 
 
 def EvalLtr(j, data, paramVariete):
+    # group 80
     # d'après biomasse.pas 
 
     
     # ltr : Taux de rayonnement transmis au sol. Unités : MJ/MJ
-    data["ltr"][:,:,j:] = np.exp(-paramVariete["kdf"] * data["lai"][:,:,j])[...,np.newaxis]
+    data["ltr"][j:,:,:] = np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])#[...,np.newaxis]
     
     return data
 
@@ -209,40 +226,46 @@ def EvalLtr(j, data, paramVariete):
 
 def EvalConversion(j, data, paramVariete):
     # d'après milbilancarbone.pas 
-
+    # group 87
 
     # EvalConversion
-    data["KAssim"][:,:,j:] = np.where(
-        data["numPhase"][:,:,j] == 2,
+    # group 81
+    data["KAssim"][j:,:,:] = np.where(
+        data["numPhase"][j,:,:] == 2,
         1,
-        data["KAssim"][:,:,j],
-    )[...,np.newaxis]
+        data["KAssim"][j,:,:],
+    )#[...,np.newaxis]
 
-    data["KAssim"][:,:,j:] = np.where(
-        data["numPhase"][:,:,j] == 3,
+    # group 82
+    data["KAssim"][j:,:,:] = np.where(
+        data["numPhase"][j,:,:] == 3,
         paramVariete['txAssimBVP'],
-        data["KAssim"][:,:,j],
-    )[...,np.newaxis]
+        data["KAssim"][j,:,:],
+    )#[...,np.newaxis]
 
-    data["KAssim"][:,:,j:] = np.where(
-        data["numPhase"][:,:,j] == 4,
+    # group 83
+    data["KAssim"][j:,:,:] = np.where(
+        data["numPhase"][j,:,:] == 4,
         paramVariete['txAssimBVP'],
-        data["KAssim"][:,:,j],
-    )[...,np.newaxis]
+        data["KAssim"][j,:,:],
+    )#[...,np.newaxis]
 
-    data["KAssim"][:,:,j:] = np.where(
-        data["numPhase"][:,:,j] == 5,
-        paramVariete["txAssimBVP"] + (data['sdj'][:,:,j] - data['sommeDegresJourPhasePrec'][:,:,j]) * (paramVariete['txAssimMatu1'] -  paramVariete['txAssimBVP']) / (data['seuilTempPhaseSuivante'][:,:,j] - data['sommeDegresJourPhasePrec'][:,:,j]),
-        data["KAssim"][:,:,j],
-    )[...,np.newaxis]
+    # group 84
+    data["KAssim"][j:,:,:] = np.where(
+        data["numPhase"][j,:,:] == 5,
+        paramVariete["txAssimBVP"] + (data['sdj'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]) * (paramVariete['txAssimMatu1'] -  paramVariete['txAssimBVP']) / (data['seuilTempPhaseSuivante'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]),
+        data["KAssim"][j,:,:],
+    )#[...,np.newaxis]
 
-    data["KAssim"][:,:,j:] = np.where(
-        data["numPhase"][:,:,j] == 6,
-        paramVariete["txAssimMatu1"] + (data["sdj"][:,:,j] - data["sommeDegresJourPhasePrec"][:,:,j]) * (paramVariete["txAssimMatu2"] - paramVariete["txAssimMatu1"]) / (data["seuilTempPhaseSuivante"][:,:,j] - data["sommeDegresJourPhasePrec"][:,:,j]),
-        data["KAssim"][:,:,j],
-    )[...,np.newaxis]
+    # group 85
+    data["KAssim"][j:,:,:] = np.where(
+        data["numPhase"][j,:,:] == 6,
+        paramVariete["txAssimMatu1"] + (data["sdj"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]) * (paramVariete["txAssimMatu2"] - paramVariete["txAssimMatu1"]) / (data["seuilTempPhaseSuivante"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]),
+        data["KAssim"][j,:,:],
+    )#[...,np.newaxis]
 
-    data["conv"][:,:,j:] = (data["KAssim"][:,:,j] * paramVariete["txConversion"])[...,np.newaxis] # Conversion:=KAssim*EpsiB;
+    # group 86
+    data["conv"][j:,:,:] = (data["KAssim"][j,:,:] * paramVariete["txConversion"])#[...,np.newaxis] # Conversion:=KAssim*EpsiB;
 
     return data
 
@@ -260,13 +283,13 @@ def BiomDensOptSarraV4(j, data, paramITK):
     """
     if ~np.isnan(paramVariete["densOpti"]) :
         paramITK["rapDensite"] = np.maximum(1,paramVariete["densOpti"]/paramITK["densite"])
-        data["rdt"][:,:,j] = data["rdt"][:,:,j] * paramITK["rapDensite"]
-        data["biomasseRacinaire"][:,:,j] = data["biomasseRacinaire"][:,:,j] * paramITK["rapDensite"]
-        data["biomasseTige"][:,:,j] = data["biomasseTige"][:,:,j] * paramITK["rapDensite"]
-        data["biomasseFeuille"][:,:,j] = data["biomasseFeuille"][:,:,j] * paramITK["rapDensite"]
-        data["biomasseAerienne"][:,:,j] = data["biomasseTige"][:,:,j] + data["biomasseFeuille"][:,:,j] + data["rdt"][:,:,j] 
-        data["lai"][:,:,j]  = data["biomasseFeuille"][:,:,j] * data["sla"][:,:,j]
-        data["biomasseTotale"][:,:,j] = data["biomasseAerienne"][:,:,j] + data["biomasseRacinaire"][:,:,j]
+        data["rdt"][j,:,:] = data["rdt"][j,:,:] * paramITK["rapDensite"]
+        data["biomasseRacinaire"][j,:,:] = data["biomasseRacinaire"][j,:,:] * paramITK["rapDensite"]
+        data["biomasseTige"][j,:,:] = data["biomasseTige"][j,:,:] * paramITK["rapDensite"]
+        data["biomasseFeuille"][j,:,:] = data["biomasseFeuille"][j,:,:] * paramITK["rapDensite"]
+        data["biomasseAerienne"][j,:,:] = data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:] + data["rdt"][j,:,:] 
+        data["lai"][j,:,:]  = data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:]
+        data["biomasseTotale"][j,:,:] = data["biomasseAerienne"][j,:,:] + data["biomasseRacinaire"][j,:,:]
 
     return data
     """
@@ -288,24 +311,33 @@ def BiomDensOptSarV42(j, data, paramITK, paramVariete):
 
     if ~np.isnan(paramVariete["densOpti"]) :
 
+        # group 88
         data["rapDensite"] = paramVariete["densiteA"] + paramVariete["densiteP"] * np.exp(-(paramITK["densite"] / ( paramVariete["densOpti"]/- np.log((1 - paramVariete['densiteA'])/ paramVariete["densiteP"]))))
         
-        data["rdt"][:,:,j:] = (data["rdt"][:,:,j] * data["rapDensite"])[...,np.newaxis]
+        # group 89
+        data["rdt"][j:,:,:] = (data["rdt"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
 
-        data["rdtPot"][:,:,j:] = (data["rdtPot"][:,:,j] * data["rapDensite"])[...,np.newaxis]
+        # group 90
+        data["rdtPot"][j:,:,:] = (data["rdtPot"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
 
-        data["biomasseRacinaire"][:,:,j:] = (data["biomasseRacinaire"][:,:,j] * data["rapDensite"])[...,np.newaxis]
-        data["biomasseTige"][:,:,j:] = (data["biomasseTige"][:,:,j] * data["rapDensite"])[...,np.newaxis]
-        data["biomasseFeuille"][:,:,j:] = (data["biomasseFeuille"][:,:,j] * data["rapDensite"])[...,np.newaxis]
+        # group 91
+        data["biomasseRacinaire"][j:,:,:] = (data["biomasseRacinaire"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
+        # group 92
+        data["biomasseTige"][j:,:,:] = (data["biomasseTige"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
+        # group 93
+        data["biomasseFeuille"][j:,:,:] = (data["biomasseFeuille"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
 
-        data["biomasseAerienne"][:,:,j:] = (data["biomasseTige"][:,:,j] + data["biomasseFeuille"][:,:,j] + data["rdt"][:,:,j])[...,np.newaxis]
-        #data["biomasseAerienne"][:,:,j:] = data["biomasseAerienne"][:,:,j] * data["rapDensite"]
+        # group 94
+        data["biomasseAerienne"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:] + data["rdt"][j,:,:])#[...,np.newaxis]
+        #data["biomasseAerienne"][j:,:,:] = data["biomasseAerienne"][j,:,:] * data["rapDensite"]
         
-        data["lai"][:,:,j:]  = (data["biomasseFeuille"][:,:,j] * data["sla"][:,:,j])[...,np.newaxis]
-        #data["lai"][:,:,j:]  = data["lai"][:,:,j:]  * data["rapDensite"]
+        # group 95
+        data["lai"][j:,:,:]  = (data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:])#[...,np.newaxis]
+        #data["lai"][j:,:,:]  = data["lai"][j:,:,:]  * data["rapDensite"]
 
-        data["biomasseTotale"][:,:,j:] = (data["biomasseAerienne"][:,:,j] + data["biomasseRacinaire"][:,:,j])[...,np.newaxis]
-        #data["biomasseTotale"][:,:,j:] = data["biomasseTotale"][:,:,j:] * data["rapDensite"]
+        # group 96
+        data["biomasseTotale"][j:,:,:] = (data["biomasseAerienne"][j,:,:] + data["biomasseRacinaire"][j,:,:])#[...,np.newaxis]
+        #data["biomasseTotale"][j:,:,:] = data["biomasseTotale"][j:,:,:] * data["rapDensite"]
     
     return data
 
@@ -314,12 +346,12 @@ def BiomDensOptSarV42(j, data, paramITK, paramVariete):
 
 def EvalAssimSarrahV4(j, data):
     """
-    data["parIntercepte"][:,:,j] = 0.5 * (1 - data["ltr"][:,:,j]) * data["rg"][:,:,j]
-    data["assimPot"][:,:,j:] = data["parIntercepte"][:,:,j] * data["conv"][:,:,j] * 10
+    data["parIntercepte"][j,:,:] = 0.5 * (1 - data["ltr"][j,:,:]) * data["rg"][j,:,:]
+    data["assimPot"][j:,:,:] = data["parIntercepte"][j,:,:] * data["conv"][j,:,:] * 10
 
-    data["assim"][:,:,j] = np.where(
-        data["trPot"][:,:,j] > 0,
-        data["assimPot"][:,:,j] * data["tr"][:,:,j] / data["trPot"][:,:,j],
+    data["assim"][j,:,:] = np.where(
+        data["trPot"][j,:,:] > 0,
+        data["assimPot"][j,:,:] * data["tr"][j,:,:] / data["trPot"][j,:,:],
         0,
     )
     """
@@ -333,6 +365,7 @@ def EvalAssimSarrahV4(j, data):
 def EvalAssimSarrahV42(j, data, paramITK, paramVariete):
 
     """
+    group 100
     d'après bilancarbonsarra.pas 
 
     Modif du 04/03/2021 : Prise en compte en plus de la densit� de semis de l'effet niveau d'intensification NI
@@ -352,22 +385,23 @@ def EvalAssimSarrahV42(j, data, paramITK, paramVariete):
 
     """
     # on rajoute le parIntercepte depuis evalassimsarrahv4
-    # data["parIntercepte"][:,:,j] = 0.5 * (1 - data["ltr"][:,:,j]) * data["rg"][:,:,j]
+    # data["parIntercepte"][j,:,:] = 0.5 * (1 - data["ltr"][j,:,:]) * data["rg"][j,:,:]
 
+    # group 97
     if ~np.isnan(paramITK["NI"]): 
         #correction des taux de conversion en fonction des niveaux d'intensification
         # paramVariete["txConversion"] = paramVariete["NIYo"] + paramVariete["NIp"] * (1-np.exp(-paramVariete["NIp"] * paramITK["NI"])) - (np.exp(-0.5*((paramITK["NI"] - paramVariete["LGauss"])/paramVariete["AGauss"])* (paramITK["NI"]- paramVariete["LGauss"])/paramVariete["AGauss"]))/(paramVariete["AGauss"]*2.506628274631)
 
-        data["assimPot"][:,:,j] = data["par"][:,:,j] * (1-np.exp(-paramVariete["kdf"] * data["lai"][:,:,j])) * paramVariete["txConversion"] * 10
+        data["assimPot"][j,:,:] = data["par"][j,:,:] * (1-np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])) * paramVariete["txConversion"] * 10
 
     else :
 
-        data["assimPot"][:,:,j] = data["par"][:,:,j] * (1-np.exp(-paramVariete["kdf"] * data["lai"][:,:,j])) * data["conv"][:,:,j] * 10
+        data["assimPot"][j,:,:] = data["par"][j,:,:] * (1-np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])) * data["conv"][j,:,:] * 10
 
-
-    data["assim"][:,:,j] = np.where(
-        data["trPot"][:,:,j] > 0,
-        data["assimPot"][:,:,j] * data["tr"][:,:,j] / data["trPot"][:,:,j],
+    # group 98
+    data["assim"][j,:,:] = np.where(
+        data["trPot"][j,:,:] > 0,
+        data["assimPot"][j,:,:] * data["tr"][j,:,:] / data["trPot"][j,:,:],
         0,
     )
 
@@ -379,6 +413,7 @@ def EvalAssimSarrahV42(j, data, paramITK, paramVariete):
 
 def EvalRespMaintSarrahV3(j, data, paramVariete):
     """
+    # group 103
     d'après bilancarbonsarra.pas
     
     RespMaint Kg/ha/j  en équivalent matiére séche
@@ -386,19 +421,20 @@ def EvalRespMaintSarrahV3(j, data, paramVariete):
     KTempMaint éC  (25 )
     """
 
+    # group 101
     # on cast sur j
     # kRespMaint = txRespMaint ?
     # dRespMaint = respMaint ?
-    data["respMaint"][:,:,j] =  ((paramVariete["kRespMaint"] * data["biomasseTotale"][:,:,j] * (2**((data["tpMoy"][:,:,j] - paramVariete["tempMaint"]) / 10)))) + (paramVariete["kRespMaint"] * data["biomasseFeuille"][:,:,j] * (2**((data["tpMoy"][:,:,j] -  paramVariete["tempMaint"]) / 10)))
+    data["respMaint"][j,:,:] =  ((paramVariete["kRespMaint"] * data["biomasseTotale"][j,:,:] * (2**((data["tpMoy"][j,:,:] - paramVariete["tempMaint"]) / 10)))) + (paramVariete["kRespMaint"] * data["biomasseFeuille"][j,:,:] * (2**((data["tpMoy"][j,:,:] -  paramVariete["tempMaint"]) / 10)))
 
-
+    # group 102
     # Question pourquoi > 4 tous le s !!! si pas de feuilles mort !!! 
     # # on cast sur j	
-    data["respMaint"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] > 4) & (data["biomasseFeuille"][:,:,j]==0),
+    data["respMaint"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] > 4) & (data["biomasseFeuille"][j,:,:]==0),
         0,
-        data["respMaint"][:,:,j],
-    )[...,np.newaxis]
+        data["respMaint"][j,:,:],
+    )#[...,np.newaxis]
 
     return data
 
@@ -407,6 +443,7 @@ def EvalRespMaintSarrahV3(j, data, paramVariete):
 
 def EvolBiomTotSarrahV4(j, data, paramVariete, paramITK):
     """
+    groupo 106
     d'après bilancarbonsarra.pas
     {
     On harmonise avec une biomasse rapportée é une plante
@@ -422,18 +459,18 @@ def EvolBiomTotSarrahV4(j, data, paramVariete, paramITK):
 
     # BiomasseTotale := Densite* Max(1,70000/Densite) * KResGrain * BiomasseGrain / 1000;
     
-
-    data["biomasseTotale"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j]==2) & (data["changePhase"][:,:,j]==1),
+    # group 104
+    data["biomasseTotale"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:]==2) & (data["changePhase"][j,:,:]==1),
         paramITK["densite"] *  np.maximum(1,paramVariete['densOpti']/paramITK['densite']) * paramVariete["txResGrain"] *  paramVariete["poidsSecGrain"] / 1000,
         # paramITK["densite"] *  np.maximum(1,70000/paramITK['densite']) * paramVariete["txResGrain"] *  paramVariete["poidsSecGrain"] / 1000,
-        data["biomasseTotale"][:,:,j]  + (data["assim"][:,:,j] - data["respMaint"][:,:,j]),
-    )[...,np.newaxis]
+        data["biomasseTotale"][j,:,:]  + (data["assim"][j,:,:] - data["respMaint"][j,:,:]),
+    )#[...,np.newaxis]
 
     
 
     # on cast sur j
-    data["deltaBiomasseTotale"][:,:,j:] = (data["assim"][:,:,j] - data["respMaint"][:,:,j]).copy()[...,np.newaxis]
+    data["deltaBiomasseTotale"][j:,:,:] = (data["assim"][j,:,:] - data["respMaint"][j,:,:]).copy()#[...,np.newaxis]
 
     return data
 
@@ -444,36 +481,36 @@ def EvolBiomTotSarrahV4(j, data, paramVariete, paramITK):
 def EvalRdtPotRespSarrahV4(j, data, paramVariete):
 
     """
-    data["biomTotStadeIp"][:,:,j] = np.where(
-        (data["numPhase"][:,:,j] == 4) & (data["changePhase"][:,:,j] == 1),
-        data["biomasseTotale"][:,:,j],
-        data["biomTotStadeIp"][:,:,j],
+    data["biomTotStadeIp"][j,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 4) & (data["changePhase"][j,:,:] == 1),
+        data["biomasseTotale"][j,:,:],
+        data["biomTotStadeIp"][j,:,:],
     )
 
-    data["biomTotStadeFloraison"][:,:,j] = np.where(
-        (data["numPhase"][:,:,j] == 4) & (data["changePhase"][:,:,j] == 1),
-        data["biomasseTotale"][:,:,j],
-        data["biomTotStadeFloraison"][:,:,j],
+    data["biomTotStadeFloraison"][j,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 4) & (data["changePhase"][j,:,:] == 1),
+        data["biomasseTotale"][j,:,:],
+        data["biomTotStadeFloraison"][j,:,:],
     )
 
-    data["rdtPot"][:,:,j] = np.where(
-        (data["numPhase"][:,:,j] == 4) & (data["changePhase"][:,:,j] == 1),
-        (paramVariete["KRdtPotA"] * (data["biomTotStadeFloraison"][:,:,j] - data["biomTotStadeIp"][:,:,j]) + paramVariete["KRdtPotB"]) + paramVariete["KRdtBiom"] * data["biomTotStadeFloraison"][:,:,j],
-        data["rdtPot"][:,:,j],
+    data["rdtPot"][j,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 4) & (data["changePhase"][j,:,:] == 1),
+        (paramVariete["KRdtPotA"] * (data["biomTotStadeFloraison"][j,:,:] - data["biomTotStadeIp"][j,:,:]) + paramVariete["KRdtPotB"]) + paramVariete["KRdtBiom"] * data["biomTotStadeFloraison"][j,:,:],
+        data["rdtPot"][j,:,:],
     )
 
     
-    data["rdtPot"][:,:,j] = np.where(
-        (data["rdtPot"][:,:,j] > data["biomasseTotale"][:,:,j]) & (data["numPhase"][:,:,j] < 6),
-        data["biomasseTotale"][:,:,j],
-        data["rdtPot"][:,:,j],
+    data["rdtPot"][j,:,:] = np.where(
+        (data["rdtPot"][j,:,:] > data["biomasseTotale"][j,:,:]) & (data["numPhase"][j,:,:] < 6),
+        data["biomasseTotale"][j,:,:],
+        data["rdtPot"][j,:,:],
     )
 
-    data["dRdtPot"][:,:,j] = np.where(
-        (data["numPhase"][:,:,j] == 5) & (data["trPot"][:,:,j]>0),
+    data["dRdtPot"][j,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 5) & (data["trPot"][j,:,:]>0),
         np.maximum(
-            data["rdtPot"][:,:,j] * (data["ddj"][:,:,j] / paramVariete["SDJMatu1"]) * (data["tr"][:,:,j] / data["trPot"][:,:,j]),
-            data["respMaint"][:,:,j] * 0.15,
+            data["rdtPot"][j,:,:] * (data["ddj"][j,:,:] / paramVariete["SDJMatu1"]) * (data["tr"][j,:,:] / data["trPot"][j,:,:]),
+            data["respMaint"][j,:,:] * 0.15,
         ),
         0,
     )
@@ -484,53 +521,54 @@ def EvalRdtPotRespSarrahV4(j, data, paramVariete):
 
 
 def EvalRdtPotRespSarV42(j, data, paramVariete):
-
+    # group 111
     # d'après bilancarbonsarra.pas
 
     #! biomTotStadeIp laissé à 0 ?
-    # data["biomTotStadeIp"][:,:,j:] = np.where(
-    #     (data["numPhase"][:,:,j] == 4) & (data["changePhase"][:,:,j] == 1),
-    #     data["biomasseTotale"][:,:,j],
-    #     data["biomTotStadeIp"][:,:,j],
+    # data["biomTotStadeIp"][j:,:,:] = np.where(
+    #     (data["numPhase"][j,:,:] == 4) & (data["changePhase"][j,:,:] == 1),
+    #     data["biomasseTotale"][j,:,:],
+    #     data["biomTotStadeIp"][j,:,:],
     # )
 
-
-    data["biomTotStadeFloraison"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] == 5) & (data["changePhase"][:,:,j] == 1),
-        data["biomasseTotale"][:,:,j],
-        data["biomTotStadeFloraison"][:,:,j],
-    )[...,np.newaxis]
-
-
-
-    data["rdtPot"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] == 5) & (data["changePhase"][:,:,j] == 1),
-        (paramVariete["KRdtPotA"] * (data["biomTotStadeFloraison"][:,:,j] - data["biomTotStadeIp"][:,:,j]) + paramVariete["KRdtPotB"]) + paramVariete["KRdtBiom"] * data["biomTotStadeFloraison"][:,:,j],
-        data["rdtPot"][:,:,j],
-    )[...,np.newaxis]
+    # group 107
+    data["biomTotStadeFloraison"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 5) & (data["changePhase"][j,:,:] == 1),
+        data["biomasseTotale"][j,:,:],
+        data["biomTotStadeFloraison"][j,:,:],
+    )#[...,np.newaxis]
 
 
-    #! phaseDevVeg pas utilisé ?
-    data["rdtPot"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] == 5) & (data["changePhase"][:,:,j] == 1) & (data["rdtPot"][:,:,j] > data["biomasseTige"][:,:,j] * 2) & (data["phaseDevVeg"][:,:,j] < 6),
-        data["biomasseTige"][:,:,j] * 2,
-        data["rdtPot"][:,:,j],
-    )[...,np.newaxis]
+    #group 108
+    data["rdtPot"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 5) & (data["changePhase"][j,:,:] == 1),
+        (paramVariete["KRdtPotA"] * (data["biomTotStadeFloraison"][j,:,:] - data["biomTotStadeIp"][j,:,:]) + paramVariete["KRdtPotB"]) + paramVariete["KRdtBiom"] * data["biomTotStadeFloraison"][j,:,:],
+        data["rdtPot"][j,:,:],
+    )#[...,np.newaxis]
 
+    #group 109
+    #! phaseDevVeg pas utilisé ? attention c'est un paramètre variétal et pas un jeu de donées
+    data["rdtPot"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 5) & (data["changePhase"][j,:,:] == 1) & (data["rdtPot"][j,:,:] > data["biomasseTige"][j,:,:] * 2) & (data["phaseDevVeg"][j,:,:] < 6),
+        data["biomasseTige"][j,:,:] * 2,
+        data["rdtPot"][j,:,:],
+    )#[...,np.newaxis]
+
+    # group 110
     # dRdtPot = rdtPotDuJour
-    data["dRdtPot"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] == 5),
+    data["dRdtPot"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 5),
         np.where(
-            (data["trPot"][:,:,j]>0),
+            (data["trPot"][j,:,:]>0),
             np.maximum(
                 #! pourquoi est ce que c'est un rapport de ddj sur sdj, et pas sdj sur sdj ?
-                data["rdtPot"][:,:,j] * (data["ddj"][:,:,j] / paramVariete["SDJMatu1"]) * (data["tr"][:,:,j] / data["trPot"][:,:,j]),
-                data["respMaint"][:,:,j] * 0.15,
+                data["rdtPot"][j,:,:] * (data["ddj"][j,:,:] / paramVariete["SDJMatu1"]) * (data["tr"][j,:,:] / data["trPot"][j,:,:]),
+                data["respMaint"][j,:,:] * 0.15,
             ),
             0,
         ),
-        data["dRdtPot"][:,:,j],
-    )[...,np.newaxis]
+        data["dRdtPot"][j,:,:],
+    )#[...,np.newaxis]
 
     
     return data
@@ -538,34 +576,39 @@ def EvalRdtPotRespSarV42(j, data, paramVariete):
 
 
 
+
 def EvolBiomAeroSarrahV3(j, data, paramVariete):
+    # group 115
     #  verif vs code pascal OK
     # d'après bilancarbonesarra.pas
 
     # on stocke la valeur précédente dans deltaBiomasseAerienne
     # deltabiomasseaerienne est juste la différence entre j et j-1
-    data["deltaBiomasseAerienne"][:,:,j:] = np.copy(data["biomasseAerienne"][:,:,j])[...,np.newaxis]
+    # group 112
+    data["deltaBiomasseAerienne"][j:,:,:] = np.copy(data["biomasseAerienne"][j,:,:])#[...,np.newaxis]
 
     # la biomasseAerienne est égale, sur les stades 2 à 4, à un coeff borné au max en 0.9
     # fois la biomasse totale
     # en dehors de ces stades, elle vaut la différence entre la biomasse totale
     # et la biomasse aerienne
     # on étend sur j
-    data["biomasseAerienne"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] >= 2) & (data["numPhase"][:,:,j] <= 4),
-        np.minimum(0.9, paramVariete["aeroTotPente"] * data["biomasseTotale"][:,:,j] + paramVariete["aeroTotBase"]) * data["biomasseTotale"][:,:,j],
-        data["biomasseAerienne"][:,:,j] + data["deltaBiomasseTotale"][:,:,j],
-    )[...,np.newaxis]
+    #group 113
+    data["biomasseAerienne"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] >= 2) & (data["numPhase"][j,:,:] <= 4),
+        np.minimum(0.9, paramVariete["aeroTotPente"] * data["biomasseTotale"][j,:,:] + paramVariete["aeroTotBase"]) * data["biomasseTotale"][j,:,:],
+        data["biomasseAerienne"][j,:,:] + data["deltaBiomasseTotale"][j,:,:],
+    )#[...,np.newaxis]
 
 
 
 
     # version ocelet
-    # data["deltaBiomasseAerienne"][:,:,j:] = (data["biomasseAerienne"][:,:,j] - data["deltaBiomasseArienne"][:,:,j])
+    # data["deltaBiomasseAerienne"][j:,:,:] = (data["biomasseAerienne"][j,:,:] - data["deltaBiomasseArienne"][j,:,:])
     # version originale
-    data["deltaBiomasseAerienne"][:,:,j:] = (data["biomasseAerienne"][:,:,j] - data["deltaBiomasseAerienne"][:,:,j])[...,np.newaxis]
+    # group 114
+    data["deltaBiomasseAerienne"][j:,:,:] = (data["biomasseAerienne"][j,:,:] - data["deltaBiomasseAerienne"][j,:,:])#[...,np.newaxis]
     # version modifiée
-    # data["deltaBiomasseAerienne"][:,:,j] = data["biomasseAerienne"][:,:,j] - data["biomasseAerienne"][:,:,j-1]
+    # data["deltaBiomasseAerienne"][j,:,:] = data["biomasseAerienne"][j,:,:] - data["biomasseAerienne"][j-1,:,:]
 
 
     
@@ -577,25 +620,29 @@ def EvolBiomAeroSarrahV3(j, data, paramVariete):
 
 def EvalReallocationSarrahV3(j, data, paramVariete):
     """
+    groupe 118
     d'après bilancarbonesarra.pas
     {
     La reallocation est é 0 quand la biomasse foliaire verte est inférieure é 30 kh/ha
     }
     """
 
-    condition = (data["numPhase"][:,:,j] == 5)
+    condition = (data["numPhase"][j,:,:] == 5)
         # on cast sur j
-    data["manqueAssim"][:,:,j:] = np.where(
+        # group 116
+    data["manqueAssim"][j:,:,:] = np.where(
         condition,
-        np.maximum(0, (data["dRdtPot"][:,:,j] -  np.maximum(0.0, data["deltaBiomasseAerienne"][:,:,j]))),
+        np.maximum(0, (data["dRdtPot"][j,:,:] -  np.maximum(0.0, data["deltaBiomasseAerienne"][j,:,:]))),
         0,
-    )[...,np.newaxis]
+    )#[...,np.newaxis]
     # on cast sur j
-    data["reallocation"][:,:,j:] = np.where(
+
+    # group 117
+    data["reallocation"][j:,:,:] = np.where(
         condition,
-        np.minimum(data["manqueAssim"][:,:,j] *  paramVariete["txRealloc"],  np.maximum(0.0, data["biomasseFeuille"][:,:,j] - 30)),
+        np.minimum(data["manqueAssim"][j,:,:] *  paramVariete["txRealloc"],  np.maximum(0.0, data["biomasseFeuille"][j,:,:] - 30)),
         0,
-    )[...,np.newaxis]
+    )#[...,np.newaxis]
 
     return data
 
@@ -605,7 +652,8 @@ def EvalReallocationSarrahV3(j, data, paramVariete):
 
 def EvalBiomasseRacinaire(j, data):
     #d'après milbilancarbone.pas
-    data["biomasseRacinaire"][:,:,j] = data["biomasseTotale"][:,:,j] - data["biomasseAerienne"][:,:,j]
+    # groupe 119
+    data["biomasseRacinaire"][j,:,:] = data["biomasseTotale"][j,:,:] - data["biomasseAerienne"][j,:,:]
 
     return data
 
@@ -619,109 +667,118 @@ def EvalFeuilleTigeSarrahV4(j, data, paramVariete):
     # on reset bM et CM en début de procédure
 
     # si numPhase > 1
-    data["deltaBiomasseFeuilles"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] > 1),
-        data["biomasseFeuille"][:,:,j],
-        data["deltaBiomasseFeuilles"][:,:,j],
-    )[...,np.newaxis]
+    # group 120
+    data["deltaBiomasseFeuilles"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] > 1),
+        data["biomasseFeuille"][j,:,:],
+        data["deltaBiomasseFeuilles"][j,:,:],
+    )#[...,np.newaxis]
 
 
     #     {
     # Modif du 15/06/2020     Je ne sais pourquoi max(10 avant max(O � v�rifier si division par BiomasseFeuilles?
     # }
     # si deltaBiomasseAerienne < 0
-    condition = (data["numPhase"][:,:,j] > 1) & \
-        (data["deltaBiomasseAerienne"][:,:,j] < 0)
+    condition = (data["numPhase"][j,:,:] > 1) & \
+        (data["deltaBiomasseAerienne"][j,:,:] < 0)
 
-    data["biomasseFeuille"][:,:,j:] = np.where(
+    # group 121
+    data["biomasseFeuille"][j:,:,:] = np.where(
         condition,
-        np.maximum(0.00000001, data["biomasseFeuille"][:,:,j] - (- data["deltaBiomasseAerienne"][:,:,j] + data["reallocation"][:,:,j]) * paramVariete["pcReallocFeuille"]),
-        data["biomasseFeuille"][:,:,j],
-    )[...,np.newaxis]
+        np.maximum(0.00000001, data["biomasseFeuille"][j,:,:] - (- data["deltaBiomasseAerienne"][j,:,:] + data["reallocation"][j,:,:]) \
+             * paramVariete["pcReallocFeuille"]),
+        data["biomasseFeuille"][j,:,:],
+    )#[...,np.newaxis]
 
-    data["biomasseTige"][:,:,j:] = np.where(
+    # group 122
+    data["biomasseTige"][j:,:,:] = np.where(
         condition,
-        np.maximum(0.00000001, data["biomasseTige"][:,:,j] - (- data["deltaBiomasseAerienne"][:,:,j] + data["reallocation"][:,:,j]) * (1 - paramVariete["pcReallocFeuille"])),
-        data["biomasseTige"][:,:,j],
-    )[...,np.newaxis]
+        np.maximum(0.00000001, data["biomasseTige"][j,:,:] - (- data["deltaBiomasseAerienne"][j,:,:] + data["reallocation"][j,:,:]) \
+            * (1 - paramVariete["pcReallocFeuille"])),
+        data["biomasseTige"][j,:,:],
+    )#[...,np.newaxis]
 
 
 
     # si deltaBiomasseAerienne >= 0
-    condition = (data["numPhase"][:,:,j] > 1) & \
-        (data["deltaBiomasseAerienne"][:,:,j] >= 0) & \
-        ((data["numPhase"][:,:,j] <= 4) | (data["numPhase"][:,:,j] <= paramVariete["phaseDevVeg"]))
-        # (data["numPhase"][:,:,j] <= 4)
+    condition = (data["numPhase"][j,:,:] > 1) & \
+        (data["deltaBiomasseAerienne"][j,:,:] >= 0) & \
+        ((data["numPhase"][j,:,:] <= 4) | (data["numPhase"][j,:,:] <= paramVariete["phaseDevVeg"]))
+        # (data["numPhase"][j,:,:] <= 4)
 
 
 
-
-    data["bM"][:,:,j] = np.where(
+    # group 123
+    data["bM"][j,:,:] = np.where(
         condition,
         paramVariete["feuilAeroBase"] - 0.1,
-        data["bM"][:,:,j],
+        data["bM"][j,:,:],
     )
 
 
-    
-    data["cM"][:,:,j] = np.where(
+    # group 124
+    data["cM"][j,:,:] = np.where(
         condition,
-        ((paramVariete["feuilAeroPente"] * 1000)/ data["bM"][:,:,j] + 0.78) / 0.75,
-        data["cM"][:,:,j],
+        ((paramVariete["feuilAeroPente"] * 1000)/ data["bM"][j,:,:] + 0.78) / 0.75,
+        data["cM"][j,:,:],
     )
 
 
-
-    data["biomasseFeuille"][:,:,j:] = np.where(
+    # group 125
+    data["biomasseFeuille"][j:,:,:] = np.where(
         condition,
-        (0.1 + data["bM"][:,:,j] * data["cM"][:,:,j] ** ((data["biomasseAerienne"][:,:,j] - data["rdt"][:,:,j]) / 1000)) * (data["biomasseAerienne"][:,:,j] - data["rdt"][:,:,j]),
-        data["biomasseFeuille"][:,:,j],
-    )[...,np.newaxis]
+        (0.1 + data["bM"][j,:,:] * data["cM"][j,:,:] ** ((data["biomasseAerienne"][j,:,:] - data["rdt"][j,:,:]) / 1000)) \
+             * (data["biomasseAerienne"][j,:,:] - data["rdt"][j,:,:]),
+        data["biomasseFeuille"][j,:,:],
+    )#[...,np.newaxis]
 
 
 
 
-
-    data["biomasseTige"][:,:,j:] = np.where(
+    # group 126
+    data["biomasseTige"][j:,:,:] = np.where(
         condition,
-        data["biomasseAerienne"][:,:,j] - data["biomasseFeuille"][:,:,j] - data["rdt"][:,:,j],
-        data["biomasseTige"][:,:,j],
-    )[...,np.newaxis]
+        data["biomasseAerienne"][j,:,:] - data["biomasseFeuille"][j,:,:] - data["rdt"][j,:,:],
+        data["biomasseTige"][j,:,:],
+    )#[...,np.newaxis]
 
 
     
-    condition = (data["numPhase"][:,:,j] > 1) & \
-        (data["deltaBiomasseAerienne"][:,:,j] >= 0)
+    condition = (data["numPhase"][j,:,:] > 1) & \
+        (data["deltaBiomasseAerienne"][j,:,:] >= 0)
 
-    data["biomasseFeuille"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] > 1) & (data["deltaBiomasseAerienne"][:,:,j] > 0),
-        data["biomasseFeuille"][:,:,j] - data["reallocation"][:,:,j] * paramVariete["pcReallocFeuille"],
-        data["biomasseFeuille"][:,:,j],
-    )[...,np.newaxis]
-
-
-
-    data["biomasseTige"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] > 1) & (data["deltaBiomasseAerienne"][:,:,j] > 0),
-        data["biomasseTige"][:,:,j] - (data["reallocation"][:,:,j] * (1- paramVariete["pcReallocFeuille"])),
-        data["biomasseTige"][:,:,j],
-    )[...,np.newaxis]
+    # group 127
+    data["biomasseFeuille"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] > 0),
+        data["biomasseFeuille"][j,:,:] - data["reallocation"][j,:,:] * paramVariete["pcReallocFeuille"],
+        data["biomasseFeuille"][j,:,:],
+    )#[...,np.newaxis]
 
 
+    # group 128
+    data["biomasseTige"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] > 0),
+        data["biomasseTige"][j,:,:] - (data["reallocation"][j,:,:] * (1- paramVariete["pcReallocFeuille"])),
+        data["biomasseTige"][j,:,:],
+    )#[...,np.newaxis]
 
-    condition = (data["numPhase"][:,:,j] > 1) 
 
-    data["deltaBiomasseFeuilles"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] > 1),
-        data["biomasseFeuille"][:,:,j] - data["deltaBiomasseFeuilles"][:,:,j],
-        data["deltaBiomasseFeuilles"][:,:,j],
-    )[...,np.newaxis]
 
-    data["biomasseAerienne"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] > 1),
-        data["biomasseTige"][:,:,j] + data["biomasseFeuille"][:,:,j] + data["rdt"][:,:,j],
-        data["biomasseAerienne"][:,:,j],
-    )[...,np.newaxis]
+    condition = (data["numPhase"][j,:,:] > 1) 
+
+    # group 129
+    data["deltaBiomasseFeuilles"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] > 1),
+        data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:],
+        data["deltaBiomasseFeuilles"][j,:,:],
+    )#[...,np.newaxis]
+
+    #group 130
+    data["biomasseAerienne"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] > 1),
+        data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:] + data["rdt"][j,:,:],
+        data["biomasseAerienne"][j,:,:],
+    )#[...,np.newaxis]
 
 
 
@@ -731,8 +788,9 @@ def EvalFeuilleTigeSarrahV4(j, data, paramVariete):
 
 
 def EvalBiomasseVegetati(j, data):
+    # group 132
     #d'après milbilancarbone.pas
-    data["biomasseVegetative"][:,:,j:] = (data["biomasseTige"][:,:,j] + data["biomasseFeuille"][:,:,j])[...,np.newaxis]
+    data["biomasseVegetative"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:])#[...,np.newaxis]
     return data
 
 
@@ -741,6 +799,7 @@ def EvalBiomasseVegetati(j, data):
 def EvalSlaSarrahV3(j, data, paramVariete):
     # check vs code pascal OK
     """
+    groupe 136
     d'après bulancarbonsarra.pas
 
     On suppose que les jeunes feuilles on un SLA supérieur aux vieilles feuilles.
@@ -756,70 +815,72 @@ def EvalSlaSarrahV3(j, data, paramVariete):
     Avec : SLAini = SLAmax
     }
     """
-    data["sla"][:,:,j:] = np.where(
-        (data["biomasseFeuille"][:,:,j] > 0) & \
-            (data["numPhase"][:,:,j] == 2) & \
-            (data["changePhase"][:,:,j] == 1),
+    # group 133
+    data["sla"][j:,:,:] = np.where(
+        (data["biomasseFeuille"][j,:,:] > 0) & \
+            (data["numPhase"][j,:,:] == 2) & \
+            (data["changePhase"][j,:,:] == 1),
         paramVariete["slaMax"],
-        data["sla"][:,:,j],
-    )[...,np.newaxis]
+        data["sla"][j,:,:],
+    )#[...,np.newaxis]
 
     # Modif du 10/07/2018, DeltaBiomasse neg si reallocation ne pas fair l'evol du SLA dans ces conditions
     
     # original
-    data["sla"][:,:,j:] = np.where(
-        (data["biomasseFeuille"][:,:,j] > 0),
+    # groupe 134
+    data["sla"][j:,:,:] = np.where(
+        (data["biomasseFeuille"][j,:,:] > 0),
         np.where(
-            (data["deltaBiomasseFeuilles"][:,:,j] > 0),
-            (data["sla"][:,:,j] - paramVariete["slaPente"] * (data["sla"][:,:,j] - paramVariete["slaMin"])) \
-              * (data["biomasseFeuille"][:,:,j] - data["deltaBiomasseFeuilles"][:,:,j]) / data["biomasseFeuille"][:,:,j] \
-              + (paramVariete["slaMax"] + data["sla"][:,:,j])/2 * (data["deltaBiomasseFeuilles"][:,:,j] / data["biomasseFeuille"][:,:,j]),
-            (data["sla"][:,:,j] - paramVariete["slaPente"] * (data["sla"][:,:,j] - paramVariete["slaMin"])) \
-                * (data["biomasseFeuille"][:,:,j] / data["biomasseFeuille"][:,:,j]),
+            (data["deltaBiomasseFeuilles"][j,:,:] > 0),
+            (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) \
+              * (data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:]) / data["biomasseFeuille"][j,:,:] \
+              + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * (data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]),
+            (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) \
+                * (data["biomasseFeuille"][j,:,:] / data["biomasseFeuille"][j,:,:]),
         ),
-        data["sla"][:,:,j],
-    )[...,np.newaxis]
+        data["sla"][j,:,:],
+    )#[...,np.newaxis]
 
     # d'après version ocelet
-    # data["sla"][:,:,j:] = np.where(
-    #     (data["biomasseFeuille"][:,:,j] > 0),
-    #     (data["sla"][:,:,j] - paramVariete["slaPente"] * (data["sla"][:,:,j] - paramVariete["slaMin"])) \
-    #         * (data["biomasseFeuille"][:,:,j] - data["deltaBiomasseFeuilles"][:,:,j]) / data["biomasseFeuille"][:,:,j] \
-    #         + (paramVariete["slaMax"] + data["sla"][:,:,j])/2 * (data["deltaBiomasseFeuilles"][:,:,j] / data["biomasseFeuille"][:,:,j]),
-    #     data["sla"][:,:,j],
+    # data["sla"][j:,:,:] = np.where(
+    #     (data["biomasseFeuille"][j,:,:] > 0),
+    #     (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) \
+    #         * (data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:]) / data["biomasseFeuille"][j,:,:] \
+    #         + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * (data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]),
+    #     data["sla"][j,:,:],
     # )
 
     # mix original/ocelet
-    # data["sla"][:,:,j:] = np.where(
-    #     (data["biomasseFeuille"][:,:,j] > 0),
+    # data["sla"][j:,:,:] = np.where(
+    #     (data["biomasseFeuille"][j,:,:] > 0),
     #     np.where(
-    #         (data["deltaBiomasseFeuilles"][:,:,j] > 0),
-    #         (data["sla"][:,:,j] - paramVariete["slaPente"] * (data["sla"][:,:,j] - paramVariete["slaMin"])) * (data["biomasseFeuille"][:,:,j] - data["deltaBiomasseFeuilles"][:,:,j]) / data["biomasseFeuille"][:,:,j] + (paramVariete["slaMax"] + data["sla"][:,:,j])/2 * (data["deltaBiomasseFeuilles"][:,:,j] / data["biomasseFeuille"][:,:,j]),
-    #         (data["sla"][:,:,j] - paramVariete["slaPente"] * (data["sla"][:,:,j] - paramVariete["slaMin"])) * (data["biomasseFeuille"][:,:,j] / data["deltaBiomasseFeuilles"][:,:,j]),
+    #         (data["deltaBiomasseFeuilles"][j,:,:] > 0),
+    #         (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:]) / data["biomasseFeuille"][j,:,:] + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * (data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]),
+    #         (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] / data["deltaBiomasseFeuilles"][j,:,:]),
     #     ),
-    #     data["sla"][:,:,j],
+    #     data["sla"][j,:,:],
     # )
 
     # original modifié
-    # data["sla"][:,:,j:] = np.where(
-    #     (data["biomasseFeuille"][:,:,j] > 0),
+    # data["sla"][j:,:,:] = np.where(
+    #     (data["biomasseFeuille"][j,:,:] > 0),
     #     np.where(
-    #         (data["deltaBiomasseFeuilles"][:,:,j] > 0),
-    #         (data["sla"][:,:,j] - paramVariete["slaPente"] * (data["sla"][:,:,j] - paramVariete["slaMin"])) * (data["biomasseFeuille"][:,:,j] - data["deltaBiomasseFeuilles"][:,:,j]) / data["biomasseFeuille"][:,:,j] + (paramVariete["slaMax"] + data["sla"][:,:,j])/2 * (data["deltaBiomasseFeuilles"][:,:,j] / data["biomasseFeuille"][:,:,j]),
-    #         (data["sla"][:,:,j] - paramVariete["slaPente"] * (data["sla"][:,:,j] - paramVariete["slaMin"])) * (data["biomasseFeuille"][:,:,j] / data["biomasseFeuille"][:,:,j]),
-    #         # data["sla"][:,:,j],
+    #         (data["deltaBiomasseFeuilles"][j,:,:] > 0),
+    #         (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:]) / data["biomasseFeuille"][j,:,:] + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * (data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]),
+    #         (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] / data["biomasseFeuille"][j,:,:]),
+    #         # data["sla"][j,:,:],
     #     ),
-    #     data["sla"][:,:,j],
+    #     data["sla"][j,:,:],
     # )
 
 
-
-    data["sla"][:,:,j:] = np.where(
-        (data["biomasseFeuille"][:,:,j] > 0),
-        # np.minimum(paramVariete["slaMin"], np.maximum(paramVariete["slaMax"], data["sla"][:,:,j])),
-        np.minimum(paramVariete["slaMax"], np.maximum(paramVariete["slaMin"], data["sla"][:,:,j])), # d'après version ocelet
-        data["sla"][:,:,j],
-    )[...,np.newaxis]
+    # groupe 135
+    data["sla"][j:,:,:] = np.where(
+        (data["biomasseFeuille"][j,:,:] > 0),
+        # np.minimum(paramVariete["slaMin"], np.maximum(paramVariete["slaMax"], data["sla"][j,:,:])),
+        np.minimum(paramVariete["slaMax"], np.maximum(paramVariete["slaMin"], data["sla"][j,:,:])), # d'après version ocelet
+        data["sla"][j,:,:],
+    )#[...,np.newaxis]
 
     
 
@@ -830,17 +891,17 @@ def EvalSlaSarrahV3(j, data, paramVariete):
 
 def EvolLAIPhases(j, data):
     # d'après milbilancarbone.pas
-
-    data["lai"][:,:,j:] = np.where(
-        #(data["numPhase"][:,:,j] <= 1),
-        (data["numPhase"][:,:,j] <= 1) | (data["startLock"][:,:,j] == 1),
+    # group 137
+    data["lai"][j:,:,:] = np.where(
+        #(data["numPhase"][j,:,:] <= 1),
+        (data["numPhase"][j,:,:] <= 1) | (data["startLock"][j,:,:] == 1),
         0,
         np.where(
-            data["numPhase"][:,:,j] <= 6,
-            data["biomasseFeuille"][:,:,j] * data["sla"][:,:,j],
+            data["numPhase"][j,:,:] <= 6,
+            data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:],
             0,
         )
-    )[...,np.newaxis]
+    )#[...,np.newaxis]
 
 
     return data
@@ -849,6 +910,7 @@ def EvolLAIPhases(j, data):
 
 
 def EvolDayRdtSarraV3(j, data):
+    # groupe 138
     # d'après bilancarbonsarra.pas
     # {
     # On tend vers le potentiel en fn du rapport des degresJours/sumDegresJours
@@ -858,11 +920,11 @@ def EvolDayRdtSarraV3(j, data):
 
     # dRdtPot = RdtPotDuJour
     # on cast sur j
-    data["rdt"][:,:,j:] = np.where(
-        (data["numPhase"][:,:,j] == 5),
-        data["rdt"][:,:,j] + np.minimum(data["dRdtPot"][:,:,j],  np.maximum(0.0, data["deltaBiomasseAerienne"][:,:,j]) + data['reallocation'][:,:,j]),
-        data["rdt"][:,:,j],
-    )[...,np.newaxis]
+    data["rdt"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 5),
+        data["rdt"][j,:,:] + np.minimum(data["dRdtPot"][j,:,:],  np.maximum(0.0, data["deltaBiomasseAerienne"][j,:,:]) + data['reallocation'][j,:,:]),
+        data["rdt"][j,:,:],
+    )#[...,np.newaxis]
 
 
     return data
@@ -873,15 +935,15 @@ def EvolDayRdtSarraV3(j, data):
 def BiomDensiteSarraV4(j, data, paramITK):
     """
     if ~np.isnan(paramVariete["densOpti"]):
-        data["rapDensite"][:,:,j] = np.minimum(1, paramITK["densite"]/paramVariete["densOpti"])
-        data["rdt"][:,:,j] = data["rdt"][:,:,j] * data["rapDensite"][:,:,j]
-        data["rdtPot"][:,:,j] = data["rdtPot"][:,:,j] * data["rapDensite"][:,:,j]
-        data["biomasseRacinaire"][:,:,j] = data["biomasseRacinaire"][:,:,j] * data["rapDensite"][:,:,j]
-        data["biomasseTige"][:,:,j] = data["biomasseTige"][:,:,j] * data["rapDensite"][:,:,j]
-        data["biomasseFeuille"][:,:,j] = data["biomasseFeuille"][:,:,j] * data["rapDensite"][:,:,j]
-        data["biomasseAerienne"][:,:,j] = data["biomasseFeuille"][:,:,j] + data["biomasseTige"][:,:,j] + data["rdt"][:,:,j]
-        data["lai"][:,:,j] = data["biomasseFeuille"][:,:,j] * data["sla"][:,:,j]
-        data["biomasseTotale"][:,:,j] = data["biomasseAerienne"][:,:,j] + data["biomasseRacinaire"][:,:,j]
+        data["rapDensite"][j,:,:] = np.minimum(1, paramITK["densite"]/paramVariete["densOpti"])
+        data["rdt"][j,:,:] = data["rdt"][j,:,:] * data["rapDensite"][j,:,:]
+        data["rdtPot"][j,:,:] = data["rdtPot"][j,:,:] * data["rapDensite"][j,:,:]
+        data["biomasseRacinaire"][j,:,:] = data["biomasseRacinaire"][j,:,:] * data["rapDensite"][j,:,:]
+        data["biomasseTige"][j,:,:] = data["biomasseTige"][j,:,:] * data["rapDensite"][j,:,:]
+        data["biomasseFeuille"][j,:,:] = data["biomasseFeuille"][j,:,:] * data["rapDensite"][j,:,:]
+        data["biomasseAerienne"][j,:,:] = data["biomasseFeuille"][j,:,:] + data["biomasseTige"][j,:,:] + data["rdt"][j,:,:]
+        data["lai"][j,:,:] = data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:]
+        data["biomasseTotale"][j,:,:] = data["biomasseAerienne"][j,:,:] + data["biomasseRacinaire"][j,:,:]
     """
     return data
 
@@ -890,36 +952,43 @@ def BiomDensiteSarraV4(j, data, paramITK):
 
 def BiomDensiteSarraV42(j, data, paramITK, paramVariete):
     # depuis bilancarbonsarra.pas
+    #group 160
     
     if ~np.isnan(paramVariete["densOpti"]):
 
+        #! confusion entre rapDensite dataset et parametre
+        #group 151
         paramITK["rapDensite"] = paramVariete["densiteA"] + paramVariete["densiteP"] * np.exp(-(paramITK["densite"] / ( paramVariete["densOpti"]/- np.log((1 - paramVariete['densiteA'])/ paramVariete["densiteP"]))))
 
-
-        data["rdt"][:,:,j:] = (data["rdt"][:,:,j] / data["rapDensite"])[...,np.newaxis]
-
-
-
-        data["rdtPot"][:,:,j:] = (data["rdtPot"][:,:,j]/ data["rapDensite"])[...,np.newaxis]
+        # group 152
+        data["rdt"][j:,:,:] = (data["rdt"][j,:,:] / data["rapDensite"])#[...,np.newaxis]
 
 
-        data["biomasseRacinaire"][:,:,j:] = (data["biomasseRacinaire"][:,:,j] / data["rapDensite"])[...,np.newaxis]
+        # group 153
+        data["rdtPot"][j:,:,:] = (data["rdtPot"][j,:,:]/ data["rapDensite"])#[...,np.newaxis]
 
-        
-        data["biomasseTige"][:,:,j:] = (data["biomasseTige"][:,:,j] / data["rapDensite"])[...,np.newaxis]
+        # group 154
+        data["biomasseRacinaire"][j:,:,:] = (data["biomasseRacinaire"][j,:,:] / data["rapDensite"])#[...,np.newaxis]
 
-        data["biomasseFeuille"][:,:,j:] = (data["biomasseFeuille"][:,:,j] / data["rapDensite"])[...,np.newaxis]
+        # group 155
+        data["biomasseTige"][j:,:,:] = (data["biomasseTige"][j,:,:] / data["rapDensite"])#[...,np.newaxis]
 
-        data["biomasseAerienne"][:,:,j:] = (data["biomasseTige"][:,:,j] + data["biomasseFeuille"][:,:,j] + data["rdt"][:,:,j])[...,np.newaxis] 
-        #data["biomasseAerienne"][:,:,j:] = data["biomasseAerienne"][:,:,j] / data["rapDensite"]
+        # group 156
+        data["biomasseFeuille"][j:,:,:] = (data["biomasseFeuille"][j,:,:] / data["rapDensite"])#[...,np.newaxis]
+
+        # group 157
+        data["biomasseAerienne"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:] + data["rdt"][j,:,:])#[...,np.newaxis] 
+        #data["biomasseAerienne"][j:,:,:] = data["biomasseAerienne"][j,:,:] / data["rapDensite"]
 
 
         #? conflit avec fonction evolLAIphase ?
-        #data["lai"][:,:,j:]  = data["biomasseFeuille"][:,:,j] * data["sla"][:,:,j]
-        data["lai"][:,:,j:]  = data["lai"][:,:,j:]  / data["rapDensite"]
+        #  group 158
+        #data["lai"][j:,:,:]  = data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:]
+        data["lai"][j:,:,:]  = data["lai"][j:,:,:]  / data["rapDensite"]
 
-        data["biomasseTotale"][:,:,j:] = (data["biomasseAerienne"][:,:,j] + data["biomasseRacinaire"][:,:,j])[...,np.newaxis]
-        #data["biomasseTotale"][:,:,j:] = data["biomasseTotale"][:,:,j:] / data["rapDensite"]
+        # group 159
+        data["biomasseTotale"][j:,:,:] = (data["biomasseAerienne"][j,:,:] + data["biomasseRacinaire"][j,:,:])#[...,np.newaxis]
+        #data["biomasseTotale"][j:,:,:] = data["biomasseTotale"][j:,:,:] / data["rapDensite"]
 
 
 
@@ -931,9 +1000,12 @@ def BiomDensiteSarraV42(j, data, paramITK, paramVariete):
 
 
 
+
 def BiomMcUBTSV3(j, data, paramITK):
     """
     depuis bilancarbonsarra.pas
+
+    group 174
 
     Pendant la croissance des cultures la d�gradation des r�sidusest calcul�e sans les UBT
     Ici c'est pendant la saion s�che quand il n'y a des cultures pas de b�tes.
@@ -949,50 +1021,66 @@ def BiomMcUBTSV3(j, data, paramITK):
     KI = 0.005
     NbUBT = 10 (zone Fakara)
     """
-    condition = (data["numPhase"][:,:,j] > 0)
+    condition = (data["numPhase"][j,:,:] > 0)
 
-    data["UBTCulture"][:,:,j:] = np.where(condition, 0, data["NbUBT"][:,:,j])[...,np.newaxis]
-    data["LitFeuille"][:,:,j:] = np.where(condition, data["LitFeuille"][:,:,j] + data["FeuilleUp"][:,:,j], data["LitFeuille"][:,:,j])[...,np.newaxis]
-    data["LitTige"][:,:,j:] = np.where(condition, data["LitTige"][:,:,j] + data["TigeUp"][:,:,j], data["LitTige"][:,:,j])[...,np.newaxis]
-    data["FeuilleUp"][:,:,j:] = np.where(condition, 0, data["FeuilleUp"][:,:,j])[...,np.newaxis]
-    data["TigeUp"][:,:,j:] = np.where(condition, 0, data["TigeUp"][:,:,j])[...,np.newaxis]
-    data["biomMc"][:,:,j:] = np.where(condition, data["LitFeuille"][:,:,j] + data["LitTige"][:,:,j], data["biomMc"][:,:,j])[...,np.newaxis]
+    #   group 161
+    data["UBTCulture"][j:,:,:] = np.where(condition, 0, data["NbUBT"][j,:,:])#[...,np.newaxis]
+    #  group 162
+    data["LitFeuille"][j:,:,:] = np.where(condition, data["LitFeuille"][j,:,:] + data["FeuilleUp"][j,:,:], data["LitFeuille"][j,:,:])#[...,np.newaxis]
+    # group 163
+    data["LitTige"][j:,:,:] = np.where(condition, data["LitTige"][j,:,:] + data["TigeUp"][j,:,:], data["LitTige"][j,:,:])#[...,np.newaxis]
+    # group 164
+    data["FeuilleUp"][j:,:,:] = np.where(condition, 0, data["FeuilleUp"][j,:,:])#[...,np.newaxis]
+    # group 165
+    data["TigeUp"][j:,:,:] = np.where(condition, 0, data["TigeUp"][j,:,:])#[...,np.newaxis]
+    # group 166
+    data["biomMc"][j:,:,:] = np.where(condition, data["LitFeuille"][j,:,:] + data["LitTige"][j,:,:], data["biomMc"][j,:,:])#[...,np.newaxis]
 
     #// D�gradation des feuilles et tiges dress�es
     # FeuilleUp := max(0, (FeuilleUp -  FeuilleUp * KNUp - FeuilleUp * KI * UBTCulture  - FeuilleUp * KT * UBTCulture));
-    data["FeuilleUp"][:,:,j:] = np.maximum(
+    # group 167
+    data["FeuilleUp"][j:,:,:] = np.maximum(
         0,
-        data["FeuilleUp"][:,:,j] - data["FeuilleUp"][:,:,j] * paramITK["KNUp"] - data["FeuilleUp"][:,:,j] * paramITK["KI"] * data["UBTCulture"][:,:,j] - data["FeuilleUp"][:,:,j] * paramITK["KT"] * data["UBTCulture"][:,:,j],
-    )[...,np.newaxis]
+        data["FeuilleUp"][j,:,:] - data["FeuilleUp"][j,:,:] * paramITK["KNUp"] - data["FeuilleUp"][j,:,:] \
+            * paramITK["KI"] * data["UBTCulture"][j,:,:] - data["FeuilleUp"][j,:,:] * paramITK["KT"] * data["UBTCulture"][j,:,:],
+    )#[...,np.newaxis]
 
+
+    # group 168
     # TigeUp := max(0, (TigeUp -  TigeUp * KNUp - TigeUp * KT * UBTCulture));
-    data["TigeUp"][:,:,j:] = np.maximum(
+    data["TigeUp"][j:,:,:] = np.maximum(
         0,
-        data["TigeUp"][:,:,j] - data["TigeUp"][:,:,j] * paramITK["KNUp"] - data["TigeUp"][:,:,j] * paramITK["KT"] * data["UBTCulture"][:,:,j],
-    )[...,np.newaxis]
+        data["TigeUp"][j,:,:] - data["TigeUp"][j,:,:] * paramITK["KNUp"] - data["TigeUp"][j,:,:] * paramITK["KT"] * data["UBTCulture"][j,:,:],
+    )#[...,np.newaxis]
     
     #// D�gradation des feuilles et tiges couch�es (liti�re)
+    # group 169
     # LitFeuille :=  max(0, (LitFeuille -  LitFeuille * KNLit - LitFeuille * KI * UBTCulture  - LitFeuille * KT * UBTCulture));
-    data["LitFeuille"][:,:,j:] = np.maximum(
+    data["LitFeuille"][j:,:,:] = np.maximum(
         0,
-        data["LitFeuille"][:,:,j] - data["LitFeuille"][:,:,j] * paramITK["KNLit"] - data["LitFeuille"][:,:,j] * paramITK["KI"] * data["UBTCulture"][:,:,j] - data["LitFeuille"][:,:,j] * paramITK["KT"] * data["UBTCulture"][:,:,j],
-    )[...,np.newaxis]
+        data["LitFeuille"][j,:,:] - data["LitFeuille"][j,:,:] * paramITK["KNLit"] - data["LitFeuille"][j,:,:] * paramITK["KI"] \
+            * data["UBTCulture"][j,:,:] - data["LitFeuille"][j,:,:] * paramITK["KT"] * data["UBTCulture"][j,:,:],
+    )#[...,np.newaxis]
 
+    # group 170
     # LitTige :=  max(0, (LitTige -  LitTige * KNLit - LitTige * KT * UBTCulture));
-    data["LitTige"][:,:,j:] = np.maximum(
+    data["LitTige"][j:,:,:] = np.maximum(
         0,
-        data["LitTige"][:,:,j] - data["LitTige"][:,:,j] * paramITK["KNLit"] - data["LitTige"][:,:,j] * paramITK["KT"] * data["UBTCulture"][:,:,j],
-    )[...,np.newaxis]
+        data["LitTige"][j,:,:] - data["LitTige"][j,:,:] * paramITK["KNLit"] - data["LitTige"][j,:,:] * paramITK["KT"] * data["UBTCulture"][j,:,:],
+    )#[...,np.newaxis]
 
+    # group 171
     #BiomMc := LitFeuille + LitTige;
-    data["biomMc"][:,:,j:] = (data["LitFeuille"][:,:,j] + data["LitTige"][:,:,j])[...,np.newaxis]
+    data["biomMc"][j:,:,:] = (data["LitFeuille"][j,:,:] + data["LitTige"][j,:,:])#[...,np.newaxis]
      
     # #// transfert dress� � liti�re effet pi�tinement
     # LitFeuille :=  LitFeuille + FeuilleUp * KT * UBTCulture;
-    data["LitFeuille"][:,:,j:] = (data["LitFeuille"][:,:,j] + data["FeuilleUp"][:,:,j] * paramITK["KT"] * data["UBTCulture"][:,:,j])[...,np.newaxis]
+    # group 172
+    data["LitFeuille"][j:,:,:] = (data["LitFeuille"][j,:,:] + data["FeuilleUp"][j,:,:] * paramITK["KT"] * data["UBTCulture"][j,:,:])#[...,np.newaxis]
 
     # LitTige :=  LitTige + TigeUp * KT * UBTCulture;
-    data["LitTige"][:,:,j:] = (data["LitTige"][:,:,j] + data["TigeUp"][:,:,j] * paramITK["KT"] * data["UBTCulture"][:,:,j])[...,np.newaxis]
+    # group 173
+    data["LitTige"][j:,:,:] = (data["LitTige"][j,:,:] + data["TigeUp"][j,:,:] * paramITK["KT"] * data["UBTCulture"][j,:,:])#[...,np.newaxis]
 
     # // le 01/03 on consid�re que toutes les pailles et feuilles dressees sont couchees
 
@@ -1012,19 +1100,31 @@ def BiomMcUBTSV3(j, data, paramITK):
 
 def MAJBiomMcSV3(data):
     """
+    groupe 182
  A la Recolte, on calcul la part des biomasses qui restent sur place (Up), non r�colt�es
  et la part qui est mise � terre (Liti�re) sur ce qui est laiss� sur place
  On met a jour aussi la biomasse des liti�res pour les calculs effet mulch sue lr bilan hydrique
     """
 #         if (NumPhase =7) then
 #     begin
+        # groupe 175
 #       FeuilleUp := FeuilleUp +  BiomasseFeuilles * (1-TxRecolte);
+        # groupe 176
 #       TigeUp := TigeUp + BiomasseTiges *  (1-TxRecolte);
+
+        # groupe 177
 #       LitFeuille := LitFeuille + FeuilleUp * TxaTerre;
+
+        # groupe 178
 #       LitTige := LitTige + TigeUp * TxaTerre;
+
+        # groupe 179
 #       FeuilleUp := FeuilleUp * (1-TxaTerre);
+
+        # groupe 180
 #       TigeUp := TigeUp * (1-TxaTerre);
 # //      LitTige := LitTige + BiomMc;
+        # groupe 181
 #       BiomMC := LitFeuille + LitTige;
 #  {     BiomasseFeuilles := 0;
 #       BiomasseTiges := 0;

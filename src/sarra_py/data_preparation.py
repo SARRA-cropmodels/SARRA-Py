@@ -313,6 +313,7 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
 
     """ 
     Load iSDA soil data and crop to the area of interest
+    remark : it would be nice to try to modulate the percentage of runoff according to slope
 
     """
 
@@ -383,5 +384,10 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
         soil_types_converted = np.reshape([dict_values[x.astype(int)] for x in data["soil_type"].to_numpy().flatten()], (grid_width, grid_height))
         data[soil_variable] = (data["soil_type"].dims,soil_types_converted)
         # TODO: add dataarray.attrs = {} to precise units and long_name
+
+    # converting pourcRuiss to decimal %
+    data["pourcRuiss"] = data["pourcRuiss"] / 100
+
+
 
     return data
