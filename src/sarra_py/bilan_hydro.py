@@ -954,14 +954,14 @@ def estimate_transpirable_water(j, data):
 
     # group 28
     data["eauTranspi"][j:,:,:] = np.where(
-        # ! modifying to replace stRuSurfPrec by stRuSurf
+        # ! modifying to replace stRuSurfPrec by stRuSurf at undex j-1
         #! renaming ruSurf to surface_tank_capacity
         #! renaming stRuSurfPrec to surface_tank_stock
         # // data["stRuSurfPrec"][j,:,:] < data["ruSurf"][j,:,:]/10,
         data["surface_tank_stock"][j-1,:,:] < 0.1 * data["surface_tank_capacity"],
         np.maximum(
             0,
-            # ! modifying to replace stRuSurfPrec by stRuSurf
+            # ! modifying to replace stRuSurfPrec by stRuSurf at iundex j-1
             #! renaming ruSurf to surface_tank_capacity
             #! renaming stRuSurf to surface_tank_stock
             # //data["eauDispo"][j,:,:] - (data["ruSurf"][j,:,:]/10 - data["stRuSurfPrec"][j,:,:])
@@ -970,6 +970,140 @@ def estimate_transpirable_water(j, data):
         data["eauDispo"][j,:,:],
     )
 
+    return data
+
+
+def update_stRurPrec_for_end_of_cycle(j, data):
+    """
+    when the phase changes from 7 to 1, stRurPrec is set to equal
+    stRur/stRurMax, that is to say the ratio of the water storage capacity of
+    the root reservoir. Otherwise, it stays at its initial value of 0. Its value
+    is broadcasted along j.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+
+    # group 23
+    condition = (data["numPhase"][j,:,:] == 7) & (data["changePhase"][j,:,:] == 1)
+    data["stRurPrec"][j:,:,:] = np.where(
+        condition,
+        #! renaming stRur to root_tank_stock
+        #! renaming stRurMax to root_tank_capacity
+        #// data["stRur"][j,:,:]/data["stRurMax"][j,:,:],
+        data["root_tank_stock"][j,:,:]/data["root_tank_capacity"][j,:,:],
+        data["stRurPrec"][j,:,:],
+    )
+    return data
+
+
+
+def update_stRurMaxPrec_for_end_of_cycle(j, data):
+    """
+    When the phase changes from 7 to 1, the stRurMaxPrec (mm, previous
+    maximum water capacity to root front) is set to equal root_tank_capacity
+    (mm). Value is broadcasted along time dimension.
+    For every other day, it keeps its initial value of 0. 
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+    # group 22
+    condition = (data["numPhase"][j,:,:] == 7) & (data["changePhase"][j,:,:] == 1)
+    data["stRurMaxPrec"][j:,:,:] = np.where(
+        condition,
+        #! renaming stRurMax to root_tank_capacity
+        #// data["stRurMax"][j,:,:],
+        data["root_tank_capacity"],
+        data["stRurMaxPrec"][j,:,:],
+    )
+    return data
+
+
+
+def reset_total_tank_capacity(j, data):
+    """
+    updating stRuMax :
+    
+    stRuMax is the max water storage capacity of the global reservoir ; it is
+    redfined at each loop as the product of the water storage capacity
+    (réserve utile, mm/m if soil) and the maximum depth of soil N.B. : on code
+    version 10/06/2015, resilience of water stock for multi-annual simulations
+    was been implemented
+    ? where is it now ? why redfining stRuMax at each loop ? neither ru, profRu
+    ? nor stRuMax seem to change during the simulation
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+    
+    # group 25
+    #! renaming stRuMax to total_tank_capacity
+    #// data["stRuMax"][j:,:,:] = (data["ru"] * data["profRu"] / 1000) #.copy()#[...,np.newaxis]
+    data["total_tank_capacity"][j:,:,:] = (data["ru"] * data["profRu"] / 1000)
+    return data
+
+def update_stRuPrec_for_end_of_cycle(j, data):
+    """
+    when the phase changes from 7 to 1, the stRuPrec (mm, previous water
+    storage capacity of the global reservoir) is set to equal the differe,ce
+    between stTot (mm, total water storage capacity of the global reservoir)
+    and stRurSurf (mm, water storage capacity of the surface reservoir)
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    # group 24
+    #! stRurSurf is not defined... we may want to drop this group
+    condition = (data["numPhase"][j,:,:] == 7) & (data["changePhase"][j,:,:] == 1)
+
+    data["stRuPrec"][j:,:,:] = np.where(
+        condition,
+        #! renaming stTot to total_tank_stock
+        #! renaming stRuSurf with surface_tank_stock
+        #// data["stRu"][j,:,:] - data["stRurSurf"][j,:,:],
+        data["total_tank_stock"][j,:,:] - data["surface_tank_stock"][j,:,:], # essai stTot
+        data["stRuPrec"][j,:,:],
+    )
+
+    return data
+
+
+
+
+def update_humPrec_for_end_of_cycle(j, data):
+    """
+    when the phase changes from 7 to 1, the humPrec (mm, previous maximum
+    water capacity to humectation front) is set to equal the higher value
+    between hum (mm, maximum water capacity to humectation front) and the root
+    water storage capacity (stRur, mm).
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+    # group 20
+    condition = (data["numPhase"][j,:,:] == 7) & (data["changePhase"][j,:,:] == 1)
+    data["humPrec"][j:,:,:] = np.where(
+        condition,
+        #! renaming ruSurf to surface_tank_capacity
+        #// np.maximum(data["hum"][j,:,:], data["ruSurf"][j,:,:]),
+        np.maximum(data["hum"][j,:,:], data["surface_tank_capacity"]),
+        data["humPrec"][j,:,:],
+    )
     return data
 
 
@@ -1019,125 +1153,34 @@ def rempliRes(j, data):
     des Dr, StRur, Hum etc...
     """
 
-
-    # updating variables at the end of the growing cycle
-
-    condition = (data["numPhase"][j,:,:] == 7) & (data["changePhase"][j,:,:] == 1)
-
-
-    #! not translating in function as we can retrieve humPrec with passing j-1 index
-    # when the phase changes from 7 to 1, the humPrec (mm, previous maximum
-    # water capacity to humectation front) is set to equal the higher value
-    # between hum (mm, maximum water capacity to humectation front) and the root
-    # water storage capacity (stRur, mm).
-    # group 20
-    # data["humPrec"][j:,:,:] = np.where(
-    #     condition,
-    #     #! renaming ruSurf to surface_tank_capacity
-    #     #// np.maximum(data["hum"][j,:,:], data["ruSurf"][j,:,:]),
-    #     np.maximum(data["hum"][j,:,:], data["surface_tank_capacity"]),
-    #     data["humPrec"][j,:,:],
-    # )
-
-    
+    data = update_humPrec_for_end_of_cycle(j, data)
+        
     data = update_hum_for_end_of_cycle(j, data)
 
+    data = update_stRurMaxPrec_for_end_of_cycle(j, data)
 
-    #! not translating in function as we can retrieve humPrec with passing j-1 index
-    # when the phase changes from 7 to 1, the stRurMaxPrec (mm, previous maximum
-    # water capacity to root front) is set to equal stRurMax (mm, maximum water
-    # capacity to root front)
-    # group 22
-    # data["stRurMaxPrec"][j:,:,:] = np.where(
-    #     condition,
-    #     #! renaming stRurMax to root_tank_capacity
-    #     #// data["stRurMax"][j,:,:],
-    #     data["root_tank_capacity"],
-    #     data["stRurMaxPrec"][j,:,:],
-    # )
+    data = update_stRurPrec_for_end_of_cycle(j, data)
 
-
-    def update_stRurPrec(j, data):
-        """
-        when the phase changes from 7 to 1, stRurPrec is set to equal stRur/stRurMax,
-        that is to say the ratio of the water storage capacity of the root
-        reservoir
-
-        Otherwise, it stays at its initial value of 0. Its value is broadcasted
-        along j.
-
-        Args:
-            j (_type_): _description_
-            data (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-  
-        # group 23
-        condition = (data["numPhase"][j,:,:] == 7) & (data["changePhase"][j,:,:] == 1)
-
-        data["stRurPrec"][j:,:,:] = np.where(
-            condition,
-            #! renaming stRur to root_tank_stock
-            #! renaming stRurMax to root_tank_capacity
-            #// data["stRur"][j,:,:]/data["stRurMax"][j,:,:],
-            data["root_tank_stock"][j,:,:]/data["root_tank_capacity"][j,:,:],
-            data["stRurPrec"][j,:,:],
-        )
-        return data
+    data = update_stRuPrec_for_end_of_cycle(j, data)
     
-
-    #! getting tired of _prec variables so commenting just to see if we can manage without them
-    # when the phase changes from 7 to 1, the stRuPrec (mm, previous water
-    # storage capacity of the global reservoir) is set to equal the differe,ce
-    # between stTot (mm, total water storage capacity of the global reservoir)
-    # and stRurSurf (mm, water storage capacity of the surface reservoir)
-    # group 24
-    #! stRurSurf is not defined... we may want to drop this group
-    # data["stRuPrec"][j:,:,:] = np.where(
-    #     condition,
-    #     #! renaming stTot to total_tank_stock
-    #     #// data["stRu"][j,:,:] - data["stRurSurf"][j,:,:],
-    #     data["total_tank_stock"][j,:,:] - data["stRurSurf"][j,:,:], # essai stTot
-    #     data["stRuPrec"][j,:,:],
-    # )
-
-
-
-    # updating stRuMax :
-    #
-    # stRuMax is the max water storage capacity of the global reservoir ; it is
-    # redfined at each loop as the product of the water storage capacity
-    # (réserve utile, mm/m if soil) and the maximum depth of soil N.B. : on code
-    # version 10/06/2015, resilience of water stock for multi-annual simulations
-    # was been implemented
-    #? where is it now ? why redfining stRuMax at each loop ? neither ru, profRu
-    #? nor stRuMax seem to change during the simulation
-    # group 25
-    #! renaming stRuMax to total_tank_capacity
-    #// data["stRuMax"][j:,:,:] = (data["ru"] * data["profRu"] / 1000) #.copy()#[...,np.newaxis]
-    data["total_tank_capacity"][j:,:,:] = (data["ru"] * data["profRu"] / 1000) #.copy()#[...,np.newaxis]
-    
+    data = reset_total_tank_capacity(j, data)
 
     # updating stRuSurfPrec :
-    #
+    
     # stRuSurf is the water stock in the surface reservoir. here, we save the
     # previous value of stRuSurf before doing any update
-    #? this has little sense, as previous value of stRuSurf is stored at the ?
-    #? (i-1)-th position in the xarray dataarray
+    # ? initially proposed code has little sense, as previous value of stRuSurf is stored at the
+    # ? (j-1)-th position in the xarray dataarray
+    # ? so we use stRuSurf with index j-1 in the following script instead
     # group 26 
-    #! after replacing data["stRuSurfPrec"][j,:,:] by data["stRuSurf"][j-1,:,:]
-    #! in group 28, we can safely remove the use of stRuSurfPrec
-    #// data["stRuSurfPrec"][j,:,:] = data["stRuSurf"][j,:,:].copy()
-
+    # ! after replacing data["stRuSurfPrec"][j,:,:] by data["stRuSurf"][j-1,:,:]
+    # ! in group 28, we can safely remove the use of stRuSurfPrec
+    # // data["stRuSurfPrec"][j,:,:] = data["stRuSurf"][j,:,:].copy()
 
     data = update_surface_tank_stock(j, data)
 
     data = estimate_transpirable_water(j, data)
     
-    
-
     # updating stTot, step 1 :
     #
     # stTot, also known as stRu in some versions of the model; is the water
@@ -1171,72 +1214,112 @@ def rempliRes(j, data):
 
 
 
-    #! renaming stRuVar with delta_total_tank_stock
-    #//condition_1 = (data["stRuVar"][j,:,:] > data["hum"][j,:,:])
-    condition_1 = (data["delta_total_tank_stock"][j,:,:] > data["hum"][j,:,:])
-    #! we replace stRurMaxPrec by stRurMax with indice j-1
-    #! renaming stRurMax with root_tank_capacity
-    #// condition_2 = (data["hum"][j,:,:] <= data["stRurMaxPrec"][j,:,:])
-    condition_2 = (data["hum"][j,:,:] <= data["root_tank_capacity"][j-1,:,:])
-    #! we replace humPrec by hum with indice j-1
-    #// condition_3 = (data["hum"][j,:,:] < data["humPrec"][j,:,:])
-    condition_3 = (data["hum"][j,:,:] < data["hum"][j-1,:,:])
+    # #! renaming stRuVar with delta_total_tank_stock
+    # #//condition_1 = (data["stRuVar"][j,:,:] > data["hum"][j,:,:])
+    # condition_1 = (data["hum"][j,:,:] < data["delta_total_tank_stock"][j,:,:])
+    # #! we replace stRurMaxPrec by stRurMax with indice j-1
+    # #// condition_2 = (data["hum"][j,:,:] <= data["stRurMaxPrec"][j,:,:])
+    # condition_2 = (data["hum"][j,:,:] <= data["stRurMaxPrec"][j,:,:])
+    # #! we replace humPrec by hum with indice j-1
+    # #// condition_3 = (data["hum"][j,:,:] < data["humPrec"][j,:,:])
+    # condition_3 = (data["hum"][j,:,:] < data["hum"][j-1,:,:])
 
-    # updating stTot step 1
-    #
-    # stTot, also known as stRu in some versions of the model, is the water
-    # stock of the global reservoir. if the variation in total water stock
-    # (stRuVar) is greater than the maximum water quantity until the humidity
-    # front (hum), and if the quantity of water until the humidity front is
-    # equal or less than the maximum root water stock (stRurMax) at j-1, the
-    # total water stock is incremented by the difference between stRuVar and
-    # hum, multiplied by the previous root water stock (stRurPrec).
-    #
-    # if the variation in total water stock (stRuVar) is greater than the
-    # maximum water quantity until the humidity front (hum), and if the quantity
-    # of water until the humidity front is MORE than the maximum root water
-    # stock (stRurMax) at j-1, then if the humidity front is lower than the
-    # previous humidity front, stTot taks stRuVar as value. Otherwise, its value
-    # does not change 
-    # group 31
+    data = update_total_tank_stock(j, data)
 
-    # si la variation du réservoir total, qui est soit nulle soit positive, est supérieure au front d'humectation,
-    # et que la quantité d'eau jusqu'au front d'humectation est inférieure ou égale au root_tank_capacity à l'indice j-1,
-    # alors le total_tank_stock est incrémenté de delta_total_tank_stock retranché du front d'humectation, multiplié par le root_tank_stock à l'indice j-1
+    def update_total_tank_stock(j, data):
+        """
+        updating total_tank_stock/stTot, step 1
+        
+        total_tank_stock, also known as stTot or stRu in some versions of the
+        model, is the water stock of the global reservoir.
+        
+        In this function, if the variation of transpirable water stock
+        (delta_total_tank_stock) is greater than the maximum water quantity
+        until the humidity front (hum) (meaning that the humectation front can
+        advance), and if hum is equal or less than stRurMaxPrec (equivalent to
+        root_tank_capacity) then total_tank_stock is incremented by the
+        difference between delta_total_tank_stock and hum, multiplied by the
+        filling  stRurPrec.
+        
+        stRurPrec is by default 0 but will take a value corresponding to the
+        decimal percentage of root tank filling when transitioning from phase 7
+        back to phase 0. This means that total_tank_stock will be modified under
+        the tested conditions only from the second season of simulation.
 
-    # en fait, le front d'humectation serait une une manière de représenter l'avancée de l'augmentatoin d'eau dans le sol ?
+        If the variation of transpirable water stock
+        (delta_total_tank_stock) is greater than the maximum water quantity
+        until the humidity front (hum) (meaning that the humectation front can
+        advance), but if hum is ABOVE than stRurMaxPrec (equivalent to
+        root_tank_capacity), then a third condition is applied. If hum is lower than humPrec, 
+        then total_tank_stock takes delta_total_tank_stock as value.
+
+        humPrec is initialized with the same value as hum. However, in the
+        update_humPrec_for_end_of_cycle function, at the day of transition
+        between phase 7 and phase 0, it takes hum as value, with a minimum bound
+        of surface_tank_capacity.
+        
+        Otherwise, total_tank_stock value does not change.
 
     
-    #! renaming stTot to total_tank_stock
-    #// data["stTot"][j:,:,:] = np.where(
-    data["total_tank_stock"][j:,:,:] = np.where(
-        condition_1, # delta_total_tank_stock > hum
-        np.where(
-            condition_2, # hum <= root_tank_capacity
-            #condition 1 + 2 = si la variation du stock d'eau transpirable est supérieure au front d'humectation
-            # (donc le front peut grandir), et que le front d'humectation reste de taille moindre 
-            # a la taille du réservoir de surface,
-            #! we replace stRurPrec with stRur at indice j-1
-            #! renaming stRur to root_tank_stock
-            #! renaming stTot to total_tank_stock
-            #! renaming stRuVar with delta_total_tank_stock
-            #// data["stTot"][j,:,:] + (data["stRuVar"][j,:,:] - data["hum"][j,:,:]) * data["stRurPrec"][j,:,:],
-            data["total_tank_stock"][j,:,:] + (data["delta_total_tank_stock"][j,:,:] - data["hum"][j,:,:]) * data["root_tank_stock"][j-1,:,:],
-            # alors le total_tank_stock est incrémenté de ...
+
+        si la variation du réservoir total, qui est soit nulle soit positive,
+        est supérieure au front d'humectation, et que la quantité d'eau jusqu'au
+        front d'humectation est inférieure ou égale au root_tank_capacity à
+        l'indice j-1, alors le total_tank_stock est incrémenté de
+        delta_total_tank_stock retranché du front d'humectation, au prorata du
+        remplissage du root_tank_stock
+
+        en fait, le front d'humectation serait une une manière de représenter
+        l'avancée de l'augmentatoin d'eau dans le sol ?
+
+
+        Args:
+            j (_type_): _description_
+            data (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+
+        #! renaming stRuVar with delta_total_tank_stock
+        #//condition_1 = (data["stRuVar"][j,:,:] > data["hum"][j,:,:])
+        condition_1 = (data["delta_total_tank_stock"][j,:,:] > data["hum"][j,:,:])
+        #! we replace stRurMaxPrec by stRurMax with indice j-1
+        #// condition_2 = (data["hum"][j,:,:] <= data["stRurMaxPrec"][j,:,:])
+        condition_2 = (data["hum"][j,:,:] <= data["stRurMaxPrec"][j,:,:])
+        #! we replace humPrec by hum with indice j-1
+        #// condition_3 = (data["hum"][j,:,:] < data["humPrec"][j,:,:])
+        condition_3 = (data["hum"][j,:,:] < data["humPrec"][j,:,:])
+
+        #! renaming stTot to total_tank_stock
+        #// data["stTot"][j:,:,:] = np.where(
+        data["total_tank_stock"][j:,:,:] = np.where(
+            condition_1,
             np.where(
-                condition_3,
-                #! renaming stRuVar with delta_total_tank_stock
-                #//data["stRuVar"][j,:,:],
-                data["delta_total_tank_stock"][j,:,:],
+                #! 
+                condition_2, 
+                #! we replace stRurPrec with stRur at indice j-1
+                #! renaming stRur to root_tank_stock
                 #! renaming stTot to total_tank_stock
-                #// data["stTot"][j,:,:],
-                data["total_tank_stock"][j,:,:],
+                #! renaming stRuVar with delta_total_tank_stock
+                #// data["stTot"][j,:,:] + (data["stRuVar"][j,:,:] - data["hum"][j,:,:]) * data["stRurPrec"][j,:,:],
+                data["total_tank_stock"][j,:,:] + (data["delta_total_tank_stock"][j,:,:] - data["hum"][j,:,:]) * data["stRurPrec"][j,:,:],
+                np.where(
+                    condition_3,
+                    #! renaming stRuVar with delta_total_tank_stock
+                    #//data["stRuVar"][j,:,:],
+                    data["delta_total_tank_stock"][j,:,:],
+                    #! renaming stTot to total_tank_stock
+                    #// data["stTot"][j,:,:],
+                    data["total_tank_stock"][j,:,:],
+                ),
             ),
-        ),
-        #! renaming stTot to total_tank_stock  
-        #// data["stTot"][j,:,:],
-        data["total_tank_stock"][j,:,:],
-    )
+            #! renaming stTot to total_tank_stock  
+            #// data["stTot"][j,:,:],
+            data["total_tank_stock"][j,:,:],
+        )
+
+        return data
 
 
 
