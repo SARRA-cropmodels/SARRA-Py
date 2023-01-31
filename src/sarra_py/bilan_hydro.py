@@ -1772,10 +1772,17 @@ def rempliRes(j, data):
 ########################################################################################
 
 
-def EvalFESW(j, data):
+
+
+
+def estimate_fesw(j, data):
     """
-    This function estimates the fraction of evaporable surface water (mm, fesw).
-    It is adapted from the bileau.pas file from the original FORTRAN code.
+    This function estimates the fraction of evaporable soil water (fesw, mm).
+    fesw is defined as the ratio of water stock in the surface tank over 110% of
+    the surface tank capacity.
+    
+    It is adapted from the EvalFESW procedure, from bileau.pas and
+    bhytypeFAO.pas files from the original FORTRAN code.
 
     Args:
         j (_type_): _description_
@@ -1795,24 +1802,38 @@ def EvalFESW(j, data):
 
 
 
-def EvalKceMc(j, data, paramITK):
+
+def estimate_kce(j, data, paramITK):
     """
-    
+    This function estimates the coefficient of evaporation from the soil (kce).
 
-    There are three ways evaporation can be limited :
-    1) ltr : plant cover
-    2) Mulch : covering effect, permanent, we consider a value of 100 
-    is no mulch, and 0 is full covering with plastic sheet
-    3) BiomMc : biomass of mulch  
+    This approach takes into consideration three factors acting on limitation of
+    kce :
 
-    This function has been adapted from bileau.pas from the original FORTRAN code.
+    1) ltr : plant cover, 1 = no plant cover, 0 = full plant cover
+    2) Mulch - permanent covering effect : we consider a value of 1.0 for no
+    covering, and 0.0 is full covering with plastic sheet ; this mulch parameter
+    has been used in previous versions of the model where evolution of mulch
+    biomass was not explicitely taken into consideration, can be used in the
+    case of crops with self-mulching phenomena, where a standard mulch parameter
+    value of 0.7 can be applied.
+    3) Mulch - evolutive covering effect BiomMc : biomass of mulch  
 
-    ? source of this method ?
+    This function has been adapted from EvalKceMC procedure, bileau.pas and
+    exmodules 2.pas from the original FORTRAN code. In its spirit, it looks like
+    it has been adapted from the dual crop coefficient from the FAO56 paper. But
+    this is still to confirm on a point of view of the history of the model.
 
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
 
+    Returns:
+        _type_: _description_
     """
 
-    data["kce"][j,:,:] = paramITK["mulch"] / 100 * data["ltr"][j,:,:] * \
+    data["kce"][j,:,:] = data["ltr"][j,:,:] * paramITK["mulch"] / 100 * \
         np.exp(-paramITK["coefMc"] * paramITK["surfMc"] * data["biomMc"][j,:,:]/1000)
     
     return data
@@ -1820,27 +1841,28 @@ def EvalKceMc(j, data, paramITK):
 
 
 
-def DemandeSol(j, data):
-    """
-    depuis bileau.pas
-    
-    This function computes estimation of potential soil evaporation (mm,
-    evapPot).
-    
-    We do not take into account a variation of evaporation in function of a
-    difference in humectation between the top and the bottom of the tank. We
-    have a mulch parameter that can translate the self-mulching phenomenon
-    (default: 0.7) that can also translate a mulch by vegetal cover. The
-    reduction of evaporation by the evolution of the soil cover by the plant is
-    translated by ltr.
-    
-    On ne tient pas compte d'une variation de l'evaporation en fonction d'une
-    humectation differente entre le haut et le bas du reservoir, on a un
-    parametre mulch qui peu traduire le phenomene d'auto mulching (defaut : 0.7)
-    qui peu aussi traduire un mulch par couverture vegetale ou... La reduction
-    de l'evaporation par l'evolution de la couverture du sol par la plante est
-    traduit par ltr.
 
+def estimate_soil_potential_evaporation(j, data):
+    """
+    This function computes estimation of potential soil evaporation (mm,
+    evapPot). 
+
+    It performs its computations solely from the evaporation forcing driven by
+    climatic demand, limited by the coefficient of evaporation from the soil
+    (kce).
+    
+    Note : difference in humectation of the top and bottom tanks is not taken
+    into consideration in this approach.  The
+  
+    This function has been adapted from DemandeSol procedure, from bileau.pas
+    and exmodules 1 & 2.pas file from the original FORTRAN code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
     """
     # group 44
     data["evapPot"][j,:,:] = data["ET0"][j,:,:] * data["kce"][j,:,:]
@@ -1850,25 +1872,67 @@ def DemandeSol(j, data):
 
 
 
-def EvapMc(j, data, paramITK):
-    """
-    group 47
-    depuis bileau.pas
 
-    comme pour FESW on retire du stock la fraction evaporable
-    la demande climatique étant réduite é la fraction touchant le sol ltr
-    on borne é 0
+def estimate_soil_evaporation(j, data):
     """
-    # on doit reset FEMcW à chaque cycle ?
-    # Var FEMcW : double;
+    This function computes estimation of soil evaporation (mm, evap). It uses
+    the potential soil evaporation (evapPot) and the fraction of evaporable soil
+    water (fesw), bounded by the surface tank stock.
+
+    It has been adapted from the EvapRuSurf procedure, from bileau.pas and
+    exmodules 1 & 2.pas file from the original FORTRAN code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    #! replacing stRuSurf by surface_tank_stock
+    #// data["evap"][j:,:,:] = np.minimum(data["evapPot"][j,:,:] * data["fesw"][j,:,:]**2, data["stRuSurf"][j,:,:])[...,np.newaxis]
+    data["evap"][j:,:,:] = np.minimum(
+        data["evapPot"][j,:,:] * data["fesw"][j,:,:]**2,
+        data["surface_tank_stock"][j,:,:]
+    )
+
+    return data
+
+
+
+
+
+def estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK):
+    """
+    This function calculates the fraction of evaporable water from the mulch
+    (FEMcW).
+
+    If the mulch water stock is greater than 0, then we compute FEMcW, which we
+    consider to be equal to the filling ratio of the mulch water capacity. We
+    then update the mulch water stock by removing the water height equivalent to
+    the climate forcing demand, modulated by FEMcW and the plant cover (ltr).
+
+    This function is adapted from the procedure EvapMC, from bileau.pas and
+    exmodules 2.pas file from the original FORTRAN code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
 
     # group 45
     data["FEMcW"][j,:,:] = np.where(
         #! replacing stockMc with mulch_water_stock
         #// data["stockMc"][j,:,:] > 0,
         data["mulch_water_stock"][j,:,:] > 0,
+        #! inverting the fraction to get stock over capacity, and not the other way round
         #// (paramITK["humSatMc"] * data["biomMc"][j,:,:] * 0.001) / data["stockMc"][j,:,:],
-        (paramITK["humSatMc"] * data["biomMc"][j,:,:] * 0.001) / data["mulch_water_stock"][j,:,:],
+        data["mulch_water_stock"][j,:,:] / (paramITK["humSatMc"] * data["biomMc"][j,:,:] / 1000),
         data["FEMcW"][j,:,:],
     )
 
@@ -1877,32 +1941,10 @@ def EvapMc(j, data, paramITK):
     #// data["stockMc"][j:,:,:] = np.maximum(
     data["mulch_water_stock"][j:,:,:] = np.maximum(
         0,
+        #! removing the power of 2 in the equation
         #// data["stockMc"][j,:,:] - data["ltr"][j,:,:] * data["ET0"][j,:,:] * data["FEMcW"][j,:,:]**2,
-        data["mulch_water_stock"][j,:,:] - data["ltr"][j,:,:] * data["ET0"][j,:,:] * data["FEMcW"][j,:,:]**2,
-    )#[...,np.newaxis]
-
-    return data
-
-
-
-
-def EvapRuSurf(j, data):
-    """
-    group 48
-    depuis bileau.pas 
-
-    Estimation de l'evaporation relle, rapporte a la fraction d'eau evaporable
-    // Parametres
-    IN:
-    fesw : mm
-    evapPot : mm
-    stRuSurf : mm
-    OUT:
-    evap : mm
-    """
-    #! replacing stRuSurf by surface_tank_stock
-    #// data["evap"][j:,:,:] = np.minimum(data["evapPot"][j,:,:] * data["fesw"][j,:,:]**2, data["stRuSurf"][j,:,:])[...,np.newaxis]
-    data["evap"][j:,:,:] = np.minimum(data["evapPot"][j,:,:] * data["fesw"][j,:,:]**2, data["surface_tank_stock"][j,:,:])#[...,np.newaxis]
+        data["mulch_water_stock"][j,:,:] - (data["ltr"][j,:,:] * data["ET0"][j,:,:] * data["FEMcW"][j,:,:]**2),
+    )
 
     return data
 
@@ -1910,19 +1952,20 @@ def EvapRuSurf(j, data):
 
 
 
-def EvalFTSW(j, data):
+def estimate_ftsw(j, data):
     """
-    group 49
-    depuis bileau.pas 
+    This function estimates the fraction of evaporable soil water (fesw) from
+    the root reservoir. 
 
-    Estimation de la fraction d'eau transpirable, rapporte donc au reservoir
-    contenant les racines
-    // Parametres
-    IN:
-    RuRac : mm
-    StockRac : mm
-    OUT:
-    ftsw : mm
+    It is based on the EvalFTSW procedure, from the bileau.pas, exmodules 1 &
+    2.pas, risocas.pas, riz.pas files from the original FORTRAN code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
     """
 
     data["ftsw"][j:,:,:] = np.where(
@@ -1934,63 +1977,207 @@ def EvalFTSW(j, data):
         #// data["stRur"][j,:,:] / data["stRurMax"][j,:,:],
         data["root_tank_stock"][j,:,:] / data["root_tank_capacity"][j,:,:],
         0,
-    )#[...,np.newaxis]
+    )
 
     return data
 
 
 
 
-def DemandePlante(j, data):
+
+def estimate_potential_plant_transpiration(j, data):
+    """
+    This function computes the potential transpiration from the plant.
+
+    Computation is based on the climate forcing (ET0), as well as the kcp coefficient.
+
+    This code is based on the DemandePlante procedure, from the bileau.pas, bhytypeFAO.pas, and
+    exmodules 1 & 2.pas files from the original FORTRAN code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     # ggroup 51
-    # d'près bileau.pas
-    # TrPot := Kcp * ETo;
-    # attention, séparation de ETp et ET0 dans les formules
-    data["trPot"][j,:,:] = (data["kcp"][j,:,:] * data["ET0"][j,:,:])#[...,np.newaxis]
+    data["trPot"][j,:,:] = (data["kcp"][j,:,:] * data["ET0"][j,:,:])
     
     return data
 
 
 
 
-def EvalKcTot(j, data):
-    # group 52
-    # d'après bileau.pas
+def estimate_kcTot(j, data):
+    """
+    This function computes the total kc coefficient.
+
+    Computation is based on the kcp (transpiration coefficient) and kce
+    (evaporation from the soil) coefficients. Where the crop coefficient is 0
+    (meaning that there was no emergence yet), kcTot takes the value of kce.
+
+    This function is based on the EvalKcTot procedure, from the bileau.pas and
+    exmodules 1 & 2.pas files, from the original FORTRAN code.
+
+    #! Note : code has been modified to match the original SARRA-H behavior.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
     # added a condition on 19/08/22 to match SARRA-H original behavior
     data["kcTot"][j,:,:] = np.where(
         data["kcp"][j,:,:] == 0.0,
         data["kce"][j,:,:],
         data["kce"][j,:,:] + data["kcp"][j,:,:],
-    )#[...,np.newaxis]
+    )
 
     return data
 
 
-def CstrPFactor(j, data, paramVariete):
-    # group 57
-    # d'après bileau.pas
 
+
+def estimate_pFact(j, data, paramVariete):
+    """_summary_
+
+    This function computes the pFactor, which is a bound coefficient used in the
+    computation of cstr from ftsw. This coefficient delimits the portion of the
+    FTSW below which water stress starts to influence the transpiration.
+
+    pFact is bounded in [0.1, 0.8].
+
+    For details see https://agritrop.cirad.fr/556855/1/document_556855.pdf
+
+    This function is based on the CstrPFactor procedure, from bileau.pas,
+    exmodules 1 & 2.pas, risocas.pas files, from the original FORTRAN code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     # group 53
-    data["pFact"][j:,:,:] = paramVariete["PFactor"] + 0.04 * (5 - np.maximum(data["kcp"][j,:,:], 1) * data["ET0"][j,:,:])#[...,np.newaxis]
-
+    data["pFact"][j:,:,:] = paramVariete["PFactor"] + \
+        0.04 * (5 - np.maximum(data["kcp"][j,:,:], 1) * data["ET0"][j,:,:])
+    
     # group 54
-    data["pFact"][j:,:,:] = np.minimum(np.maximum(0.1, data["pFact"][j,:,:]), 0.8)#[...,np.newaxis]
-
-    #group 55
-    data["cstr"][j:,:,:] = np.minimum((data["ftsw"][j,:,:] / (1 - data["pFact"][j,:,:])), 1)#[...,np.newaxis]
-
-    # group 56
-    data["cstr"][j:,:,:] = np.maximum(0, data["cstr"][j,:,:])#[...,np.newaxis]
+    data["pFact"][j:,:,:] = np.minimum(
+        np.maximum(
+            0.1,
+            data["pFact"][j,:,:],
+        ),
+        0.8,
+    )
 
     return data
 
 
 
 
-def EvalTranspi(j, data):
-    # d'après bileau.pas
+def estimate_cstr(j, data):
+    """
+    This function computes the water stress coefficient cstr.
+
+    It uses ftsw and pFact. cstr is bounded in [0, 1].
+
+    This function is based on the CstrPFactor procedure, from bileau.pas,
+    exmodules 1 & 2.pas, risocas.pas files, from the original FORTRAN code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    #group 55
+    data["cstr"][j:,:,:] = np.minimum((data["ftsw"][j,:,:] / (1 - data["pFact"][j,:,:])), 1)
+    # group 56
+    data["cstr"][j:,:,:] = np.maximum(0, data["cstr"][j,:,:])
+
+    return data
+
+
+
+
+def estimate_plant_transpiration(j, data):
+    """
+
+    This function computes the transpiration from the plant.
+
+    This function is based on the EvalTranspi procedure, from bileau.pas,
+    bhytypeFAO.pas, exmodules 1 & 2.pas, from the original FORTRAN code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     # group 58
-    data["tr"][j:,:,:] = (data["trPot"][j,:,:] * data["cstr"][j,:,:]).copy()#[...,np.newaxis]
+    data["tr"][j:,:,:] = (data["trPot"][j,:,:] * data["cstr"][j,:,:])
+
+    return data
+
+
+def compute_evapotranspiration(j, data, paramITK, paramVariete):
+    data = estimate_fesw(j, data) 
+    data = estimate_kce(j, data, paramITK)
+    data = estimate_soil_potential_evaporation(j, data)
+    data = estimate_soil_evaporation(j, data)
+    data = estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK)
+    data = estimate_ftsw(j, data)
+    data = estimate_kcp(j, data, paramVariete)
+    data = estimate_potential_plant_transpiration(j, data)
+    data = estimate_kcTot(j, data)
+    data = estimate_pFact(j, data, paramVariete)
+    data = estimate_cstr(j, data)
+    data = estimate_plant_transpiration(j, data)
+    return data
+
+
+
+
+def estimate_transpirable_surface_water(j, data):
+    """
+    This function estimates the transpirable surface water. It removes
+    1/10th of surface tank capacity as water is condidered as bound.
+    This function is based on the ConsoResSep procedure, from bileau.pas,
+    exmodules 1 & 2.pas files, from the original FORTRAN code.
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+    # group 59
+    #! replacing stRuSurf by surface_tank_stock
+    #! renaming ruSurf with surface_tank_capacity
+    #// data["trSurf"][j:,:,:] = np.maximum(0, data["stRuSurf"][j,:,:] - data["ruSurf"][j,:,:] / 10)[...,np.newaxis]
+    data["trSurf"][j:,:,:] = np.maximum(
+        0,
+        data["surface_tank_stock"][j,:,:] - data["surface_tank_capacity"] * 0.1,
+    )
+    return data
+
+
+
+
+def apply_evaporation_on_surface_tank_stock(j, data):
+    # qte d'eau evapore a consommer sur le reservoir de surface
+    # group 60
+    #! replacing stRuSurf by surface_tank_stock
+    #// data["stRuSurf"][j:,:,:] = np.maximum(0, data["stRuSurf"][j,:,:] - data["evap"][j,:,:])[...,np.newaxis]
+    data["surface_tank_stock"][j:,:,:] = np.maximum(0, data["surface_tank_stock"][j,:,:] - data["evap"][j,:,:])
     return data
 
 
@@ -2032,27 +2219,19 @@ def ConsoResSep(j, data):
     etm : mm
     """
 
-    # part transpirable sur le reservoir de surface
-    # group 59
-    #! replacing stRuSurf by surface_tank_stock
-    #! renaming ruSurf with surface_tank_capacity
-    #// data["trSurf"][j:,:,:] = np.maximum(0, data["stRuSurf"][j,:,:] - data["ruSurf"][j,:,:] / 10)[...,np.newaxis]
-    data["trSurf"][j:,:,:] = np.maximum(0, data["surface_tank_stock"][j,:,:] - data["surface_tank_capacity"] / 10)#[...,np.newaxis]
+    data = estimate_transpirable_surface_water(j, data)
 
-    # qte d'eau evapore a consommer sur le reservoir de surface
-    # group 60
-    #! replacing stRuSurf by surface_tank_stock
-    #// data["stRuSurf"][j:,:,:] = np.maximum(0, data["stRuSurf"][j,:,:] - data["evap"][j,:,:])[...,np.newaxis]
-    data["surface_tank_stock"][j:,:,:] = np.maximum(0, data["surface_tank_stock"][j,:,:] - data["evap"][j,:,:])#[...,np.newaxis]
-
+    data = apply_evaporation_on_surface_tank_stock(j, data)
 
     # qte d'eau evapore a retirer sur la part transpirable
     # group 61
+    # if evaporation is above transpirable water, consumtion of root tank stock is equal 
+    # to transpirable water, else it is equal to evaporation
     data["consoRur"][j:,:,:] = np.where(
         data["evap"][j,:,:] > data["trSurf"][j,:,:],
         data["trSurf"][j,:,:],
         data["evap"][j,:,:],
-    )#[...,np.newaxis]
+    )
 
     # data["stRu"][j:,:,:] = np.maximum(0, data["stRu"][j,:,:] - data["consoRur"][j,:,:])
     # essais stTot
