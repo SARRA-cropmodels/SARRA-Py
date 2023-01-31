@@ -201,18 +201,31 @@ def EvalPar(data):
 
     
 
-def EvolKcpKcIni(j, data, paramVariete):
-    # group 50
+def estimate_kcp(j, data, paramVariete):
+    """
+    This function estimates the kcp coefficient.
     
-    # //manque   Numphase := trunc(NoPhase); ??
-    # d'après biomasse.pas : 
-    # kcp := max ( 0.3,KcMax * (1 - Ltr));
+    It performs computation of kcp based on the maximum crop coefficient kcMax,
+    as well as plant cover ltr.
+
+    This function is based on the EvolKcpKcIni procedure, from the biomasse.pas,
+    exmodules 1 & 2.pas files of the original PASCAL code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    # group 50
 
     data["kcp"][j:,:,:] = np.where(
         data["numPhase"][j,:,:] >= 1,
         np.maximum(0.3, paramVariete["kcMax"] * (1 - data["ltr"][j,:,:])),
         data["kcp"][j,:,:],
-    )#[...,np.newaxis]
+    )
     
     return data
 
