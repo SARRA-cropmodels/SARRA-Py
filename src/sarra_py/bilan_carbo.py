@@ -142,17 +142,25 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         # renaming stRu to root_tank_stock
         #// "stRu": ["",""],
         "root_tank_stock": ["",""],
-        "stRuMax": ["",""],
+
+        #! renaming stRuMax to total_tank_capacity
+        #//"stRuMax": ["",""],
+        "total_tank_capacity": ["",""],
         # renaming stRur to 
         "stRur": ["",""],
-        "stRurMaxPrec": ["",""],
+        #! renaming stRurMaxPrec to root_tank_capacity_previous_season
+        # "stRurMaxPrec": ["",""],
+        "root_tank_capacity_previous_season": ["",""],
         "stRurPrec": ["",""],
         "stRurSurf": ["",""],
         #! renaming stRuSurf to surface_tank_stock
         #// "stRuSurf": ["",""],
         "surface_tank_stock": ["",""],
         "stRuSurfPrec": ["",""],
-        "stRuVar": ["",""],
+
+        #! renaming stRuVar to delta_total_tank_stock
+        #// "stRuVar": ["",""],
+        "delta_total_tank_stock": ["",""],
         "sumPP": ["",""],
         "TigeUp": ["",""],
         "tr": ["",""],
