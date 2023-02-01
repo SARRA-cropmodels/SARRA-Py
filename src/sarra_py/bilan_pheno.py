@@ -385,70 +385,46 @@ def calculate_sum_of_thermal_time(j, data, paramVariete):
 
 
 
-def EvalVitesseRacSarraV3(j, data, paramVariete):
-    # d'après phenologie.pas
-    # group 79
+def update_root_growth_speed(j, data, paramVariete):
+    """
+    This function updates the root growth speed (vRac, mm/day) according to the
+    current phase (numPhase).
 
-    # EvalVitesseRacSarraV3
+    This function has been adapted from the EvalVitesseRacSarraV3 procedure of
+    the phenologie.pas and exmodules 1 & 2.pas files of the Sarra-H model,
+    Pascal version.
 
-    # phase 1
-    #group 72
-    data["vRac"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 1,
-        paramVariete['VRacLevee'],
-        data["vRac"][j,:,:],
-    )#[...,np.newaxis]
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramVariete (_type_): _description_
 
-    # phase 2
-    # group 73
-    data["vRac"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 2,
-        paramVariete['VRacBVP'],
-        data["vRac"][j,:,:],
-    )#[...,np.newaxis]
+    Returns:
+        _type_: _description_
+    """
 
-    # phase 3
-    # group 74
-    data["vRac"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 3,
-        paramVariete['VRacPSP'],
-        data["vRac"][j,:,:],
-    )#[...,np.newaxis]
+    phase_correspondances = {
+        1: paramVariete['VRacLevee'],
+        2: paramVariete['VRacBVP'],
+        3: paramVariete['VRacPSP'],
+        4: paramVariete['VRacRPR'],
+        5: paramVariete['VRacMatu1'],
+        6: paramVariete['VRacMatu2'],
+    }
 
-    # phase 4
-    # group 75
-    data["vRac"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 4,
-        paramVariete['VRacRPR'],
-        data["vRac"][j,:,:],
-    )#[...,np.newaxis]
-
-    # phase 5
-    # group 76
-    data["vRac"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 5,
-        paramVariete['VRacMatu1'],
-        data["vRac"][j,:,:],
-    )#[...,np.newaxis]
-    
-    # phase 6
-    # group 77
-    data["vRac"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 6,
-        paramVariete['VRacMatu2'],
-        data["vRac"][j,:,:],
-    )#[...,np.newaxis]
+    for phase in range(1,6):
+        data["vRac"][j:,:,:] = np.where(
+            data["numPhase"][j,:,:] == phase,
+            phase_correspondances[phase],
+            data["vRac"][j,:,:],
+        )
 
     # phase 0 ou 7
-    #     else
-    #  VitesseRacinaire := 0
-    #
-    # group 78
     data["vRac"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 0) | (data["numPhase"][j,:,:] == 7),
         0,
         data["vRac"][j,:,:],
-    )#[...,np.newaxis]
+    )
 
     return data
 

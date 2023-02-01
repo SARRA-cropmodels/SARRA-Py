@@ -2179,6 +2179,231 @@ def apply_evaporation_on_surface_tank_stock(j, data):
     #// data["stRuSurf"][j:,:,:] = np.maximum(0, data["stRuSurf"][j,:,:] - data["evap"][j,:,:])[...,np.newaxis]
     data["surface_tank_stock"][j:,:,:] = np.maximum(0, data["surface_tank_stock"][j,:,:] - data["evap"][j,:,:])
     return data
+    
+
+
+
+def estimate_water_consumption_from_root_tank_stock(j, data):
+    """
+    This function estimates consoRur, which is the water to be consumed from
+    the root tank stock.
+
+    If soil evaporation (evap) is higher than transpirable surface water
+    (trSurf), then consumption from root tank stock equals trSurf. Else, it
+    equals evap.
+
+    #? how to interpret this ?
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    """
+
+    data["consoRur"][j:,:,:] = np.where(
+        data["evap"][j,:,:] > data["trSurf"][j,:,:],
+        data["trSurf"][j,:,:],
+        data["evap"][j,:,:],
+    )
+
+    return data
+
+
+
+
+def update_total_tank_stock_with_water_consumption(j, data):
+    """
+    This function updates the total tank stock by subtracting the lower water consumption
+    value from estimate_water_consumption_from_root_tank_stock
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    # group 62
+    #! renaming stTot to total_tank_stock
+    #// data["stTot"][j:,:,:] = np.maximum(0, data["stTot"][j,:,:] - data["consoRur"][j,:,:])[...,np.newaxis]
+    data["total_tank_stock"][j:,:,:] = np.maximum(0, data["total_tank_stock"][j,:,:] - data["consoRur"][j,:,:])#[...,np.newaxis]
+
+    return data
+
+
+
+
+def update_water_consumption_according_to_rooting(j, data):
+    """
+    This function updates the water consumption consoRur according to
+    rooting depth.
+
+    If the root tank capacity is lower than the surface tank capacity,
+    meaning than the roots did not dive into the deep tank yet, then the
+    water consumption is updated to equal the evaporation at the prorata of
+    the exploration of surface tank by the roots.
+
+    Else, consoRur keeps it value, which was previously computed by
+    estimate_water_consumption_from_root_tank_stock.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+    #  fraction d'eau evapore sur la part transpirable qd les racines sont moins
+    #  profondes que le reservoir de surface, mise a jour des stocks transpirables
+    # group 63
+
+    data["consoRur"][j:,:,:] = np.where(
+        #! renaming stRurMax with root_tank_capacity
+        #! renaming ruSurf with surface_tank_capacity
+        #// data["stRurMax"][j,:,:] < data["ruSurf"][j,:,:],
+        data["root_tank_capacity"][j:,:,:] < data["surface_tank_capacity"],
+        #! renaming stRur to root_tank_stock
+        #! renaming ruSurf with surface_tank_capacity
+        #// data["evap"][j,:,:] * data["stRur"][j,:,:] / data["ruSurf"][j,:,:],
+        data["evap"][j,:,:] * data["root_tank_stock"][j,:,:] / data["surface_tank_capacity"],
+        data["consoRur"][j,:,:],
+    )
+
+    return data
+
+
+
+
+def update_root_tank_stock_with_water_consumption(j, data):
+    """
+    This function updates root tank stock according to water consumption.
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+    # group 64
+    #! renaming stRur to root_tank_stock
+    #// data["stRur"][j:,:,:] = np.maximum(0, data["stRur"][j,:,:] - data["consoRur"][j,:,:])#[...,np.newaxis]
+    data["root_tank_stock"][j:,:,:] = np.maximum(0, data["root_tank_stock"][j,:,:] - data["consoRur"][j,:,:])
+    return data
+
+
+
+
+def update_plant_transpiration(j, data):
+    """
+    reajustement de la qte transpirable considerant que l'evap a eu lieu avant
+    mise a jour des stocks transpirables  
+    if plant transpiration is higher than the root tank stock, then plant 
+    transpiration is updated to be equal to the difference between the root tank stock and the
+    plant transpiration. Else, its value is unmodified.
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+   
+    # group 65
+    data["tr"][j:,:,:] = np.where(
+        #! renaming stRur to root_tank_stock
+        #// data["tr"][j,:,:] > data["stRur"][j,:,:],
+        data["tr"][j,:,:] > data["root_tank_stock"][j,:,:],
+        #// np.maximum(data["stRur"][j,:,:] - data["tr"][j,:,:], 0),
+        np.maximum(data["root_tank_stock"][j,:,:] - data["tr"][j,:,:], 0),
+        data["tr"][j,:,:],
+    )
+    return data
+
+
+
+
+def update_surface_tank_stock_according_to_transpiration(j, data):
+    """
+    This function updates the surface tank stock to reflect plant
+    transpiration.
+
+    if the root tank stock is above 0, then surface tank stock is updated by
+    subtracting the plant transpiration modulated by the ratio between the
+    transpirable water and the root tank stock.
+
+    That is to say, the more transpirable water is close to the root tank stock,
+    the more of transpirated water by plant will be removed from surface tank stock.
+ 
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    # group 66
+    #! renaming stRuSurf with surface_tank_stock
+    #// data["stRuSurf"][j:,:,:] = np.where(
+    data["surface_tank_stock"][j:,:,:] = np.where(
+        #! renaming stRur to surface_tank_stock
+        #// data["stRur"][j,:,:] > 0,
+        data["root_tank_stock"][j,:,:] > 0,
+        #// np.maximum(data["stRuSurf"][j,:,:] - (data["tr"][j,:,:] * np.minimum(data["trSurf"][j,:,:]/data["stRur"][j,:,:], 1)), 0),
+        #! renaming stRuSurf with surface_tank_stock
+        #// np.maximum(data["stRuSurf"][j,:,:] - (data["tr"][j,:,:] * np.minimum(data["trSurf"][j,:,:]/data["root_tank_stock"][j,:,:], 1)), 0),
+        np.maximum(
+            data["surface_tank_stock"][j,:,:] - \
+                (data["tr"][j,:,:] * np.minimum(data["trSurf"][j,:,:]/data["root_tank_stock"][j,:,:], 1)),
+            0,
+        ),
+        #// data["stRuSurf"][j,:,:],
+        data["surface_tank_stock"][j,:,:],
+    )
+
+    return data
+
+
+
+
+
+def update_root_tank_stock_with_transpiration(j, data):
+    """_summary_
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+    # group 67
+    #! renaming stRur to root_tank_stock
+    #// data["stRur"][j:,:,:] = np.maximum(0, data["stRur"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis]
+    data["root_tank_stock"][j:,:,:] = np.maximum(0, data["root_tank_stock"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis]
+    return data
+
+
+
+
+
+def update_total_tank_stock_with_transpiration(j, data):
+    # data["stRu"][j:,:,:] = np.maximum(0, data["stRu"][j,:,:] - data["tr"][j,:,:])
+    # essais stTot
+    # group 68
+    #! renaming stTot to total_tank_stock
+    #// data["stTot"][j:,:,:] = np.maximum(0, data["stTot"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis] 
+    data["total_tank_stock"][j:,:,:] = np.maximum(0, data["total_tank_stock"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis] ## ok
+    return data
+
+
+
+
+
+def update_etr_etm(j, data):
+    # group 69
+    data["etr"][j:,:,:] = (data["tr"][j,:,:] + data["evap"][j,:,:]).copy()#[...,np.newaxis]
+    
+    # group 70
+    data["etm"][j:,:,:] = (data["trPot"][j,:,:] + data["evapPot"][j,:,:]).copy()#[...,np.newaxis]
+    return data
+
+
 
 
 
@@ -2223,89 +2448,22 @@ def ConsoResSep(j, data):
 
     data = apply_evaporation_on_surface_tank_stock(j, data)
 
-    # qte d'eau evapore a retirer sur la part transpirable
-    # group 61
-    # if evaporation is above transpirable water, consumtion of root tank stock is equal 
-    # to transpirable water, else it is equal to evaporation
-    data["consoRur"][j:,:,:] = np.where(
-        data["evap"][j,:,:] > data["trSurf"][j,:,:],
-        data["trSurf"][j,:,:],
-        data["evap"][j,:,:],
-    )
+    data = estimate_water_consumption_from_root_tank_stock(j, data)
 
-    # data["stRu"][j:,:,:] = np.maximum(0, data["stRu"][j,:,:] - data["consoRur"][j,:,:])
-    # essais stTot
-    # group 62
-    #! renaming stTot to total_tank_stock
-    #// data["stTot"][j:,:,:] = np.maximum(0, data["stTot"][j,:,:] - data["consoRur"][j,:,:])[...,np.newaxis]
-    data["total_tank_stock"][j:,:,:] = np.maximum(0, data["total_tank_stock"][j,:,:] - data["consoRur"][j,:,:])#[...,np.newaxis]
+    data = update_total_tank_stock_with_water_consumption(j, data)
 
-    #  fraction d'eau evapore sur la part transpirable qd les racines sont moins
-    #  profondes que le reservoir de surface, mise a jour des stocks transpirables
-    # group 63
-    data["consoRur"][j:,:,:] = np.where(
-        #! renaming stRurMax with root_tank_capacity
-        #! renaming ruSurf with surface_tank_capacity
-        #// data["stRurMax"][j,:,:] < data["ruSurf"][j,:,:],
-        data["root_tank_capacity"][j:,:,:] < data["surface_tank_capacity"],
-        #! renaming stRur to root_tank_stock
-        #! renaming ruSurf with surface_tank_capacity
-        #// data["evap"][j,:,:] * data["stRur"][j,:,:] / data["ruSurf"][j,:,:],
-        data["evap"][j,:,:] * data["root_tank_stock"][j,:,:] / data["surface_tank_capacity"],
-        data["consoRur"][j,:,:],
-    )#[...,np.newaxis]
+    data = update_water_consumption_according_to_rooting(j, data)
 
-    # group 64
-    #! renaming stRur to root_tank_stock
-    #// data["stRur"][j:,:,:] = np.maximum(0, data["stRur"][j,:,:] - data["consoRur"][j,:,:])#[...,np.newaxis]
-    data["root_tank_stock"][j:,:,:] = np.maximum(0, data["root_tank_stock"][j,:,:] - data["consoRur"][j,:,:])#[...,np.newaxis]
+    data = update_root_tank_stock_with_water_consumption(j, data)
 
+    data = update_plant_transpiration(j, data)
 
-    # // reajustement de la qte transpirable considerant que l'evap a eu lieu avant
-    # // mise a jour des stocks transpirables  
-    # group 65
-    data["tr"][j:,:,:] = np.where(
-        #! renaming stRur to root_tank_stock
-        #// data["tr"][j,:,:] > data["stRur"][j,:,:],
-        data["tr"][j,:,:] > data["root_tank_stock"][j,:,:],
-        #// np.maximum(data["stRur"][j,:,:] - data["tr"][j,:,:], 0),
-        np.maximum(data["root_tank_stock"][j,:,:] - data["tr"][j,:,:], 0),
-        data["tr"][j,:,:],
-    )#[...,np.newaxis]
+    data = update_surface_tank_stock_according_to_transpiration(j, data)
 
+    data = update_root_tank_stock_with_transpiration(j, data)
 
-    # group 66
-    #! renaming stRuSurf with surface_tank_stock
-    #// data["stRuSurf"][j:,:,:] = np.where(
-    data["surface_tank_stock"][j:,:,:] = np.where(
-        #! renaming stRur to surface_tank_stock
-        #// data["stRur"][j,:,:] > 0,
-        data["root_tank_stock"][j,:,:] > 0,
-        #// np.maximum(data["stRuSurf"][j,:,:] - (data["tr"][j,:,:] * np.minimum(data["trSurf"][j,:,:]/data["stRur"][j,:,:], 1)), 0),
-        #! renaming stRuSurf with surface_tank_stock
-        #// np.maximum(data["stRuSurf"][j,:,:] - (data["tr"][j,:,:] * np.minimum(data["trSurf"][j,:,:]/data["root_tank_stock"][j,:,:], 1)), 0),
-        np.maximum(data["surface_tank_stock"][j,:,:] - (data["tr"][j,:,:] * np.minimum(data["trSurf"][j,:,:]/data["root_tank_stock"][j,:,:], 1)), 0),
-        #// data["stRuSurf"][j,:,:],
-        data["surface_tank_stock"][j,:,:],
-    )#[...,np.newaxis]
+    data = update_total_tank_stock_with_transpiration(j, data)
 
-
-    # group 67
-    #! renaming stRur to root_tank_stock
-    #// data["stRur"][j:,:,:] = np.maximum(0, data["stRur"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis]
-    data["root_tank_stock"][j:,:,:] = np.maximum(0, data["root_tank_stock"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis]
-
-    # data["stRu"][j:,:,:] = np.maximum(0, data["stRu"][j,:,:] - data["tr"][j,:,:])
-    # essais stTot
-    # group 68
-    #! renaming stTot to total_tank_stock
-    #// data["stTot"][j:,:,:] = np.maximum(0, data["stTot"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis] 
-    data["total_tank_stock"][j:,:,:] = np.maximum(0, data["total_tank_stock"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis] ## ok
-
-    # group 69
-    data["etr"][j:,:,:] = (data["tr"][j,:,:] + data["evap"][j,:,:]).copy()#[...,np.newaxis]
-    
-    # group 70
-    data["etm"][j:,:,:] = (data["trPot"][j,:,:] + data["evapPot"][j,:,:]).copy()#[...,np.newaxis]
+    data = update_etr_etm(j, data)
 
     return data
