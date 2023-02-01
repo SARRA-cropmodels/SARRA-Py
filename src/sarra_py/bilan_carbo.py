@@ -232,61 +232,85 @@ def estimate_kcp(j, data, paramVariete):
 
 
 
-def EvalLtr(j, data, paramVariete):
-    # group 80
-    # d'après biomasse.pas 
+def estimate_ltr(j, data, paramVariete):
+    """
+    This function estimates ltr, which is the fraction of radiation transmitted
+    to the soil. In the water balance part, ltr is used as a proxy for plant
+    covering of the soil, with 1 = no plant cover, 0 = full plant cover.
 
-    
-    # ltr : Taux de rayonnement transmis au sol. Unités : MJ/MJ
-    data["ltr"][j:,:,:] = np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])#[...,np.newaxis]
+    ltr is computed as a exponential decay function of lai, with a decay
+    coefficient kdf.
+
+     This function has been adapted from the EvalLtr procedure, from the
+     biomasse.pas, and exmodules 1 & 2.pas files of the original PASCAL code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    # group 80   
+    data["ltr"][j:,:,:] = np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])
     
     return data
 
 
 
 
-def EvalConversion(j, data, paramVariete):
-    # d'après milbilancarbone.pas 
-    # group 87
+def estimate_KAssim(j, data, paramVariete):
+    """
+    This function evaluates the conversion factor KAssim, which is used to
+    calculate conv (conversion of assimilates into biomass).
 
-    # EvalConversion
-    # group 81
-    data["KAssim"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 2,
-        1,
-        data["KAssim"][j,:,:],
-    )#[...,np.newaxis]
+    KAssim value depends on the phase of the crop.
 
-    # group 82
-    data["KAssim"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 3,
-        paramVariete['txAssimBVP'],
-        data["KAssim"][j,:,:],
-    )#[...,np.newaxis]
+    This function has been adapted from the EvalConversion procedure, from the
+    milbilancarbone copie, ecopalm2_2, exmodules 1 & 2, ***milbilancarbone***,
+    risocas, riz.pas files of the original PASCAL code. 
 
-    # group 83
-    data["KAssim"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 4,
-        paramVariete['txAssimBVP'],
-        data["KAssim"][j,:,:],
-    )#[...,np.newaxis]
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramVariete (_type_): _description_
 
-    # group 84
-    data["KAssim"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 5,
-        paramVariete["txAssimBVP"] + (data['sdj'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]) * (paramVariete['txAssimMatu1'] -  paramVariete['txAssimBVP']) / (data['seuilTempPhaseSuivante'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]),
-        data["KAssim"][j,:,:],
-    )#[...,np.newaxis]
+    Returns:
+        _type_: _description_
+    """
 
-    # group 85
-    data["KAssim"][j:,:,:] = np.where(
-        data["numPhase"][j,:,:] == 6,
-        paramVariete["txAssimMatu1"] + (data["sdj"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]) * (paramVariete["txAssimMatu2"] - paramVariete["txAssimMatu1"]) / (data["seuilTempPhaseSuivante"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]),
-        data["KAssim"][j,:,:],
-    )#[...,np.newaxis]
+    phase_equivalences = {
+        2: 1,
+        3: paramVariete['txAssimBVP'],
+        4: paramVariete['txAssimBVP'],
+        5: paramVariete["txAssimBVP"] + (data['sdj'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]) * (paramVariete['txAssimMatu1'] -  paramVariete['txAssimBVP']) / (data['seuilTempPhaseSuivante'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]),
+        6: paramVariete["txAssimMatu1"] + (data["sdj"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]) * (paramVariete["txAssimMatu2"] - paramVariete["txAssimMatu1"]) / (data["seuilTempPhaseSuivante"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]),
+    }
 
-    # group 86
-    data["conv"][j:,:,:] = (data["KAssim"][j,:,:] * paramVariete["txConversion"])#[...,np.newaxis] # Conversion:=KAssim*EpsiB;
+    for phase in range(2,7):
+        data["KAssim"][j:,:,:] = np.where(
+            data["numPhase"][j,:,:] == phase,
+            phase_equivalences[phase],
+            data["KAssim"][j,:,:],
+        )
+
+    return data
+
+
+
+def estimate_conv(j,data,paramVariete):
+    """_summary_
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    data["conv"][j:,:,:] = (data["KAssim"][j,:,:] * paramVariete["txConversion"])
 
     return data
 
@@ -389,20 +413,22 @@ def EvalAssimSarrahV42(j, data, paramITK, paramVariete):
     group 100
     d'après bilancarbonsarra.pas 
 
-    Modif du 04/03/2021 : Prise en compte en plus de la densit� de semis de l'effet niveau d'intensification NI
-    NI = 1 quand on est � l'optimum du niveau d'intensification. Dans le cas de situation contr�l� c'est
-    la fertilit� qui est la clef principale en prenant en r�f�rence la qt� d'azote (�quivalent phosphore...) optimum
-    Il peut aller � 0 ou �tre sup�rieur � 1 si situation sur optimum, ie un peu plus de rdt mais � cout trop �lev�...
-    On �value un nouveau tx de conversion en fn du Ni au travers d'une double �quation : asympote x gaussienne invers�e
-    Et d'un NI d�fini en fn du sc�nario de simulation ou des donn�es observ�es.
-    NIYo = D�calage en Y de l'asymptote
-    NIp  = pente de l'asymptote
-    LGauss = Largeur de la Guaussienne
+    Modif du 04/03/2021 : Prise en compte en plus de la densit� de semis de
+    l'effet niveau d'intensification NI NI = 1 quand on est � l'optimum du
+    niveau d'intensification. Dans le cas de situation contr�l� c'est la
+    fertilit� qui est la clef principale en prenant en r�f�rence la qt� d'azote
+    (�quivalent phosphore...) optimum Il peut aller � 0 ou �tre sup�rieur � 1 si
+    situation sur optimum, ie un peu plus de rdt mais � cout trop �lev�... On
+    �value un nouveau tx de conversion en fn du Ni au travers d'une double
+    �quation : asympote x gaussienne invers�e Et d'un NI d�fini en fn du
+    sc�nario de simulation ou des donn�es observ�es. NIYo = D�calage en Y de
+    l'asymptote NIp  = pente de l'asymptote LGauss = Largeur de la Guaussienne
     AGauss = Amplitude de la Guaussienne
 
-    Conversion qui est la valeur du taux de conversion en situation optimum n'a plus besoin d'�tre utilis� sinon
-    dans la calibration des param�tres de cette �quation en absence de donn�es sur ces param�tres on ne met aucune valeur � NI
-    CF fichier ex IndIntensite_txConv_eq.xls}
+    Conversion qui est la valeur du taux de conversion en situation optimum n'a
+    plus besoin d'�tre utilis� sinon dans la calibration des param�tres de cette
+    �quation en absence de donn�es sur ces param�tres on ne met aucune valeur �
+    NI CF fichier ex IndIntensite_txConv_eq.xls}
 
     """
     # on rajoute le parIntercepte depuis evalassimsarrahv4
