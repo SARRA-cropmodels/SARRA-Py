@@ -54,7 +54,9 @@ def testing_for_initialization(j, data, paramITK, paramVariete):
         data["seuilTempPhaseSuivante"][j, :, :],
     )
 
-    data["initPhase"][j:, :, :] = xr.where(
+    #! removed broadcasting of value
+    #// data["initPhase"][j:, :, :] = xr.where(
+    data["initPhase"][j, :, :] = xr.where(
         condition,
         1,
         data["initPhase"][j, :, :]
@@ -97,6 +99,60 @@ def testing_for_phase_1(j, data, paramITK, paramVariete):
         paramVariete["SDJLevee"],
         data["seuilTempPhaseSuivante"][j,:,:]
     )       
+    
+    return data
+
+
+def testing_for_phase_2(j, data, paramITK, paramVariete):
+
+    condition = \
+        (data["numPhase"][j,:,:] == 2) & \
+        (data["sdj"][j,:,:] >= data["seuilTempPhaseSuivante"][j,:,:])
+
+    data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
+    
+    return data
+
+
+def testing_for_phase_3(j, data, paramITK, paramVariete):
+
+    condition = \
+        (data["numPhase"][j,:,:] == 3) & \
+        (data["phasePhotoper"][j,:,:] == 0)
+
+    data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
+    
+    return data
+
+
+def testing_for_phase_4(j, data, paramITK, paramVariete):
+
+    condition = \
+        (data["numPhase"][j,:,:] == 4) & \
+        (data["sdj"][j,:,:] >= data["seuilTempPhaseSuivante"][j,:,:])
+
+    data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
+    
+    return data
+
+
+def testing_for_phase_5(j, data, paramITK, paramVariete):
+
+    condition = \
+        (data["numPhase"][j,:,:] == 5) & \
+        (data["sdj"][j,:,:] >= data["seuilTempPhaseSuivante"][j,:,:])
+
+    data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
+    
+    return data
+
+def testing_for_phase_6(j, data, paramITK, paramVariete):
+
+    condition = \
+        (data["numPhase"][j,:,:] == 6) & \
+        (data["sdj"][j,:,:] >= data["seuilTempPhaseSuivante"][j,:,:])
+
+    data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
     
     return data
 
@@ -150,62 +206,16 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
 
     
     data = testing_for_initialization(j, data, paramITK, paramVariete)
-
+    data = testing_for_phase_1(j, data, paramITK, paramVariete)
+    data = testing_for_phase_2(j, data, paramITK, paramVariete)
+    data = testing_for_phase_3(j, data, paramITK, paramVariete)
+    data = testing_for_phase_4(j, data, paramITK, paramVariete)
+    data = testing_for_phase_5(j, data, paramITK, paramVariete)
+    data = testing_for_phase_6(j, data, paramITK, paramVariete)
     
 
 
-    def testing_for_phase_2(j, data, paramITK, paramVariete):
-
-        condition = \
-            (data["numPhase"][j,:,:] == 2) & \
-            (data["sdj"][j,:,:] >= data["seuilTempPhaseSuivante"][j,:,:])
-
-        data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
-        
-        return data
-
     
-    def testing_for_phase_3(j, data, paramITK, paramVariete):
-
-        condition = \
-            (data["numPhase"][j,:,:] == 3) & \
-            (data["phasePhotoper"][j,:,:] == 0)
-
-        data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
-        
-        return data
-
-    
-    def testing_for_phase_4(j, data, paramITK, paramVariete):
-
-        condition = \
-            (data["numPhase"][j,:,:] == 4) & \
-            (data["sdj"][j,:,:] >= data["seuilTempPhaseSuivante"][j,:,:])
-
-        data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
-        
-        return data
-
-
-    def testing_for_phase_5(j, data, paramITK, paramVariete):
-
-        condition = \
-            (data["numPhase"][j,:,:] == 5) & \
-            (data["sdj"][j,:,:] >= data["seuilTempPhaseSuivante"][j,:,:])
-
-        data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
-        
-        return data
-
-    def testing_for_phase_6(j, data, paramITK, paramVariete):
-
-        condition = \
-            (data["numPhase"][j,:,:] == 6) & \
-            (data["sdj"][j,:,:] >= data["seuilTempPhaseSuivante"][j,:,:])
-
-        data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
-        
-        return data
 
     # ### Phase transitions
     # # Testing for phase 2
