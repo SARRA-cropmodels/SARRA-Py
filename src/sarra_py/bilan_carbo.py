@@ -403,7 +403,7 @@ def EvalAssimSarrahV4(j, data):
     return data
     
 
-def update_assimPot(j, data, paramITK):
+def update_assimPot(j, data, paramVariete, paramITK):
     """
     This function updates the assimPot value. It does so differentially
     depending on the value of NI, which is intensification level. Note from
@@ -664,7 +664,7 @@ def update_potential_yield(j, data, paramVariete):
     
     return data
 
-def update_potential_yield_delta(j, data):
+def update_potential_yield_delta(j, data, paramVariete):
     """
     This function updates the potential yield delta (dRdtPot) of the plant.
 
@@ -1104,18 +1104,31 @@ def EvalFeuilleTigeSarrahV4(j, data, paramVariete):
 
 
 
-def EvalBiomasseVegetati(j, data):
-    # group 132
-    #d'après milbilancarbone.pas
-    data["biomasseVegetative"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:])#[...,np.newaxis]
+def update_vegetative_biomass(j, data):
+    """_summary_
+
+    This function is adapted from the EvalBiomasseVegetati procedure from the copie milbilancarbon, exmodules 1 & 2, ***milbilancarbone*** file
+    of the original Pascal code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    data["biomasseVegetative"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:])
     return data
 
 
 
 
 def EvalSlaSarrahV3(j, data, paramVariete):
-    # check vs code pascal OK
     """
+    Evaluates the specific leaf area (SLA) of the canopy.
+    
+    Notes :
+
     groupe 136
     d'après bulancarbonsarra.pas
 
@@ -1131,20 +1144,25 @@ def EvalSlaSarrahV3(j, data, paramVariete):
     penteSLA (0 é 0.2), ex : 0.1
     Avec : SLAini = SLAmax
     }
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
     """
-    # group 133
+
     data["sla"][j:,:,:] = np.where(
         (data["biomasseFeuille"][j,:,:] > 0) & \
             (data["numPhase"][j,:,:] == 2) & \
             (data["changePhase"][j,:,:] == 1),
         paramVariete["slaMax"],
         data["sla"][j,:,:],
-    )#[...,np.newaxis]
+    )
 
     # Modif du 10/07/2018, DeltaBiomasse neg si reallocation ne pas fair l'evol du SLA dans ces conditions
-    
-    # original
-    # groupe 134
     data["sla"][j:,:,:] = np.where(
         (data["biomasseFeuille"][j,:,:] > 0),
         np.where(
@@ -1156,9 +1174,9 @@ def EvalSlaSarrahV3(j, data, paramVariete):
                 * (data["biomasseFeuille"][j,:,:] / data["biomasseFeuille"][j,:,:]),
         ),
         data["sla"][j,:,:],
-    )#[...,np.newaxis]
+    )
 
-    # d'après version ocelet
+    # for reference : code adapted from Ocelet version 
     # data["sla"][j:,:,:] = np.where(
     #     (data["biomasseFeuille"][j,:,:] > 0),
     #     (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) \
@@ -1167,7 +1185,7 @@ def EvalSlaSarrahV3(j, data, paramVariete):
     #     data["sla"][j,:,:],
     # )
 
-    # mix original/ocelet
+    # or reference : code mix original/ocelet
     # data["sla"][j:,:,:] = np.where(
     #     (data["biomasseFeuille"][j,:,:] > 0),
     #     np.where(
@@ -1178,7 +1196,7 @@ def EvalSlaSarrahV3(j, data, paramVariete):
     #     data["sla"][j,:,:],
     # )
 
-    # original modifié
+    # or reference : modified original code
     # data["sla"][j:,:,:] = np.where(
     #     (data["biomasseFeuille"][j,:,:] > 0),
     #     np.where(
@@ -1191,15 +1209,12 @@ def EvalSlaSarrahV3(j, data, paramVariete):
     # )
 
 
-    # groupe 135
     data["sla"][j:,:,:] = np.where(
         (data["biomasseFeuille"][j,:,:] > 0),
-        # np.minimum(paramVariete["slaMin"], np.maximum(paramVariete["slaMax"], data["sla"][j,:,:])),
-        np.minimum(paramVariete["slaMax"], np.maximum(paramVariete["slaMin"], data["sla"][j,:,:])), # d'après version ocelet
+        # np.minimum(paramVariete["slaMin"], np.maximum(paramVariete["slaMax"], data["sla"][j,:,:])), # according to original
+        np.minimum(paramVariete["slaMax"], np.maximum(paramVariete["slaMin"], data["sla"][j,:,:])), # according to ocelet version
         data["sla"][j,:,:],
-    )#[...,np.newaxis]
-
-    
+    )
 
     return data
 
@@ -1244,24 +1259,6 @@ def EvolDayRdtSarraV3(j, data):
     )#[...,np.newaxis]
 
 
-    return data
-
-
-
-
-def BiomDensiteSarraV4(j, data, paramITK):
-    """
-    if ~np.isnan(paramVariete["densOpti"]):
-        data["rapDensite"][j,:,:] = np.minimum(1, paramITK["densite"]/paramVariete["densOpti"])
-        data["rdt"][j,:,:] = data["rdt"][j,:,:] * data["rapDensite"][j,:,:]
-        data["rdtPot"][j,:,:] = data["rdtPot"][j,:,:] * data["rapDensite"][j,:,:]
-        data["biomasseRacinaire"][j,:,:] = data["biomasseRacinaire"][j,:,:] * data["rapDensite"][j,:,:]
-        data["biomasseTige"][j,:,:] = data["biomasseTige"][j,:,:] * data["rapDensite"][j,:,:]
-        data["biomasseFeuille"][j,:,:] = data["biomasseFeuille"][j,:,:] * data["rapDensite"][j,:,:]
-        data["biomasseAerienne"][j,:,:] = data["biomasseFeuille"][j,:,:] + data["biomasseTige"][j,:,:] + data["rdt"][j,:,:]
-        data["lai"][j,:,:] = data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:]
-        data["biomasseTotale"][j,:,:] = data["biomasseAerienne"][j,:,:] + data["biomasseRacinaire"][j,:,:]
-    """
     return data
 
 
