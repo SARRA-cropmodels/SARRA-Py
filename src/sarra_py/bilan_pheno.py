@@ -22,9 +22,21 @@ def reset(j, data):
 
 def testing_for_initialization(j, data, paramITK, paramVariete):
     """
-    In this function, we test if the conditions are met to initiate the crop.
-    Conditions are : 1) we are in the first phase (0), and 2) the soil moisture is above the threshold for sowing.
-    If conditions are met, we initiate the crop by setting the phase number to 1, by flagging a change of phase,and by setting the sum of thermal time of the next phase to be "SDJ levée".
+    This function tests if the conditions are met to initiate the crop.
+
+    If numPhase is 0, if the current day is equal or above the sowing date, and
+    if surface_tank_stock is above the threshold for sowing, we initiate the
+    crop :
+
+    1) we set numPhase to 1 ; we broadcast the value over remaining days.
+    2) we set changePhase of this particular day to 1.
+    3) set the sum of thermal time to the next phase (seuilTempPhaseSuivante) to
+       be SDJLevee ; we broadcast the value over remaining days.
+    4) we set initPhase to 1 ; we broadcast the value over remaining days.
+
+    initPhase is only used in update_pheno_phase_1_to_2 function, so that we do
+    not go directly from phase 0 to phase 2. It is used as a specific flag for
+    phase 0 to 1 transition.
 
     Args:
         j (_type_): _description_
@@ -40,7 +52,7 @@ def testing_for_initialization(j, data, paramITK, paramVariete):
         (data["numPhase"][j, :, :] == 0) & \
         (j >= data["sowing_date"][j,:,:]) & \
         (data["surface_tank_stock"][j, :, :] >= paramITK["seuilEauSemis"])
-    # & (data["startLock"][j,:,:] == 0)
+        # & (data["startLock"][j,:,:] == 0)
 
     data["numPhase"][j:, :, :] = xr.where(
         condition, 1, data["numPhase"][j, :, :])
@@ -54,8 +66,7 @@ def testing_for_initialization(j, data, paramITK, paramVariete):
         data["seuilTempPhaseSuivante"][j, :, :],
     )
 
-    #! removed broadcasting of value
-    #// data["initPhase"][j:, :, :] = xr.where(
+    #flagging phase change has been done
     data["initPhase"][j, :, :] = xr.where(
         condition,
         1,
@@ -65,17 +76,100 @@ def testing_for_initialization(j, data, paramITK, paramVariete):
     return data
 
 
-def testing_for_phase_1(j, data, paramITK, paramVariete):
 
-    # testing if the sum of thermal time reaches the threshold needed for the next phase
-    # if numPhase is 1 and sum of thermal time is above the threshold, we flag a change of phase
-    # then, we update phase number
-    # and we update the threshold for the next phase
+def flag_change_phase(j, data, num_phase):
+    """
+    This function flags the day for phase change.
+
+    If the phase number is above the num_phase value, and if the sum of thermal
+    time is above the threshold, this function returns changePhase flags.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        num_phase (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    # flagging the day for phase change
     condition = \
-        (data["numPhase"][j,:,:] == 1) & \
+        (data["numPhase"][j,:,:] == num_phase) & \
         (data["sdj"][j,:,:] >= data["seuilTempPhaseSuivante"][j,:,:])
 
-    data["changePhase"][j,:,:] = xr.where(condition, 1, data["changePhase"][j,:,:])
+    data["changePhase"][j,:,:] = xr.where(
+        condition,
+        1,
+        data["changePhase"][j,:,:],
+    )
+
+    return data
+
+
+def update_thermal_time_next_phase(j, data, num_phase, thermal_time_threshold):
+    """_summary_
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        num_phase (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    condition = \
+        (data["numPhase"][j,:,:] == num_phase) & \
+        (data["changePhase"][j,:,:] == 1)
+
+    data["seuilTempPhaseSuivante"][j:,:,:] = np.where(
+        condition,
+        data["seuilTempPhaseSuivante"][j,:,:] + thermal_time_threshold,
+        data["seuilTempPhaseSuivante"][j,:,:]
+    )  
+
+    return data
+
+
+def update_pheno_phase_1_to_2(j, data, paramITK, paramVariete):
+    """
+    This function manages phase change from phases number 1 to 2.
+
+    First, it flags the day for phase change : If numPhase is 1 and sum of
+    thermal time is above the threshold (which value comes here from the
+    previous function testing_for_initialization), we set changePhase of this
+    particular day to 1.
+
+    Second, we update the thermal time to next phase : if numPhase is 1 and
+    changePhase is 1 (meaning that we are at the transition day between phases 1
+    and 2), we set the sum of thermal time to the next phase as SDJLevee ; we
+    broadcast the value over remaining days.
+
+    We do it before updating phase number because we need to test what is the
+    phase number before updating it
+
+    Third, we update the phase number : if numPhase is different from 0 and
+    changePhase is 1 (meaning that we are at the transition day between two
+    phases, to the exception of transition day between phases 0 and 1), we
+    increment numPhase by 1 ; we broadcast the value over remaining days.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    num_phase = 1
+    thermal_time_threshold = paramVariete["SDJLevee"]
+
+    # flagging the day for phase change
+    data = flag_change_phase(j, data, num_phase)
+
+    # updating thermal time to next phase 
+    data = update_thermal_time_next_phase(j, data, num_phase, thermal_time_threshold)
 
     # updating phase number
     condition = \
@@ -89,18 +183,387 @@ def testing_for_phase_1(j, data, paramITK, paramVariete):
         data["numPhase"][j,:,:],
     )
 
-    # updating temp threshold
-    condition = \
-        (data["numPhase"][j,:,:] == 1) & \
-        (data["changePhase"][j,:,:] == 1)
-
-    data["seuilTempPhaseSuivante"][j:,:,:] = np.where(
+    #trying to use initphase to flag that phase number has been updated
+    data["initPhase"][j, :, :] = xr.where(
         condition,
-        paramVariete["SDJLevee"],
-        data["seuilTempPhaseSuivante"][j,:,:]
-    )       
+        1,
+        data["initPhase"][j, :, :]
+    )     
     
     return data
+
+
+
+
+
+def update_pheno_phase_2_to_3(j, data, paramITK, paramVariete):
+    """
+    This function manages phase change from phases number 1 to 2.
+
+    First, it flags the day for phase change : If numPhase is 1 and sum of
+    thermal time is above the threshold (which value comes here from the
+    previous function testing_for_initialization), we set changePhase of this
+    particular day to 1.
+
+    Second, we update the thermal time to next phase : if numPhase is 1 and
+    changePhase is 1 (meaning that we are at the transition day between phases 1
+    and 2), we set the sum of thermal time to the next phase as SDJLevee ; we
+    broadcast the value over remaining days.
+
+    Third, we update the phase number : if numPhase is different from 0 and
+    changePhase is 1 (meaning that we are at the transition day between two
+    phases, to the exception of transition day between phases 0 and 1), we
+    increment numPhase by 1 ; we broadcast the value over remaining days.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    num_phase = 2
+    thermal_time_threshold = paramVariete["SDJBVP"]
+
+    # flagging the day for phase change
+    data = flag_change_phase(j, data, num_phase)
+
+    # saving "previous thermal time to next phase" to be used 
+    condition = \
+        (data["numPhase"][j,:,:] == num_phase) & \
+        (data["changePhase"][j,:,:] == 1)
+
+    data["seuilTempPhasePrec"][j:,:,:] = xr.where(
+        condition,
+        data["seuilTempPhaseSuivante"][j,:,:],
+        data["seuilTempPhasePrec"][j,:,:]
+    )
+
+    # updating thermal time to next phase 
+    data = update_thermal_time_next_phase(j, data, num_phase, thermal_time_threshold)
+
+    # updating phase number
+    condition = \
+        (data["numPhase"][j,:,:] != 0) & \
+        (data["changePhase"][j,:,:] == 1) & \
+        (data["initPhase"][j,:,:] != 1)  
+
+    data["numPhase"][j:,:,:] = np.where(
+        condition,
+        data["numPhase"][j,:,:] + 1 ,
+        data["numPhase"][j,:,:],
+    )   
+
+    # flagging phase change has been performed
+    data["initPhase"][j, :, :] = xr.where(
+        condition,
+        1,
+        data["initPhase"][j, :, :]
+    ) 
+
+    return data    
+
+
+
+def update_pheno_phase_3_to_4(j, data, paramITK, paramVariete):
+    """
+    This function manages phase change from phases number 1 to 2.
+
+    First, it flags the day for phase change : If numPhase is 1 and sum of
+    thermal time is above the threshold (which value comes here from the
+    previous function testing_for_initialization), we set changePhase of this
+    particular day to 1.
+
+    Second, we update the thermal time to next phase : if numPhase is 1 and
+    changePhase is 1 (meaning that we are at the transition day between phases 1
+    and 2), we set the sum of thermal time to the next phase as SDJLevee ; we
+    broadcast the value over remaining days.
+
+    Third, we update the phase number : if numPhase is different from 0 and
+    changePhase is 1 (meaning that we are at the transition day between two
+    phases, to the exception of transition day between phases 0 and 1), we
+    increment numPhase by 1 ; we broadcast the value over remaining days.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    # flagging the day for phase change (specific to phase 3)
+    condition = \
+        (data["numPhase"][j,:,:] == 3) & \
+        (data["phasePhotoper"][j,:,:] == 0)
+
+    data["changePhase"][j,:,:] = xr.where(
+        condition,
+        1,
+        data["changePhase"][j,:,:],
+    )
+
+    # updating phasePhotoper (specific to phase 3)
+    condition = \
+        (data["numPhase"][j,:,:] == 3) & \
+        (data["changePhase"][j,:,:] == 1)
+
+    data["phasePhotoper"][j,:,:] = np.where(
+        condition,
+        1,
+        data["phasePhotoper"][j,:,:],
+    )  
+
+    # updating phase number
+    condition = \
+        (data["numPhase"][j,:,:] != 0) & \
+        (data["changePhase"][j,:,:] == 1) & \
+        (data["initPhase"][j,:,:] != 1)  
+
+    # flagging phase change has been performed
+    data["numPhase"][j:,:,:] = np.where(
+        condition,
+        data["numPhase"][j,:,:] + 1 ,
+        data["numPhase"][j,:,:],
+    )   
+
+    return data
+
+
+
+
+
+
+
+def update_pheno_phase_4_to_5(j, data, paramITK, paramVariete):
+    """
+    This function manages phase change from phases number 1 to 2.
+
+    First, it flags the day for phase change : If numPhase is 1 and sum of
+    thermal time is above the threshold (which value comes here from the
+    previous function testing_for_initialization), we set changePhase of this
+    particular day to 1.
+
+    Second, we update the thermal time to next phase : if numPhase is 1 and
+    changePhase is 1 (meaning that we are at the transition day between phases 1
+    and 2), we set the sum of thermal time to the next phase as SDJLevee ; we
+    broadcast the value over remaining days.
+
+    Third, we update the phase number : if numPhase is different from 0 and
+    changePhase is 1 (meaning that we are at the transition day between two
+    phases, to the exception of transition day between phases 0 and 1), we
+    increment numPhase by 1 ; we broadcast the value over remaining days.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    num_phase = 4
+    thermal_time_threshold = paramVariete["SDJRPR"]
+
+    # flagging the day for phase change
+    data = flag_change_phase(j, data, num_phase)
+
+    # saving "previous thermal time to next phase" to be used 
+    condition = \
+        (data["numPhase"][j,:,:] == num_phase) & \
+        (data["changePhase"][j,:,:] == 1)
+
+    data["seuilTempPhasePrec"][j:,:,:] = xr.where(
+        condition,
+        data["seuilTempPhaseSuivante"][j,:,:],
+        data["seuilTempPhasePrec"][j,:,:]
+    )
+
+    # updating thermal time to next phase 
+    data = update_thermal_time_next_phase(j, data, num_phase, thermal_time_threshold)
+
+    # updating phase number
+    condition = \
+        (data["numPhase"][j,:,:] != 0) & \
+        (data["changePhase"][j,:,:] == 1) & \
+        (data["initPhase"][j,:,:] != 1)  
+
+    data["numPhase"][j:,:,:] = np.where(
+        condition,
+        data["numPhase"][j,:,:] + 1 ,
+        data["numPhase"][j,:,:],
+    )   
+
+    # flagging phase change has been performed
+    data["initPhase"][j, :, :] = xr.where(
+        condition,
+        1,
+        data["initPhase"][j, :, :]
+    ) 
+
+    return data 
+
+
+
+
+
+
+
+
+def update_pheno_phase_5_to_6(j, data, paramITK, paramVariete):
+    """
+    This function manages phase change from phases number 1 to 2.
+
+    First, it flags the day for phase change : If numPhase is 1 and sum of
+    thermal time is above the threshold (which value comes here from the
+    previous function testing_for_initialization), we set changePhase of this
+    particular day to 1.
+
+    Second, we update the thermal time to next phase : if numPhase is 1 and
+    changePhase is 1 (meaning that we are at the transition day between phases 1
+    and 2), we set the sum of thermal time to the next phase as SDJLevee ; we
+    broadcast the value over remaining days.
+
+    Third, we update the phase number : if numPhase is different from 0 and
+    changePhase is 1 (meaning that we are at the transition day between two
+    phases, to the exception of transition day between phases 0 and 1), we
+    increment numPhase by 1 ; we broadcast the value over remaining days.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    num_phase = 5
+    thermal_time_threshold = paramVariete["SDJMatu1"]
+
+    # flagging the day for phase change
+    data = flag_change_phase(j, data, num_phase)
+
+    # saving "previous thermal time to next phase" to be used 
+    condition = \
+        (data["numPhase"][j,:,:] == num_phase) & \
+        (data["changePhase"][j,:,:] == 1)
+
+    data["seuilTempPhasePrec"][j:,:,:] = xr.where(
+        condition,
+        data["seuilTempPhaseSuivante"][j,:,:],
+        data["seuilTempPhasePrec"][j,:,:]
+    )
+
+    # updating thermal time to next phase 
+    data = update_thermal_time_next_phase(j, data, num_phase, thermal_time_threshold)
+
+    # updating phase number
+    condition = \
+        (data["numPhase"][j,:,:] != 0) & \
+        (data["changePhase"][j,:,:] == 1) & \
+        (data["initPhase"][j,:,:] != 1)  
+
+    data["numPhase"][j:,:,:] = np.where(
+        condition,
+        data["numPhase"][j,:,:] + 1 ,
+        data["numPhase"][j,:,:],
+    )   
+
+    # flagging phase change has been performed
+    data["initPhase"][j, :, :] = xr.where(
+        condition,
+        1,
+        data["initPhase"][j, :, :]
+    ) 
+
+    return data 
+
+
+
+
+
+
+def update_pheno_phase_6_to_7(j, data, paramITK, paramVariete):
+    """
+    This function manages phase change from phases number 1 to 2.
+
+    First, it flags the day for phase change : If numPhase is 1 and sum of
+    thermal time is above the threshold (which value comes here from the
+    previous function testing_for_initialization), we set changePhase of this
+    particular day to 1.
+
+    Second, we update the thermal time to next phase : if numPhase is 1 and
+    changePhase is 1 (meaning that we are at the transition day between phases 1
+    and 2), we set the sum of thermal time to the next phase as SDJLevee ; we
+    broadcast the value over remaining days.
+
+    Third, we update the phase number : if numPhase is different from 0 and
+    changePhase is 1 (meaning that we are at the transition day between two
+    phases, to the exception of transition day between phases 0 and 1), we
+    increment numPhase by 1 ; we broadcast the value over remaining days.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    num_phase = 6
+    thermal_time_threshold = paramVariete["SDJMatu2"]
+
+    # flagging the day for phase change
+    data = flag_change_phase(j, data, num_phase)
+
+    # saving "previous thermal time to next phase" to be used 
+    condition = \
+        (data["numPhase"][j,:,:] == num_phase) & \
+        (data["changePhase"][j,:,:] == 1)
+
+    data["seuilTempPhasePrec"][j:,:,:] = xr.where(
+        condition,
+        data["seuilTempPhaseSuivante"][j,:,:],
+        data["seuilTempPhasePrec"][j,:,:]
+    )
+
+    # updating thermal time to next phase 
+    data = update_thermal_time_next_phase(j, data, num_phase, thermal_time_threshold)
+
+    # updating phase number
+    condition = \
+        (data["numPhase"][j,:,:] != 0) & \
+        (data["changePhase"][j,:,:] == 1) & \
+        (data["initPhase"][j,:,:] != 1)  
+
+    data["numPhase"][j:,:,:] = np.where(
+        condition,
+        data["numPhase"][j,:,:] + 1 ,
+        data["numPhase"][j,:,:],
+    )   
+
+    # flagging phase change has been performed
+    data["initPhase"][j, :, :] = xr.where(
+        condition,
+        1,
+        data["initPhase"][j, :, :]
+    ) 
+
+    return data 
+
+
+
 
 
 def testing_for_phase_2(j, data, paramITK, paramVariete):
@@ -206,12 +669,12 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
 
     
     data = testing_for_initialization(j, data, paramITK, paramVariete)
-    data = testing_for_phase_1(j, data, paramITK, paramVariete)
-    data = testing_for_phase_2(j, data, paramITK, paramVariete)
-    data = testing_for_phase_3(j, data, paramITK, paramVariete)
-    data = testing_for_phase_4(j, data, paramITK, paramVariete)
-    data = testing_for_phase_5(j, data, paramITK, paramVariete)
-    data = testing_for_phase_6(j, data, paramITK, paramVariete)
+    data = update_pheno_phase_1_to_2(j, data, paramITK, paramVariete)
+    # data = testing_for_phase_2(j, data, paramITK, paramVariete)
+    # data = testing_for_phase_3(j, data, paramITK, paramVariete)
+    # data = testing_for_phase_4(j, data, paramITK, paramVariete)
+    # data = testing_for_phase_5(j, data, paramITK, paramVariete)
+    # data = testing_for_phase_6(j, data, paramITK, paramVariete)
     
 
 
@@ -380,11 +843,13 @@ def calculate_sum_of_thermal_time(j, data, paramVariete):
     """
         Translated from the EvalDegresJourSarrahV3 procedure of the phenologie.pas and exmodules.pas files of the Sarra-H model, Pascal version.
     calculating sum of thermal time
+sdj has to be broadcasted or calculated as the first process to be able to use it with pheno correctly
+
     Note : in SARRA-H, when numPhase > 7, sdj is set to 0 and sdj stops cumulating
     Returns:
         _type_: _description_
     """
-    data["sdj"][j,:,:] = xr.where(
+    data["sdj"][j:,:,:] = xr.where(
         (j >= data["sowing_date"][j,:,:]) & (data["numPhase"][j,:,:] >= 1),
         data["sdj"][j-1,:,:] + data["ddj"][j,:,:],
         0,
@@ -442,36 +907,72 @@ def update_root_growth_speed(j, data, paramVariete):
 
 
 def PhotoperSarrahV3(j, data, paramVariete):
-    # depuis phenologie.pas
-    # group 142
     """
-        {Procedure speciale Vaksman Dingkuhn valable pour tous types de sensibilite
-    photoperiodique et pour les varietes non photoperiodique.
-    PPsens varie de 0,4 a 1,2. Pour PPsens > 2,5 = variété non photoperiodique.
+    This function aims at managing the photoperiodic sensitivity of the crop.
+
+    It first updates the sumPP variable : on the transition day between phase 2
+    and 3 (numPhase = 3 and changePhase = 1), the sumPP variable is set to 100.
+
+    Then, we compute the thermal_time_since_previous_phase (thermal time since
+    the transition between phases 2 and 3), and the
+    time_above_critical_day_length, which is the difference between day length
+    and critical day length PPcrit, in decimal hours.
+    
+    On all days with numPhase = 3 (so including the transition day), the sumPP
+    is calculated as a function of thermal_time_since_previous_phase and PPExp
+    (attenuator for progressive PSP response to PP ; rarely used in calibration
+    procedure, a robust value is 0.17), multiplied by a ratio between the daily
+    time above critical day length and the difference between SeuilPP (Upper day
+    length limit of PP response) and PPCrit (Lower day length limit to PP
+    response). 
+
+    Finally, phasePhotoper is updated : when numPhase = 3 and sumPP is lower than
+    PPsens, phasePhotoper is set to 0. PP sensitivity, important variable. Range
+    0.3-0.6 is PP sensitive, sensitivity disappears towards values of 0.7 to
+    1. Described in Dingkuhn et al. 2008; Euro.J.Agron. (Impatience model)
+
+    This function has been adapted from the PhotoperSarrahV3 procedure of the
+    phenologie.pas of the Sarra-H model, Pascal version.
+
+    Notes CB : 
+    Procedure speciale Vaksman Dingkuhn valable pour tous types de sensibilite
+    photoperiodique et pour les varietes non photoperiodique. PPsens varie de
+    0,4 a 1,2. Pour PPsens > 2.5 = variété non photoperiodique.
     SeuilPP = 13.5
     PPcrit = 12
-    SumPP est dans ce cas une variable quotidienne (et non un cumul)}
+    SumPP est dans ce cas une variable quotidienne (et non un cumul)
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
     """
-    # group 139
+
+    thermal_time_since_previous_phase = np.maximum(0.01, data["sdj"][j,:,:] - data["seuilTempPhasePrec"][j,:,:])
+    time_above_critical_day_length = np.maximum(0, data["dureeDuJour"][j,:,:] - paramVariete["PPCrit"])
+
     data["sumPP"][j,:,:] = np.where(
-        (data["numPhase"][j,:,:] == 3) & (data["changePhase"][j,:,:] == 1),
-        100,
+        data["numPhase"][j,:,:] == 3,
+        np.where(
+            data["changePhase"][j,:,:] == 1,
+            # if numPhase = 3 and changePhase == 1, sumPP = 100
+            100,
+            # if numPhase = 3 and changePhase != 1, sumPP calculated through formula
+            ((1000 / thermal_time_since_previous_phase) ** (paramVariete["PPExp"])) \
+                * time_above_critical_day_length / (paramVariete["SeuilPP"] - paramVariete["PPCrit"]),
+        ),
+        # if numPhase != 3, sumPP is not updated
         data["sumPP"][j,:,:],
     )
 
-    # group 140
-    data["sumPP"][j,:,:] = np.where(
-        (data["numPhase"][j,:,:] == 3),
-        (1000 / np.maximum(0.01, data["sdj"][j,:,:] - data["seuilTempPhasePrec"][j,:,:]) ** paramVariete["PPExp"]) * np.maximum(0, (data["dureeDuJour"][j,:,:] - paramVariete["PPCrit"])) / (paramVariete["SeuilPP"] - paramVariete["PPCrit"]),
-        data["sumPP"][j,:,:],
-    )
-
-    # group 141
     data["phasePhotoper"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 3) & (data["sumPP"][j,:,:] < paramVariete["PPsens"]),
         0,
         data["phasePhotoper"][j,:,:],
-    )#[...,np.newaxis]
+    )
 
     return data
 

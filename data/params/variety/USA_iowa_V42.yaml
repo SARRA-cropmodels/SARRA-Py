@@ -10,15 +10,19 @@ LGauss: 1.0
 NIYo: 1.0
 NIp: 0.0
 PFactor: 0.45
-PPCrit: 11.0
-PPExp: 0.0
-PPsens: 5.0
+
+# photoperiodicity
+PPCrit: 11.0 # Lower day length limit to PP response (h)
+SeuilPP: 13.6 # Upper day length limit of PP response (h)
+PPExp: 0.0 # attenuator for progressive PSP response to PP ; rarely used in calibration procedure, a robust value is 0.17
+PPsens: 5.0 # PP sensitivity (h), important variable. Range 0.3-0.6 is PP sensitive, sensitivity disappears towards values of 0.7 to 1. Described in Dingkuhn et al. 2008; Euro.J.Agron. (Impatience model)
+
 SDJBVP: 320.0
 SDJLevee: 90.0
 SDJMatu1: 560.0
 SDJMatu2: 200.0
 SDJRPR: 500
-SeuilPP: 13.6
+
 TBase: 8.0
 TLim: 44.0
 TOpt1: 26.0
