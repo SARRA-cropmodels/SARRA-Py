@@ -87,7 +87,7 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         "delta_root_tank_capacity": ["change in root system water reserve","mm"],
         "dr": ["",""],
         "dRdtPot": ["",""],
-        "dureeDuJour": ["",""],
+        #// "dureeDuJour": ["",""],
         #! replacing eauCaptee by water_gathered_by_mulch
         #// "eauCaptee" : ["water captured by the mulch in one day","mm"],
         "water_gathered_by_mulch" : ["water captured by the mulch in one day","mm"],
