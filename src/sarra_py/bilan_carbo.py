@@ -1,4 +1,5 @@
 import numpy as np
+import xarray as xr
 
 def InitiationCulture(data, grid_width, grid_height, duration, paramVariete):
     """
@@ -116,7 +117,7 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         "nbjStress": ["",""],
         "NbUBT": ["",""],
         "pFact": ["",""],
-        "phaseDevVeg": ["",""],
+        "phaseDevVeg": ["NumPhase max de développement végétatif (tiges,Feuilles) $$ Max NumPhase for the vegetative developpement (Stem and Leaf)",""],
         "phasePhotoper": ["photoperiodic phase indicator","binary"],
         "rapDensite": ["",""],
         "rdt": ["",""],
@@ -657,7 +658,7 @@ def update_potential_yield(j, data, paramVariete):
 
     #! phaseDevVeg pas utilisé ? attention c'est un paramètre variétal et pas un jeu de donées
     data["rdtPot"][j:,:,:] = np.where(
-        (data["numPhase"][j,:,:] == 5) & (data["changePhase"][j,:,:] == 1) & (data["rdtPot"][j,:,:] > data["biomasseTige"][j,:,:] * 2) & (data["phaseDevVeg"][j,:,:] < 6),
+        (data["numPhase"][j,:,:] == 5) & (data["changePhase"][j,:,:] == 1) & (data["rdtPot"][j,:,:] > data["biomasseTige"][j,:,:] * 2) & (paramVariete["phaseDevVeg"] < 6),
         data["biomasseTige"][j,:,:] * 2,
         data["rdtPot"][j,:,:],
     )
@@ -824,12 +825,9 @@ def update_root_biomass(j, data):
 
 
 
-def condition_phase_above_1_and_negative_delta_biomass(j, data):
-    condition = (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] < 0)
-    return condition 
 
 
-def update_leaf_biomass(j, data):
+def update_leaf_biomass(j, data, paramVariete):
     """
     For phase above 1 and if the delta of aerial biomass is negative,
     meaning that the plant is losing aerial biomass, the leaf biomass is
@@ -852,7 +850,7 @@ def update_leaf_biomass(j, data):
     """
 
     data["biomasseFeuille"][j:,:,:] = np.where(
-        condition_phase_above_1_and_negative_delta_biomass(j, data),
+        (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] < 0),
         np.maximum(
             0.00000001,
             data["biomasseFeuille"][j,:,:] - (data["reallocation"][j,:,:] - data["deltaBiomasseAerienne"][j,:,:]) * paramVariete["pcReallocFeuille"]
@@ -864,7 +862,7 @@ def update_leaf_biomass(j, data):
 
 
 
-def update_stem_biomass(j, data):
+def update_stem_biomass(j, data, paramVariete):
     """
     For phase above 1 and if the delta of aerial biomass is negative,
     meaning that the plant is losing aerial biomass, the stem biomass is
@@ -887,7 +885,7 @@ def update_stem_biomass(j, data):
     """
     # group 122
     data["biomasseTige"][j:,:,:] = np.where(
-        condition_phase_above_1_and_negative_delta_biomass(j, data),
+        (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] < 0),
         np.maximum(
             0.00000001,
             data["biomasseTige"][j,:,:] - (data["reallocation"][j,:,:] - data["deltaBiomasseAerienne"][j,:,:]) * (1 - paramVariete["pcReallocFeuille"]),
@@ -901,7 +899,8 @@ def update_stem_biomass(j, data):
 
 
 
-def condition_positive_delta_biomass(j, data):
+def condition_positive_delta_biomass(j, data, paramVariete):
+
 
         condition = (data["numPhase"][j,:,:] > 1) & \
             (data["deltaBiomasseAerienne"][j,:,:] >= 0) & \
@@ -911,7 +910,7 @@ def condition_positive_delta_biomass(j, data):
         return condition
 
 
-def update_bM_and_cM(j, data):
+def update_bM_and_cM(j, data, paramVariete):
     """
     This function returns the updated values of bM and cM.
     bM and cM are updated if the delta of aerial biomass is positive, 
@@ -930,14 +929,14 @@ def update_bM_and_cM(j, data):
     """
 
     data["bM"][j,:,:] = np.where(
-        condition_positive_delta_biomass(j, data),
+        condition_positive_delta_biomass(j, data, paramVariete),
         paramVariete["feuilAeroBase"] - 0.1,
         data["bM"][j,:,:],
     )
 
 
     data["cM"][j,:,:] = np.where(
-        condition_positive_delta_biomass(j, data),
+        condition_positive_delta_biomass(j, data, paramVariete),
         ((paramVariete["feuilAeroPente"] * 1000)/ data["bM"][j,:,:] + 0.78) / 0.75,
         data["cM"][j,:,:],
     )
@@ -945,7 +944,7 @@ def update_bM_and_cM(j, data):
     return data
 
 
-def update_leaf_biomass_positive_delta_aboveground_biomass(j, data):
+def update_leaf_biomass_positive_delta_aboveground_biomass(j, data, paramVariete):
     """
 
     Args:
@@ -956,7 +955,7 @@ def update_leaf_biomass_positive_delta_aboveground_biomass(j, data):
         _type_: _description_
     """
     data["biomasseFeuille"][j:,:,:] = np.where(
-        condition_positive_delta_biomass(j, data),
+        condition_positive_delta_biomass(j, data, paramVariete),
         (0.1 + data["bM"][j,:,:] * data["cM"][j,:,:] ** ((data["biomasseAerienne"][j,:,:] - data["rdt"][j,:,:]) / 1000)) \
             * (data["biomasseAerienne"][j,:,:] - data["rdt"][j,:,:]),
         data["biomasseFeuille"][j,:,:],
@@ -966,7 +965,7 @@ def update_leaf_biomass_positive_delta_aboveground_biomass(j, data):
 
 
 
-def update_stem_biomass_positive_delta_aboveground_biomass(j, data):
+def update_stem_biomass_positive_delta_aboveground_biomass(j, data, paramVariete):
     """_summary_
 
     Args:
@@ -977,7 +976,7 @@ def update_stem_biomass_positive_delta_aboveground_biomass(j, data):
         _type_: _description_
     """
     data["biomasseTige"][j:,:,:] = np.where(
-        condition_positive_delta_biomass(j, data),
+        condition_positive_delta_biomass(j, data, paramVariete),
         data["biomasseAerienne"][j,:,:] - data["biomasseFeuille"][j,:,:] - data["rdt"][j,:,:],
         data["biomasseTige"][j,:,:],
     )
@@ -995,7 +994,7 @@ def condition_positive_delta_aboveground_biomass_all_phases(j, data):
 
 
 
-def update_leaf_biomass_all_phases(j, data):
+def update_leaf_biomass_all_phases(j, data, paramVariete):
     """_summary_
 
     Args:
@@ -1016,7 +1015,7 @@ def update_leaf_biomass_all_phases(j, data):
 
 
 
-def update_stem_biomass_all_phases(j, data):
+def update_stem_biomass_all_phases(j, data, paramVariete):
     """_summary_
 
     Args:
@@ -1075,17 +1074,17 @@ def EvalFeuilleTigeSarrahV4(j, data, paramVariete):
     # )
 
     # if (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] < 0)
-    data = update_leaf_biomass(j, data)
-    data = update_stem_biomass(j, data)
+    data = update_leaf_biomass(j, data, paramVariete)
+    data = update_stem_biomass(j, data, paramVariete)
 
     # if deltaBiomasseAerienne >= 0 and (numPhase <= 4 or numPhase <= phaseDevVeg)
-    data = update_bM_and_cM(j, data)
-    data = update_leaf_biomass_positive_delta_aboveground_biomass(j, data)
-    data = update_stem_biomass_positive_delta_aboveground_biomass(j, data)
+    data = update_bM_and_cM(j, data, paramVariete)
+    data = update_leaf_biomass_positive_delta_aboveground_biomass(j, data, paramVariete)
+    data = update_stem_biomass_positive_delta_aboveground_biomass(j, data, paramVariete)
 
     # if deltaBiomasseAerienne > 0 and numPhase > 1
-    data = update_leaf_biomass_all_phases(j, data)
-    data = update_stem_biomass_all_phases(j, data)
+    data = update_leaf_biomass_all_phases(j, data, paramVariete)
+    data = update_stem_biomass_all_phases(j, data, paramVariete)
 
     # condition = (data["numPhase"][j,:,:] > 1) 
     # data["deltaBiomasseFeuilles"][j:,:,:] = np.where(
@@ -1123,27 +1122,47 @@ def update_vegetative_biomass(j, data):
 
 
 
-def EvalSlaSarrahV3(j, data, paramVariete):
+def update_sla(j, data, paramVariete):
     """
-    Evaluates the specific leaf area (SLA) of the canopy.
+    This function estimates the specific leaf area (SLA) of the canopy.
     
+    First, if the leaf biomass is positive, if numPhase = 2 and changePhase = 1,
+    which means we are at the transition day between phases 1 and 2, sla is set
+    to be equal to slaMax.
+
+    Then, if the leaf biomass is positive, and if deltaBiomasseFeuilles is
+    positive (meaning that the leaf biomass is increasing), SLA for already
+    existing leaves is calculated by removing a value that is an affine function
+    of SLA itself, and SLA for new leaves is calculated as the mean between SLA
+    and slaMax ; then the SLA is calculated as the weighted mean of the two SLA
+    values.
+
+    Logically, if there is no newly produced leaf biomass (deltaBiomasseFeuilles
+    is negative), only the SLA for already existing leaves is calculated.
+
+    If biomasseFeuille is negative, SLA is unchanged.
+
+    Finally, if biomasseFeuille is positive, SLA value is bounded between slaMin
+    and slaMax.
+
+    This function is adapted from the EvalSlaSarrahV3 procedure from the
+    bilancarbonsarra.pas and  exmodules 1 & 2.pas file of the original Pascal
+    code.  We note that multiple versions of the calculation methods have been
+    used in the original procecure. We may want to go back to that if this
+    function is problematic.
+
     Notes :
+    In this approach, it is assumed that young leaves have a higher SLA than old
+    leaves. The fraction of young leaves makes the canopy SLA increase. The
+    penteSLA parameter causes a general decrease in SLA (penteSLA = relative
+    decrease per day = fraction of difference between SLAmax and SLAmin). This
+    approach is known for legumes, but can also be adapted to other species.
 
-    groupe 136
-    d'après bulancarbonsarra.pas
-
-    On suppose que les jeunes feuilles on un SLA supérieur aux vieilles feuilles.
-    La fraction de jeunes (nouvelles) feuilles fait donc monter le SLA global
-    du couvert. Le paramétre penteSLA provoque une chute générale du SLA
-    (penteSLA = chute relative par jour = fraction de différence entre SLAmax
-    et SLAmin). Fonctionnement conéu surtout pour les légumineuses, mais
-    peut étre aussi adapté aux autres espéces.
-    Paramétres :
-    SLAmax (0.001 é 0.01), ex : 0.007
-    SLAmin (0.001 é 0.01), ex : 0.002
-    penteSLA (0 é 0.2), ex : 0.1
-    Avec : SLAini = SLAmax
-    }
+    Generic/expected parameters :
+    SLAmax [0.001, 0.01]
+    SLAmin [0.001, 0.01]
+    penteSLA [0, 0.2]
+    SLAini = SLAmax
 
     Args:
         j (_type_): _description_
@@ -1154,65 +1173,44 @@ def EvalSlaSarrahV3(j, data, paramVariete):
         _type_: _description_
     """
 
+    condition = (data["biomasseFeuille"][j,:,:] > 0) & \
+                (data["numPhase"][j,:,:] == 2) & \
+                (data["changePhase"][j,:,:] == 1)
+
     data["sla"][j:,:,:] = np.where(
-        (data["biomasseFeuille"][j,:,:] > 0) & \
-            (data["numPhase"][j,:,:] == 2) & \
-            (data["changePhase"][j,:,:] == 1),
+        condition,
         paramVariete["slaMax"],
         data["sla"][j,:,:],
     )
+
+    ratio_old_leaf_biomass = data["biomasseFeuille"][j-1,:,:] / data["biomasseFeuille"][j,:,:]
+    ratio_new_leaf_biomass = data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]
+    sla_decrease_step = paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])
 
     # Modif du 10/07/2018, DeltaBiomasse neg si reallocation ne pas fair l'evol du SLA dans ces conditions
     data["sla"][j:,:,:] = np.where(
         (data["biomasseFeuille"][j,:,:] > 0),
         np.where(
             (data["deltaBiomasseFeuilles"][j,:,:] > 0),
-            (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) \
-              * (data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:]) / data["biomasseFeuille"][j,:,:] \
-              + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * (data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]),
-            (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) \
-                * (data["biomasseFeuille"][j,:,:] / data["biomasseFeuille"][j,:,:]),
+            #// (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:]) / data["biomasseFeuille"][j,:,:] + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * (data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]),
+            (data["sla"][j,:,:] - sla_decrease_step) * ratio_old_leaf_biomass + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * ratio_new_leaf_biomass,
+            #//(data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] / data["biomasseFeuille"][j,:,:]),
+            (data["sla"][j,:,:] - sla_decrease_step) * ratio_old_leaf_biomass,
         ),
         data["sla"][j,:,:],
     )
 
-    # for reference : code adapted from Ocelet version 
-    # data["sla"][j:,:,:] = np.where(
-    #     (data["biomasseFeuille"][j,:,:] > 0),
-    #     (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) \
-    #         * (data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:]) / data["biomasseFeuille"][j,:,:] \
-    #         + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * (data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]),
-    #     data["sla"][j,:,:],
-    # )
-
-    # or reference : code mix original/ocelet
-    # data["sla"][j:,:,:] = np.where(
-    #     (data["biomasseFeuille"][j,:,:] > 0),
-    #     np.where(
-    #         (data["deltaBiomasseFeuilles"][j,:,:] > 0),
-    #         (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:]) / data["biomasseFeuille"][j,:,:] + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * (data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]),
-    #         (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] / data["deltaBiomasseFeuilles"][j,:,:]),
-    #     ),
-    #     data["sla"][j,:,:],
-    # )
-
-    # or reference : modified original code
-    # data["sla"][j:,:,:] = np.where(
-    #     (data["biomasseFeuille"][j,:,:] > 0),
-    #     np.where(
-    #         (data["deltaBiomasseFeuilles"][j,:,:] > 0),
-    #         (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] - data["deltaBiomasseFeuilles"][j,:,:]) / data["biomasseFeuille"][j,:,:] + (paramVariete["slaMax"] + data["sla"][j,:,:])/2 * (data["deltaBiomasseFeuilles"][j,:,:] / data["biomasseFeuille"][j,:,:]),
-    #         (data["sla"][j,:,:] - paramVariete["slaPente"] * (data["sla"][j,:,:] - paramVariete["slaMin"])) * (data["biomasseFeuille"][j,:,:] / data["biomasseFeuille"][j,:,:]),
-    #         # data["sla"][j,:,:],
-    #     ),
-    #     data["sla"][j,:,:],
-    # )
-
-
     data["sla"][j:,:,:] = np.where(
         (data["biomasseFeuille"][j,:,:] > 0),
-        # np.minimum(paramVariete["slaMin"], np.maximum(paramVariete["slaMax"], data["sla"][j,:,:])), # according to original
-        np.minimum(paramVariete["slaMax"], np.maximum(paramVariete["slaMin"], data["sla"][j,:,:])), # according to ocelet version
+        #// np.minimum(paramVariete["slaMin"], np.maximum(paramVariete["slaMax"], data["sla"][j,:,:])), # according to original
+        # according to ocelet version
+        np.minimum(
+            paramVariete["slaMax"],
+            np.maximum(
+                paramVariete["slaMin"],
+                data["sla"][j,:,:],
+            ),
+        ), 
         data["sla"][j,:,:],
     )
 
@@ -1221,43 +1219,80 @@ def EvalSlaSarrahV3(j, data, paramVariete):
 
 
 
-def EvolLAIPhases(j, data):
-    # d'après milbilancarbone.pas
-    # group 137
-    data["lai"][j:,:,:] = np.where(
-        #(data["numPhase"][j,:,:] <= 1),
-        (data["numPhase"][j,:,:] <= 1) | (data["startLock"][j,:,:] == 1),
+
+def update_LAI(j, data):
+    """
+    This function estimates and updates the value of the leaf area index (LAI).
+
+    When numPhase is under 2 (before the first leaf appearance), the LAI is set
+    to 0. When numPhase is between 2 and 6, the LAI is calculated from the
+    biomass of the leaves and the SLA.
+    
+    When numPhase is above 6, the LAI is set back to 0.
+
+    This function is adapted from the EvolLAIPhases procedure from the
+    milbilancarbone.pas and exmodules 1 & 2.pas file of the original Pascal
+    code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    data["lai"][j:,:,:] = xr.where(
+        (data["numPhase"][j,:,:] <= 1),
         0,
         np.where(
             data["numPhase"][j,:,:] <= 6,
             data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:],
             0,
         )
-    )#[...,np.newaxis]
-
+    )
 
     return data
 
 
 
 
-def EvolDayRdtSarraV3(j, data):
-    # groupe 138
-    # d'après bilancarbonsarra.pas
-    # {
-    # On tend vers le potentiel en fn du rapport des degresJours/sumDegresJours
-    # pour la phase de remplissage
-    # Frein sup fn du flux de s�ve estim� par le rapport Tr/TrPot
-    # }
 
-    # dRdtPot = RdtPotDuJour
-    # on cast sur j
+def update_yield(j, data):
+    """
+    This function updates the yield value.
+
+    If numPhase is 5 (filling phase), the yield is updated by incrementing it
+    with the sum of deltaBioAerienne and reallocation, bounded in minimum by 0
+    and maximum by dRdtPot.
+
+    That is to say construction of yield is done during phase 5 only, from the
+    variation of aerial biomass and reallocation, with a maximum of dRdtPot
+    (daily potential yield).
+
+    Notes :
+    On tend vers le potentiel en fn du rapport des degresJours/sumDegresJours
+    pour la phase de remplissage. Frein sup fn du flux de sève estimé par le
+    rapport Tr/TrPot.
+    dRdtPot = RdtPotDuJour
+
+    This function is adapted from the EvolDayRdtSarraV3 procedure from the
+    ***bilancarbonesarra***, exmodules 1 & 2.pas file of the original Pascal
+    code.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
     data["rdt"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 5),
         data["rdt"][j,:,:] + np.minimum(data["dRdtPot"][j,:,:],  np.maximum(0.0, data["deltaBiomasseAerienne"][j,:,:]) + data['reallocation'][j,:,:]),
         data["rdt"][j,:,:],
-    )#[...,np.newaxis]
-
+    )
 
     return data
 

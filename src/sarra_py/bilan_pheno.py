@@ -484,7 +484,7 @@ def update_pheno_phase_6_to_7(j, data, paramVariete):
 
 def EvalPhenoSarrahV3(j, data, paramITK, paramVariete): 
     """
-        This function manages the evolution of the phenological phases. It is a
+    This function manages the evolution of the phenological phases. It is a
     wrapper function that calls the specific functions for each phase.
 
     This function is called at the beginning of the day and makes the
@@ -653,7 +653,7 @@ def update_root_growth_speed(j, data, paramVariete):
 
 
 
-def PhotoperSarrahV3(j, data, paramVariete):
+def update_photoperiodism(j, data, paramVariete):
     """
     This function aims at managing the photoperiodic sensitivity of the crop.
 
@@ -679,7 +679,7 @@ def PhotoperSarrahV3(j, data, paramVariete):
     1. Described in Dingkuhn et al. 2008; Euro.J.Agron. (Impatience model)
 
     This function has been adapted from the PhotoperSarrahV3 procedure of the
-    phenologie.pas of the Sarra-H model, Pascal version.
+    phenologie.pas and exmodules 1 et 2.pas of the Sarra-H model, Pascal version.
 
     Notes CB : 
     Procedure speciale Vaksman Dingkuhn valable pour tous types de sensibilite
