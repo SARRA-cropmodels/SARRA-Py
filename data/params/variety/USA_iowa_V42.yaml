@@ -20,7 +20,7 @@ PPsens: 5.0 # PP sensitivity (h), important variable. Range 0.3-0.6 is PP sensit
 # phenology/thermal time
 SDJLevee: 90.0 # thermal time from the beginning of the conditions favorable for germination to the day of germination (°C.d)
 SDJBVP: 320.0 # thermal time from the day of germination to the beginning of the photoperiodic phase (°C.d)
-SDJRPR: 500 # thermal time from the beginning of the reproductive phase to the beginning of the maturation (°C.d)
+SDJRPR: 500.0 # thermal time from the beginning of the reproductive phase to the beginning of the maturation (°C.d)
 SDJMatu1: 560.0 # thermal time from the beginning of the maturation to the grain milk stage (°C.d)
 SDJMatu2: 200.0 # thermal time from the grain milk stage to the end of the maturation (°C.d)
 
@@ -46,7 +46,7 @@ kRespMaint: 0.01
 kcMax: 1.25
 kdf: 0.4
 pcReallocFeuille: 0.7
-phaseDevVeg: 0
+phaseDevVeg: 0 # NumPhase max de développement végétatif (tiges,Feuilles) $$ Max NumPhase for the vegetative developpement (Stem and Leaf)
 poidsSecGrain: 0.38
 senCO2: 10.0
 seuilCstrMortality: 3.0
