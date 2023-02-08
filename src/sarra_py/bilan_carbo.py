@@ -1,70 +1,13 @@
 import numpy as np
 import xarray as xr
 
-def InitiationCulture(data, grid_width, grid_height, duration, paramVariete):
+def variable_dict():
     """
-    Initializes variables related to crop growth in the data xarray dataset.
-    This code has been adapted from the original InitiationCulture procedure, MilBilanCarbone.pas code.
-    Comments with tab indentation are from the original code.
-    As the rain is the first variable to be initialized in the data xarray dataset, its dimensions are used
-    to initialize the other variables.
+    Returns the dictionary of variables and their units.
+
+    Returns:
+        _type_: _description_
     """    
-
-    # Maximum thermal time (°C.j)
-    # Somme de degré-jour maximale (°C.j)
-    #   SommeDegresJourMaximale := SeuilTempLevee + SeuilTempBVP + SeuilTempRPR + SeuilTempMatu1 + SeuilTempMatu2;
-    data["sommeDegresJourMaximale"] = (data["rain"].dims, np.full(
-        (duration, grid_width, grid_height),
-        (paramVariete["SDJLevee"] + paramVariete["SDJBVP"] + paramVariete["SDJRPR"] + paramVariete["SDJMatu1"] + paramVariete["SDJMatu2"])
-    ))
-    data["sommeDegresJourMaximale"].attrs = {"units":"°C.j", "long_name":"Maximum thermal time"}
-
-    
-    # Other variables to be initialized at 0
-    # Autres variables à initialiser à 0
-    #   NumPhase := 0;
-    #   SommeDegresJour := 0;
-    #   BiomasseAerienne := 0;
-    #   BiomasseVegetative := 0;
-    #   BiomasseTotale := 0;
-    #   BiomasseTiges := 0;
-    #   BiomasseRacinaire := 0;
-    #   BiomasseFeuilles := 0;
-    #   DeltaBiomasseTotale := 0;
-    #   SeuilTempPhaseSuivante:=0;
-    #   Lai := 0;
-    variables = {
-        "numPhase":"arbitrary units",
-        "sdj":"°C.j",
-        "biomasseAerienne":"kg/ha",
-        "biomasseVegetative":"kg/ha",
-        "biomasseTotale":"kg/ha",
-        "biomasseTige":"kg/ha",
-        "biomasseRacinaire":"kg/ha",
-        "biomasseFeuille":"kg/ha",
-        "deltaBiomasseTotale":"kg/ha",
-        "seuilTempPhaseSuivante":"°C.j",
-        "lai":"m2/m2",
-    }
-        
-    for variable in variables :
-        data[variable] = (data["rain"].dims, np.zeros(shape=(duration, grid_width, grid_height)))
-        data[variable].attrs = {"units":variables[variable], "long_name":variable}
-
-    return data
-
-
-
-
-
-def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
-    """
-    Initializes supplementary variables needed for computations.
-    As the rain is the first variable to be initialized in the data xarray dataset, its dimensions are used
-    to initialize the other variables.
-    """   
-
-    data = data.copy(deep=True)
 
     variables = {
         "assim": ["",""],
@@ -124,7 +67,6 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         "rdtPot": ["",""],
         "reallocation": ["",""],
         "respMaint": ["",""],
-
         #! renaming ruIrr to irrigation_tank_capacity
         #//"ruIrr" : ["?","mm"],
         "irrigation_tank_capacity" : ["irrigation tank capacity","mm"],
@@ -140,14 +82,12 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         #// "stockMc" : ["water stored in crop residues (mulch)","mm"],
         "mulch_water_stock" : ["water stored in crop residues (mulch)","mm"],
         "stockRac": ["",""],
-        # renaming stRu to root_tank_stock
+        #! renaming stRu to root_tank_stock
         #// "stRu": ["",""],
         "root_tank_stock": ["",""],
-
         #! renaming stRuMax to total_tank_capacity
         #//"stRuMax": ["",""],
         "total_tank_capacity": ["",""],
-        # renaming stRur to 
         "stRur": ["",""],
         #! renaming stRurMaxPrec to root_tank_capacity_previous_season
         # "stRurMaxPrec": ["",""],
@@ -158,7 +98,6 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         #// "stRuSurf": ["",""],
         "surface_tank_stock": ["",""],
         "stRuSurfPrec": ["",""],
-
         #! renaming stRuVar to delta_total_tank_stock
         #// "stRuVar": ["",""],
         "delta_total_tank_stock": ["",""],
@@ -169,38 +108,207 @@ def InitSup(data, grid_width, grid_height, duration, paramTypeSol, paramITK):
         "trSurf": ["",""],
         "UBTCulture": ["",""],
         "vRac" : ["reference daily root growth","mm/day"],
+
+
+
+        # variables issues de la seconde fonction dans initialize_simulation 
+        "numPhase":["","arbitrary units"],
+        "sdj":["","°C.j"],
+        "biomasseAerienne":["","kg/ha"],
+        "biomasseVegetative":["","kg/ha"],
+        "biomasseTotale":["","kg/ha"],
+        "biomasseTige":["","kg/ha"],
+        "biomasseRacinaire":["","kg/ha"],
+        "biomasseFeuille":["","kg/ha"],
+        "deltaBiomasseTotale":["","kg/ha"],
+        "seuilTempPhaseSuivante":["","°C.j"],
+        "lai":["","m2/m2"],
     }
+
+    return variables
+
+
+
+
+
+def initialize_simulation(data, grid_width, grid_height, duration, paramVariete, paramITK, date_start):
+    """
+    This function initializes variables related to crop growth in the data
+    xarray dataset. As the rain is the first variable to be initialized in the
+    data xarray dataset, its dimensions are used to initialize the other
+    variables.
+    
+    This code has been adapted from the original InitiationCulture procedure,
+    from the MilBilanCarbone.pas code of the SARRA model. 
+
+    Args:
+        data (_type_): _description_
+        grid_width (_type_): _description_
+        grid_height (_type_): _description_
+        duration (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    ### variables to be initialized with values from parameters 
+
+    # from paramVariete : maximum daily thermal time (°C.j)
+    data["sommeDegresJourMaximale"] = (data["rain"].dims, np.full(
+        (duration, grid_width, grid_height),
+        (paramVariete["SDJLevee"] + paramVariete["SDJBVP"] + paramVariete["SDJRPR"] + paramVariete["SDJMatu1"] + paramVariete["SDJMatu2"])
+    ))
+    data["sommeDegresJourMaximale"].attrs = {"units":"°C.j", "long_name":"Maximum thermal time"}
+
+    # from paramITK : sowing date
+    data["sowing_date"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), (paramITK["DateSemis"] - date_start).days))
+    
+    # from paramITK : automatic irrigation indicator
+    data["irrigAuto"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["irrigAuto"]))
+    data["irrigAuto"].attrs = {"units":"binary", "long_name":"automatic irrigation indicator"}
+
+    ####### variables qui viennent de initplotMc
+    # Initial biomass of crop residues (mulch) (kg/ha)
+    # Biomasse initiale des résidus de culture (mulch) (kg/ha)
+    #   BiomMc := BiomIniMc;
+    data["biomMc"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
+    data["biomMc"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of crop residues (mulch)"}
+
+
+    # ?
+    #   StSurf := StockIniSurf;
+    # data["stSurf"] = np.full((grid_width, grid_height, duration), paramTypeSol["stockIniSurf"])
+
+
+    # ?
+    #   Ltr := 1;
+    data["ltr"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), 1.0))
+
+
+    # Initial biomass of stem residues as litter (kg/ha)
+    # Biomasse initiale des résidus de tiges sous forme de litière (kg/ha)
+    #   LitTiges := BiomIniMc;
+    data["LitTige"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
+    data["LitTige"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of stem residues as litter"}
+
+    ####### fin variables qui viennent de initplotMc
+
+    ####### variables eau depuis InitPlotMc
+
+    # Initializes variables related to crop residues boimass (mulch) in the data
+    # xarray dataset. This code has been adapted from the original InitPlotMc
+    # procedure, Bileau.pas code. Comments with tab indentation are from the
+    # original code. As the rain is the first variable to be initialized in the
+    # data xarray dataset, its dimensions are used to initialize the other
+    # variables.
+
+    # Soil maximum water storage capacity (mm)
+    # Capacité maximale de la RU (mm)
+    #   StRurMax := Ru * ProfRacIni / 1000;
+    #! renaming stRurMax with root_tank_capacity
+    #// data["stRurMax"] = data["ru"] * paramITK["profRacIni"] / 1000
+    data["root_tank_capacity"] = (data["rain"].dims, np.repeat(np.array(data["ru"] * paramITK["profRacIni"] / 1000)[np.newaxis,:,:], duration, axis=0))
+    #// data["stRurMax"].attrs = {"units": "mm", "long_name": "Soil maximum water storage capacity"}
+    data["root_tank_capacity"].attrs = {"units": "mm", "long_name": "Soil maximum water storage capacity"}
+
+
+    # Maximum water capacity of surface tank (mm)
+    # Reserve utile de l'horizon de surface (mm)
+    #   RuSurf := EpaisseurSurf / 1000 * Ru;
+    #! renaming ruSurf with surface_tank_capacity
+    #// data["ruSurf"] = data["epaisseurSurf"] / 1000 * data["ru"]
+    data["surface_tank_capacity"] = data["epaisseurSurf"] / 1000 * data["ru"]
+    #// data["ruSurf"].attrs = {"units": "mm", "long_name": "Maximum water capacity of surface tank"}
+    data["surface_tank_capacity"].attrs = {"units": "mm", "long_name": "Maximum water capacity of surface tank"}
     
 
+    # ?
+    #   //    PfTranspi := EpaisseurSurf * HumPf;
+    #   //    StTot := StockIniSurf - PfTranspi/2 + StockIniProf;
+    #   StTot := StockIniSurf  + StockIniProf;
+    # data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniSurf"] + paramTypeSol["stockIniProf"]))
+    #! modifié pour faire correspondre les résultats de simulation, à remettre en place pour un calcul correct dès que possible
+    # data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniProf"]))
+    #! renaming stTot to total_tank_stock
+    #// data["stTot"] = data["stockIniProf"]
+    #//data["total_tank_stock"] = data["stockIniProf"]
+    #! coorecting total_tank_stock initialization as it did not have the time dimensions that are required as stock evolves through time
+    data["total_tank_stock"] = (data["rain"].dims, np.repeat(np.array(data["stockIniProf"])[np.newaxis,:,:], duration, axis=0))
+    #// data["stTot"].attrs = {"units": "mm", "long_name": "?"}
+    data["total_tank_stock"].attrs = {"units": "mm", "long_name": "?"}
+    
+
+    # Soil maximal depth (mm)
+    # Profondeur maximale de sol (mm)
+    #   ProfRU := EpaisseurSurf + EpaisseurProf;
+    data["profRu"] = data["epaisseurProf"] + data["epaisseurSurf"]
+    data["profRu"].attrs = {"units": "mm", "long_name": "Soil maximal depth"}
+
+
+    # Maximum water capacity to humectation front (mm)
+    # Quantité d'eau maximum jusqu'au front d'humectation (mm)
+    #   // modif 10/06/2015  resilience stock d'eau
+    #   // Front d'humectation egal a RuSurf trop de stress initial
+    #   //    Hum := max(StTot, StRurMax);
+    #   Hum := max(RuSurf, StRurMax);
+    #   // Hum mis a profRuSurf
+    #   Hum := max(StTot, Hum);
+    data["hum"] = (data["rain"].dims, np.full((duration, grid_width, grid_height),
+        np.maximum(
+            np.maximum(
+                #! renaming ruSurf with surface_tank_capacity
+                #// data["ruSurf"],
+                data["surface_tank_capacity"].expand_dims({"time":duration}),
+                #! renaming stRurMax with root_tank_capacity
+                #// data["stRurMax"],
+                data["root_tank_capacity"],
+            ),
+            #! renaming stTot with total_tank_stock
+            #// data["stTot"],
+            data["total_tank_stock"],
+        )
+    ))
+    data["hum"].attrs = {"units": "mm", "long_name": "Maximum water capacity to humectation front"}
+
+
+    # Previous value for Maximum water capacity to humectation front (mm)
+    #  HumPrec := Hum;
+    data["humPrec"] = data["hum"]
+    
+    
+    # ?
+    #   StRurPrec := 0;
+
+
+    # Previous value for stTot
+    #   StRurMaxPrec := 0;
+    #   //modif 10/06/2015 resilience stock d'eau
+    #! renaming stTot with total_tank_stock
+    #! renaminog stRuPrec with total_tank_stock_previous_value
+    #// data["stRuPrec"] =  data["stTot"]
+    data["total_tank_stock_previous_value"] =  data["total_tank_stock"]
+
+    ####### fin variables eau depuis InitPlotMc
+
+
+    # depuis meteo.pas
+    kpar = 0.5
+    data["par"] = kpar * data["rg"]
+    data["par"].attrs = {"units":"MJ/m2", "long_name":"par"}
+
+    # initialize variables with values at 0
+    variables = variable_dict()
 
     for variable in variables :
         data[variable] = (data["rain"].dims, np.zeros(shape=(duration, grid_width, grid_height)))
         data[variable].attrs = {"units":variables[variable][1], "long_name":variables[variable][0]}
 
-
-    data["irrigAuto"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["irrigAuto"]))
-    data["irrigAuto"].attrs = {"units":"binary", "long_name":"automatic irrigation indicator"}
-
-
     return data
 
-
-def InitSup2(data, grid_width, grid_height, duration, df_weather):
-    data["tpMoy"] = df_weather["TEMP"].copy().values.reshape(grid_width, grid_height, duration)
-    data["rain"] = df_weather["RAIN"].copy().values.reshape(grid_width, grid_height, duration)
-    data["ET0"] = df_weather["ET0"].copy().values.reshape(grid_width, grid_height, duration)
-    data["rg"] = df_weather["IRRAD"].copy().values.reshape(grid_width, grid_height, duration)
-    return data
-
-
-def EvalPar(data):
-    #depuis meteo.par
-    kpar = 0.5
-    data["par"] = kpar * data["rg"]
-    data["par"].attrs = {"units":"MJ/m2", "long_name":"par"}
-    return data
 
     
+
 
 def estimate_kcp(j, data, paramVariete):
     """
@@ -694,8 +802,7 @@ def update_potential_yield_delta(j, data, paramVariete):
         np.where(
             (data["trPot"][j,:,:] > 0),
             np.maximum(
-                #! original code used ddj instead of sdj, but that did not make sense so it was modified
-                data["rdtPot"][j,:,:] * (data["sdj"][j,:,:] / paramVariete["SDJMatu1"]) * (data["tr"][j,:,:] / data["trPot"][j,:,:]),
+                data["rdtPot"][j,:,:] * (data["ddj"][j,:,:] / paramVariete["SDJMatu1"]) * (data["tr"][j,:,:] / data["trPot"][j,:,:]),
                 data["respMaint"][j,:,:] * 0.15,
             ),
             0,

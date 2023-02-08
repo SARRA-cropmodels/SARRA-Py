@@ -3,35 +3,13 @@ import xarray as xr
 
 def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
     """
-    Initializes variables related to crop residues boimass (mulch) in the data xarray dataset.
-    This code has been adapted from the original InitPlotMc procedure, Bileau.pas code.
-    Comments with tab indentation are from the original code.
-    As the rain is the first variable to be initialized in the data xarray dataset, its dimensions are used
-    to initialize the other variables.
+    Initializes variables related to crop residues boimass (mulch) in the data
+    xarray dataset. This code has been adapted from the original InitPlotMc
+    procedure, Bileau.pas code. Comments with tab indentation are from the
+    original code. As the rain is the first variable to be initialized in the
+    data xarray dataset, its dimensions are used to initialize the other
+    variables.
     """
-
-    # Initial biomass of crop residues (mulch) (kg/ha)
-    # Biomasse initiale des résidus de culture (mulch) (kg/ha)
-    #   BiomMc := BiomIniMc;
-    data["biomMc"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
-    data["biomMc"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of crop residues (mulch)"}
-
-
-    # Initial biomass of stem residues as litter (kg/ha)
-    # Biomasse initiale des résidus de tiges sous forme de litière (kg/ha)
-    #   LitTiges := BiomIniMc;
-    data["LitTige"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
-    data["LitTige"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of stem residues as litter"}
-
-
-    # ?
-    #   StSurf := StockIniSurf;
-    # data["stSurf"] = np.full((grid_width, grid_height, duration), paramTypeSol["stockIniSurf"])
-
-
-    # ?
-    #   Ltr := 1;
-    data["ltr"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), 1.0))
 
 
     # Soil maximum water storage capacity (mm)
@@ -125,40 +103,6 @@ def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
     return data
 
 
-
-
-def Meteo0DegToRad(): #pas indispensable
-    return None
-
-def Meteo1AVGTempHum(): # pas indispensable
-    return None
-
-def Meteo2Decli(): # pas indispensable
-    return None
-
-def Meteo3SunPosi():# pas indispensable
-    return None
-
-def Meteo4DayLength():# pas indispensable
-    return None
-
-def Meteo5SunDistance():# pas indispensable
-    return None
-
-def Meteo6RayExtra():# pas indispensable
-    return None
-
-def Meteo7RgMax():# pas indispensable
-    return None
-
-def Meteo8InsToRg():# pas indispensable
-    return None
-
-def Meteo9Par():# pas indispensable
-    return None
-
-def MeteoEToFAO():# pas indispensable
-    return None
 
 
 
@@ -2435,6 +2379,7 @@ def ConsoResSep(j, data):
     trPot : mm
     evaPot : mm
     INOUT :
+    
     stRuSurf : mm
     tr : mm
     stRur : mm
