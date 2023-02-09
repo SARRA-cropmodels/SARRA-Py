@@ -1993,6 +1993,9 @@ def estimate_pFact(j, data, paramVariete):
     computation of cstr from ftsw. This coefficient delimits the portion of the
     FTSW below which water stress starts to influence the transpiration.
 
+    FAO reference for critical FTSW value for transpiration response (0 =
+    stomata respond immediately if FTSW<1; 0.5 for most of the crops)
+
     pFact is bounded in [0.1, 0.8].
 
     For details see https://agritrop.cirad.fr/556855/1/document_556855.pdf
