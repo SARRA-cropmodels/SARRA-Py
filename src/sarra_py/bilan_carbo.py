@@ -10,110 +10,36 @@ def variable_dict():
     """    
 
     variables = {
-        "assim": ["",""],
-        "assimPot": ["",""],
-        "biomTotStadeFloraison": ["",""],
-        "biomTotStadeIp": ["",""],
+        # climate
+        "ddj": ["daily thermal time","°C.j"],
+        "sdj":["sum of thermal time since beginning of emergence","°C.j"],
+
+        # phenology
+        "changePhase" : ["indicator of phase transition day","binary"],
+        "numPhase":["number of phenological stage","arbitrary units"],
+        "initPhase": ["indicator of performed phase transition","binary"],
+        "phasePhotoper": ["photoperiodic phase indicator","binary"],
+        "seuilTempPhaseSuivante":["sum of thermal time needed to reach the next phenological phase","°C.j"],
+        "sommeDegresJourPhasePrec": ["sum of thermal time needed to reach the previous phenological phase","°C.j"],
+        "seuilTempPhasePrec": ["",""],
+
+        # carbon balance
+        "assim": ["plant biomass assimilation","kg/ha"],
+        "assimPot": ["plant potential biomass assimilation","kg/ha"],
         "bM": ["",""],
-        "changePhase" : ["indicator of phase transition","binary"],
         "cM": ["",""],
-        "consoRur": ["",""],
-        "conv": ["",""],
-        "correctedIrrigation" : ["corrected irrigation","mm"],
-        "cstr" : ["drought stress coefficient", "arbitrary unit"],
-        "dayBiomLeaf": ["",""],
-        "dayVrac" : ["modulated daily root growth","mm/day"],
-        "ddj": ["daily thermal time","°C"],
+        "rdt": ["grain yield","kg/ha"],
+        "rdtPot": ["potential grain yield","kg/ha"],
+        "reallocation": ["amount of assimilates reallocated to the yield (supply < demand)","kg/ha"],
+        "respMaint": ["amount of assimilates consumed by maintainance respiration","kg/ha"],
+        "manqueAssim": ["deficit in assimilates (demand - supply)","kg/ha"],
+
+
+        # biomass
+        "biomTotStadeFloraison": ["total biomass of the plant at the end of the flowering stage","kg/ha"],
+        "biomTotStadeIp": ["total biomass at the panicle initiation stage","kg/ha"],
         "deltaBiomasseAerienne": ["",""],
         "deltaBiomasseFeuilles": ["",""],
-        #! renaming deltaRur with delta_root_tank_capacity
-        #// "deltaRur": ["change in root system water reserve","mm"],
-        "delta_root_tank_capacity": ["change in root system water reserve","mm"],
-        "dr": ["",""],
-        "dRdtPot": ["",""],
-        #// "dureeDuJour": ["",""],
-        #! replacing eauCaptee by water_gathered_by_mulch
-        #// "eauCaptee" : ["water captured by the mulch in one day","mm"],
-        "water_gathered_by_mulch" : ["water captured by the mulch in one day","mm"],
-        "eauDispo" : ["available water, sum of rainfall and total irrigation for the day","mm"],
-        "eauTranspi": ["",""],
-        "etm": ["",""],
-        "etp": ["",""],
-        "etr": ["",""],
-        "evap": ["",""],
-        "evapPot": ["",""],
-        "FEMcW": ["",""],
-        "fesw": ["",""],
-        "FeuilleUp": ["",""],
-        "ftsw": ["",""],
-        "initPhase": ["",""],
-        "irrigTotDay" : ["total irrigation for the day","mm"],
-        "KAssim": ["",""],
-        "kce": ["",""],
-        "kcp": ["",""],
-        "kcTot": ["",""],
-        "kRespMaint": ["",""],
-        "LitFeuille": ["",""],
-        "lr" : ["daily water runoff","mm"],
-        "manqueAssim": ["",""],
-        "nbJourCompte": ["",""],
-        "nbjStress": ["",""],
-        "NbUBT": ["",""],
-        "pFact": ["",""],
-        "phaseDevVeg": ["NumPhase max de développement végétatif (tiges,Feuilles) $$ Max NumPhase for the vegetative developpement (Stem and Leaf)",""],
-        "phasePhotoper": ["photoperiodic phase indicator","binary"],
-        "rapDensite": ["",""],
-        "rdt": ["",""],
-        "rdtPot": ["",""],
-        "reallocation": ["",""],
-        "respMaint": ["",""],
-        #! renaming ruIrr to irrigation_tank_capacity
-        #//"ruIrr" : ["?","mm"],
-        "irrigation_tank_capacity" : ["irrigation tank capacity","mm"],
-        "ruRac": ["Water column that can potentially be strored in soil volume explored by root system","mm"],
-        "seuilTempPhasePrec": ["",""],
-        "sla": ["",""],
-        "sommeDegresJourPhasePrec": ["",""],
-        "startLock": ["",""],
-        #! renaming stockIrr to irrigation_tank_stock
-        #// "stockIrr" : ["?","mm"],
-        "irrigation_tank_stock" : ["?","mm"],
-        #! renaming stockMc to mulch_water_stock
-        #// "stockMc" : ["water stored in crop residues (mulch)","mm"],
-        "mulch_water_stock" : ["water stored in crop residues (mulch)","mm"],
-        "stockRac": ["",""],
-        #! renaming stRu to root_tank_stock
-        #// "stRu": ["",""],
-        "root_tank_stock": ["",""],
-        #! renaming stRuMax to total_tank_capacity
-        #//"stRuMax": ["",""],
-        "total_tank_capacity": ["",""],
-        "stRur": ["",""],
-        #! renaming stRurMaxPrec to root_tank_capacity_previous_season
-        # "stRurMaxPrec": ["",""],
-        "root_tank_capacity_previous_season": ["",""],
-        "stRurPrec": ["",""],
-        "stRurSurf": ["",""],
-        #! renaming stRuSurf to surface_tank_stock
-        #// "stRuSurf": ["",""],
-        "surface_tank_stock": ["",""],
-        "stRuSurfPrec": ["",""],
-        #! renaming stRuVar to delta_total_tank_stock
-        #// "stRuVar": ["",""],
-        "delta_total_tank_stock": ["",""],
-        "sumPP": ["",""],
-        "TigeUp": ["",""],
-        "tr": ["",""],
-        "trPot": ["",""],
-        "trSurf": ["",""],
-        "UBTCulture": ["",""],
-        "vRac" : ["reference daily root growth","mm/day"],
-
-
-
-        # variables issues de la seconde fonction dans initialize_simulation 
-        "numPhase":["","arbitrary units"],
-        "sdj":["","°C.j"],
         "biomasseAerienne":["","kg/ha"],
         "biomasseVegetative":["","kg/ha"],
         "biomasseTotale":["","kg/ha"],
@@ -121,8 +47,81 @@ def variable_dict():
         "biomasseRacinaire":["","kg/ha"],
         "biomasseFeuille":["","kg/ha"],
         "deltaBiomasseTotale":["","kg/ha"],
-        "seuilTempPhaseSuivante":["","°C.j"],
-        "lai":["","m2/m2"],
+
+        # evapotranspiration
+        "kce": ["fraction of kc attributable to soil evaporation","decimal percentage"],
+        "kcp": ["fraction of kc attributable to plant transpiration","decimal percentage"],
+        "kcTot": ["",""],
+        "tr": ["actual crop transpiration","mm/d"],
+        "trPot": ["potential crop transpiration","mm/d"],
+        "trSurf": ["",""],
+
+        # water balance
+        "consoRur": ["",""],
+        "water_gathered_by_mulch" : ["water captured by the mulch in one day","mm"], #! replacing eauCaptee by water_gathered_by_mulch
+        "eauDispo" : ["available water, sum of rainfall and total irrigation for the day","mm"],
+        "eauTranspi": ["water available for transpiration from the surface reservoir","mm"],
+        "correctedIrrigation" : ["corrected irrigation","mm/d"],
+        "cstr" : ["drought stress coefficient", "arbitrary unit"],
+        "dayVrac" : ["modulated daily root growth","mm/day"],
+        "delta_root_tank_capacity": ["change in root system water reserve","mm"], #! renaming deltaRur with delta_root_tank_capacity
+        "dr": ["",""],
+        "etm": ["",""],
+        "etp": ["",""],
+        "etr": ["",""],
+        "evap": ["",""],
+        "evapPot": ["",""],
+        "FEMcW": ["",""],
+        "fesw": ["",""],
+        "irrigTotDay" : ["total irrigation for the day","mm"],
+        "vRac" : ["reference daily root growth","mm/day"],
+        "ftsw": ["fraction of transpirable surface water","decimal percentage"], 
+        "lr" : ["daily water runoff","mm/d"],
+        "pFact": ["FAO reference for critical FTSW value for transpiration response","none"],
+
+        # water tanks
+        "irrigation_tank_stock" : ["?","mm"], #! renaming stockIrr to irrigation_tank_stock
+        "mulch_water_stock" : ["water stored in crop residues (mulch)","mm"], #! renaming stockMc to mulch_water_stock
+        "root_tank_stock": ["",""], #! renaming stRu to root_tank_stock
+        "total_tank_capacity": ["",""], #! renaming stRuMax to total_tank_capacity
+        "stRur": ["",""],
+        "root_tank_capacity_previous_season": ["",""], #! renaming stRurMaxPrec to root_tank_capacity_previous_season
+        "stRurPrec": ["",""],
+        "stRurSurf": ["",""],
+        "surface_tank_stock": ["",""], #! renaming stRuSurf to surface_tank_stock
+        "stRuSurfPrec": ["",""],
+        "delta_total_tank_stock": ["",""], #! renaming stRuVar to delta_total_tank_stock
+        "irrigation_tank_capacity" : ["irrigation tank capacity","mm"], #! renaming ruIrr to irrigation_tank_capacity
+        "ruRac": ["Water column that can potentially be strored in soil volume explored by root system","mm"],
+        
+
+
+        "conv": ["",""],
+        "KAssim": ["",""],
+
+
+        "dayBiomLeaf": ["daily growth of leaf biomass","kg/ha/d"],
+        "dRdtPot": ["daily potential demand from yield","kg/ha/d"],
+        "FeuilleUp": ["",""],
+        
+        
+        "kRespMaint": ["",""],
+        "LitFeuille": ["",""],
+        
+        
+        "nbJourCompte": ["",""],
+        "nbjStress": ["",""],
+        "NbUBT": ["",""],
+        
+        "rapDensite": ["",""],
+        
+        "sla": ["",""],
+
+        "stockRac": ["",""],
+        "sumPP": ["",""],
+        "TigeUp": ["",""],
+        "UBTCulture": ["",""],
+        "lai":["leaf area index","m2/m2"],
     }
 
     return variables
@@ -154,12 +153,12 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
 
     ### variables to be initialized with values from parameters 
 
-    # from paramVariete : maximum daily thermal time (°C.j)
-    data["sommeDegresJourMaximale"] = (data["rain"].dims, np.full(
-        (duration, grid_width, grid_height),
-        (paramVariete["SDJLevee"] + paramVariete["SDJBVP"] + paramVariete["SDJRPR"] + paramVariete["SDJMatu1"] + paramVariete["SDJMatu2"])
-    ))
-    data["sommeDegresJourMaximale"].attrs = {"units":"°C.j", "long_name":"Maximum thermal time"}
+    # from paramVariete : maximum daily thermal time (°C.j) -> #? unused ?
+    #// data["sommeDegresJourMaximale"] = (data["rain"].dims, np.full(
+    #//     (duration, grid_width, grid_height),
+    #//     (paramVariete["SDJLevee"] + paramVariete["SDJBVP"] + paramVariete["SDJRPR"] + paramVariete["SDJMatu1"] + paramVariete["SDJMatu2"])
+    #// ))
+    #// data["sommeDegresJourMaximale"].attrs = {"units":"°C.j", "long_name":"Maximum thermal time"}
 
     # from paramITK : sowing date
     data["sowing_date"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), (paramITK["DateSemis"] - date_start).days))
@@ -393,8 +392,11 @@ def estimate_KAssim(j, data, paramVariete):
         2: 1,
         3: paramVariete['txAssimBVP'],
         4: paramVariete['txAssimBVP'],
-        5: paramVariete["txAssimBVP"] + (data['sdj'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]) * (paramVariete['txAssimMatu1'] -  paramVariete['txAssimBVP']) / (data['seuilTempPhaseSuivante'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]),
-        6: paramVariete["txAssimMatu1"] + (data["sdj"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]) * (paramVariete["txAssimMatu2"] - paramVariete["txAssimMatu1"]) / (data["seuilTempPhaseSuivante"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]),
+        #! replacing sommeDegresJourPhasePrec with seuilTempPhasePrec
+        #// 5: paramVariete["txAssimBVP"] + (data['sdj'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]) * (paramVariete['txAssimMatu1'] -  paramVariete['txAssimBVP']) / (data['seuilTempPhaseSuivante'][j,:,:] - data['sommeDegresJourPhasePrec'][j,:,:]),
+        5: paramVariete["txAssimBVP"] + (data['sdj'][j,:,:] - data['seuilTempPhasePrec'][j,:,:]) * (paramVariete['txAssimMatu1'] -  paramVariete['txAssimBVP']) / (data['seuilTempPhaseSuivante'][j,:,:] - data['seuilTempPhasePrec'][j,:,:]),
+        #// 6: paramVariete["txAssimMatu1"] + (data["sdj"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]) * (paramVariete["txAssimMatu2"] - paramVariete["txAssimMatu1"]) / (data["seuilTempPhaseSuivante"][j,:,:] - data["sommeDegresJourPhasePrec"][j,:,:]),
+        6: paramVariete["txAssimMatu1"] + (data["sdj"][j,:,:] - data["seuilTempPhasePrec"][j,:,:]) * (paramVariete["txAssimMatu2"] - paramVariete["txAssimMatu1"]) / (data["seuilTempPhaseSuivante"][j,:,:] - data["seuilTempPhasePrec"][j,:,:]),
     }
 
     for phase in range(2,7):
