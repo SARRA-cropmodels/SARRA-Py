@@ -18,17 +18,21 @@ PPExp: 0.0 # attenuator for progressive PSP response to PP ; rarely used in cali
 PPsens: 5.0 # PP sensitivity (h), important variable. Range 0.3-0.6 is PP sensitive, sensitivity disappears towards values of 0.7 to 1. Described in Dingkuhn et al. 2008; Euro.J.Agron. (Impatience model)
 
 # phenology/thermal time
+TBase: 8.0
+TLim: 44.0
+TOpt1: 26.0
+TOpt2: 34.0
 SDJLevee: 90.0 # thermal time from the beginning of the conditions favorable for germination to the day of germination (°C.d)
 SDJBVP: 320.0 # thermal time from the day of germination to the beginning of the photoperiodic phase (°C.d)
 SDJRPR: 500.0 # thermal time from the beginning of the reproductive phase to the beginning of the maturation (°C.d)
 SDJMatu1: 560.0 # thermal time from the beginning of the maturation to the grain milk stage (°C.d)
 SDJMatu2: 200.0 # thermal time from the grain milk stage to the end of the maturation (°C.d)
 
+# sowing
+densOpti: 85000.0 # optimal density (ha-1)
+densiteA: 0.7 # density correction factor A
+densiteP: 4.5 # # density correction factor P
 
-TBase: 8.0
-TLim: 44.0
-TOpt1: 26.0
-TOpt2: 34.0
 VRacBVP: 15.0
 VRacLevee: 30.0
 VRacMatu1: 12.0
@@ -37,9 +41,6 @@ VRacPSP: 15.0
 VRacRPR: 15.0
 aeroTotBase: 0.6
 aeroTotPente: 5.0e-05
-densOpti: 85000.0
-densiteA: 0.7
-densiteP: 4.5
 feuilAeroBase: 0.55
 feuilAeroPente: -5.0e-05
 kRespMaint: 0.01

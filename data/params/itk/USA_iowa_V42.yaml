@@ -6,7 +6,9 @@ KT: 0.0
 NI: .nan
 coefMc: 0.0
 dateFin: 300.0
-densite: 86500.0
+
+densite: 86500.0 # sowing density (ha-1)
+
 nbjTestSemis: 0
 precision: 0.0
 profRacIni: 0.0

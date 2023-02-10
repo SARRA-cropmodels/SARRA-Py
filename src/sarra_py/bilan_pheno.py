@@ -727,60 +727,88 @@ def update_photoperiodism(j, data, paramVariete):
 
 
 def MortaliteSarraV3(j, data, paramITK, paramVariete):
-    # group 150
-    # test de mortalité juvénile
-    #     {
-    # Test sur 20 jours
-    # D�s que le delta est n�gatif sur 10 jours
-    # }
+    """
+    This functions tests for death of young plants.
 
-    condition = (data["numPhase"][j,:,:] >= 2) & (data["numPhase"][j,:,:] == 2) & (data["changePhase"][j,:,:] == 1)
+    First, for numphase = 2 and changePhase = 1, hence at the transition day
+    between phase 1 and 2 at this point of the loop, the nbJourCompte and
+    nbjStress variables are set to 0.
 
-    # group 143
+    Second, for numPhase equal or above 2, on each day nbJourCompte is
+    incremented by 1. Thus this part just count days since emergence.
+
+    Third, for numPhase equal or above 2, for days where nbJourCompte is lower
+    than nbjTestSemis and where deltaBiomasseAerienne is negative, the nbjStress
+    variable is incremented by 1. Thus, we count the number of days with
+    negative deltaBiomasseAerienne since emergence as stress days.
+
+    Finally, for days where nbjStress is equal or higher than
+    seuilCstrMortality, the crop is reset by setting numPhase,
+    root_tank_capacity and nbjStress to 0.
+
+    This all seems a bit simplistic though, and can be improved.
+
+    This function has been adapted from the MortaliteSarraV3 procedure of the
+    bilancarbonsarra.pas and exmodules 1 & 2.pas codes of the Sarra-H model,
+    Pascal version.
+
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    condition = (data["numPhase"][j,:,:] >= 2) & \
+        (data["numPhase"][j,:,:] == 2) & \
+        (data["changePhase"][j,:,:] == 1)
+
     data['nbJourCompte'][j:,:,:] = np.where(
         condition,
         0,
         data['nbJourCompte'][j,:,:],
-    )#[...,np.newaxis]
+    )
 
-    # group 144
     data['nbjStress'][j:,:,:] = np.where(
         condition,
         0,
         data['nbjStress'][j,:,:],
-    )#[...,np.newaxis]
+    )
 
 
     condition = (data["numPhase"][j,:,:] >= 2)
 
-    # group 145
     data['nbJourCompte'][j:,:,:] = np.where(
         condition,
         data['nbJourCompte'][j,:,:] + 1,
         data['nbJourCompte'][j,:,:],
-    )#[...,np.newaxis]
+    )
 
 
-    condition = (data["numPhase"][j,:,:] >= 2) & (data["nbJourCompte"][j,:,:] < paramITK["nbjTestSemis"]) & (data["deltaBiomasseAerienne"][j,:,:] < 0)
+    condition = (data["numPhase"][j,:,:] >= 2) & \
+        (data["nbJourCompte"][j,:,:] < paramITK["nbjTestSemis"]) & \
+        (data["deltaBiomasseAerienne"][j,:,:] < 0)
 
-    # group 146
     data["nbjStress"][j:,:,:] = np.where(
         condition,
         data["nbjStress"][j,:,:] + 1,
         data["nbjStress"][j,:,:],                           
-    )#[...,np.newaxis]
+    )
 
 
-    condition = (data["numPhase"][j,:,:] >= 2) & (data["nbjStress"][j,:,:] == paramVariete["seuilCstrMortality"])
+    condition = (data["numPhase"][j,:,:] >= 2) & \
+        (data["nbjStress"][j,:,:] == paramVariete["seuilCstrMortality"])
 
-    # group 147
     data["numPhase"][j,:,:] = np.where(
         condition,
         0,
         data["numPhase"][j,:,:],
     )
 
-    # group 148
     #! renaming stRurMax with root_tank_capacity
     #// data["stRurMax"][j,:,:] = np.where(
     data["root_tank_capacity"][j,:,:] = np.where(
@@ -790,12 +818,11 @@ def MortaliteSarraV3(j, data, paramITK, paramVariete):
         data["root_tank_capacity"][j,:,:],
     )
 
-    # group 149
     data["nbjStress"][j:,:,:] = np.where(
         condition,
         0,
         data["nbjStress"][j,:,:],
-    )#[...,np.newaxis]
+    )
 
     return data
 
