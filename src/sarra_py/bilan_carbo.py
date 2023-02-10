@@ -113,7 +113,6 @@ def variable_dict():
         "nbjStress": ["",""],
         "NbUBT": ["",""],
         
-        "rapDensite": ["",""],
         
         "sla": ["",""],
 
@@ -122,6 +121,9 @@ def variable_dict():
         "TigeUp": ["",""],
         "UBTCulture": ["",""],
         "lai":["leaf area index","m2/m2"],
+
+        # experimental
+        "Ncrit": ["",""],
     }
 
     return variables
@@ -137,14 +139,14 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     data xarray dataset, its dimensions are used to initialize the other
     variables.
     
-    This code has been adapted from the original InitiationCulture procedure,
-    from the MilBilanCarbone.pas code of the SARRA model. 
+    ![no caption](../../docs/images/sla.png)
+
+    This code has been adapted from the original InitiationCulture procedure, from the `MilBilanCarbone.pas` code of the
+    SARRA model. 
 
     Args:
-        data (_type_): _description_
-        grid_width (_type_): _description_
-        grid_height (_type_): _description_
-        duration (_type_): _description_
+        data (_type_): _description_ grid_width (_type_): _description_
+        grid_height (_type_): _description_ duration (_type_): _description_
         paramVariete (_type_): _description_
 
     Returns:
@@ -295,6 +297,12 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     kpar = 0.5
     data["par"] = kpar * data["rg"]
     data["par"].attrs = {"units":"MJ/m2", "long_name":"par"}
+
+
+    # crop density
+    if ~np.isnan(paramVariete["densOpti"]) :
+        data["rapDensite"] = data["rain"] * 0 + compute_rapDensite(paramITK, paramVariete)
+        data["rapDensite"].attrs = {"units":"none", "long_name":"sowing density adjustement factor"}
 
     # initialize variables with values at 0
     variables = variable_dict()
@@ -454,48 +462,92 @@ def BiomDensOptSarraV4(j, data, paramITK):
 
 
 
-def BiomDensOptSarV42(j, data, paramITK, paramVariete):
+def compute_rapDensite(paramITK, paramVariete):
     """
-    d'après bilancarbonsarra.pas
+    It basically calculates a correction factor (rapDensite).
+    This correction factor Is calculated with an equation of form
 
-    { si densit� plus faible alors on consid�re qu'il faut augmenter les biomasses, LAI etc
-    en regard de cette situation au niveau de chaque plante (car tout est rapport� � des kg/ha).
-    Si elle est plus forte elle augmente de fa�on asymptotique.
-    }
+    a + p * exp( -(x/(o / -log((1-a)/p) )) )
 
+    with a the densiteA parameter
+    p the densiteP parameter$
+    x the actual crop density
+    o the densOpti parameter
+
+    See
+    https://www.wolframalpha.com/input?i=a+%2B+p+*+exp%28-%28x+%2F+%28+o%2F-+log%28%281+-+a%29%2F+p%29%29%29%29
+    for equation visualization.
+
+    This equation is probably too complex for the problem at hand.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
     """
 
-    if ~np.isnan(paramVariete["densOpti"]) :
+    rapDensite = paramVariete["densiteA"] + paramVariete["densiteP"] * np.exp(-(paramITK["densite"] / ( paramVariete["densOpti"]/- np.log((1 - paramVariete['densiteA'])/ paramVariete["densiteP"]))))
+    return rapDensite
 
-        # group 88
-        data["rapDensite"] = paramVariete["densiteA"] + paramVariete["densiteP"] * np.exp(-(paramITK["densite"] / ( paramVariete["densOpti"]/- np.log((1 - paramVariete['densiteA'])/ paramVariete["densiteP"]))))
+
+
+
+def adjust_for_sowing_density(j, data, paramVariete, direction):
+    """
+    This function translates the effect of sowing density on biomass and LAI.
+
+    This function is adapted from the BiomDensOptSarV42 and BiomDensiteSarraV42
+    procedures, from the bilancarbonsarra.pas original Pascal code.
+
+    Notes from CB : 
+    if density is lower than the optimal density, then we consider that we need
+    to increase the biomass, LAI etc in regard of this situation at each plant
+    level (because everything is related to kg/ha). If it is higher, it
+    increases asymptotically.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+        paramITK (_type_): _description_
+        paramVariete (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    if direction == "in" :
+        if ~np.isnan(paramVariete["densOpti"]) :
+            
+            data["rdt"][j:,:,:] = data["rdt"][j,:,:] * data["rapDensite"][j,:,:]
+            data["rdtPot"][j:,:,:] = (data["rdtPot"][j,:,:] * data["rapDensite"][j,:,:])
+            data["biomasseRacinaire"][j:,:,:] = (data["biomasseRacinaire"][j,:,:] * data["rapDensite"][j,:,:])
+            data["biomasseTige"][j:,:,:] = (data["biomasseTige"][j,:,:] * data["rapDensite"][j,:,:])
+            data["biomasseFeuille"][j:,:,:] = (data["biomasseFeuille"][j,:,:] * data["rapDensite"][j,:,:])
+            data["biomasseAerienne"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:] + data["rdt"][j,:,:])
+            data["lai"][j:,:,:]  = (data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:])
+            data["biomasseTotale"][j:,:,:] = (data["biomasseAerienne"][j,:,:] + data["biomasseRacinaire"][j,:,:])
         
-        # group 89
-        data["rdt"][j:,:,:] = (data["rdt"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
-
-        # group 90
-        data["rdtPot"][j:,:,:] = (data["rdtPot"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
-
-        # group 91
-        data["biomasseRacinaire"][j:,:,:] = (data["biomasseRacinaire"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
-        # group 92
-        data["biomasseTige"][j:,:,:] = (data["biomasseTige"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
-        # group 93
-        data["biomasseFeuille"][j:,:,:] = (data["biomasseFeuille"][j,:,:] * data["rapDensite"])#[...,np.newaxis]
-
-        # group 94
-        data["biomasseAerienne"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:] + data["rdt"][j,:,:])#[...,np.newaxis]
-        #data["biomasseAerienne"][j:,:,:] = data["biomasseAerienne"][j,:,:] * data["rapDensite"]
-        
-        # group 95
-        data["lai"][j:,:,:]  = (data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:])#[...,np.newaxis]
-        #data["lai"][j:,:,:]  = data["lai"][j:,:,:]  * data["rapDensite"]
-
-        # group 96
-        data["biomasseTotale"][j:,:,:] = (data["biomasseAerienne"][j,:,:] + data["biomasseRacinaire"][j,:,:])#[...,np.newaxis]
-        #data["biomasseTotale"][j:,:,:] = data["biomasseTotale"][j:,:,:] * data["rapDensite"]
+        return data
     
-    return data
+    if direction == "out":
+        if ~np.isnan(paramVariete["densOpti"]):
+
+            data["rdt"][j:,:,:] = (data["rdt"][j,:,:] / data["rapDensite"][j,:,:])
+            data["rdtPot"][j:,:,:] = (data["rdtPot"][j,:,:]/ data["rapDensite"][j,:,:])
+            data["biomasseRacinaire"][j:,:,:] = (data["biomasseRacinaire"][j,:,:] / data["rapDensite"][j,:,:])
+            data["biomasseTige"][j:,:,:] = (data["biomasseTige"][j,:,:] / data["rapDensite"][j,:,:])
+            data["biomasseFeuille"][j:,:,:] = (data["biomasseFeuille"][j,:,:] / data["rapDensite"][j,:,:])
+            data["biomasseAerienne"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:] + data["rdt"][j,:,:])
+            #? conflit avec fonction evolLAIphase ?
+            #data["lai"][j:,:,:]  = data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:]
+            data["lai"][j:,:,:]  = data["lai"][j:,:,:]  / data["rapDensite"][j,:,:]
+            data["biomasseTotale"][j:,:,:] = (data["biomasseAerienne"][j,:,:] + data["biomasseRacinaire"][j,:,:])#[...,np.newaxis]
+            #data["biomasseTotale"][j:,:,:] = data["biomasseTotale"][j:,:,:] / data["rapDensite"]
+
+        return data
 
 
 
@@ -517,7 +569,15 @@ def EvalAssimSarrahV4(j, data):
 def update_assimPot(j, data, paramVariete, paramITK):
     """
     This function updates the assimPot value. It does so differentially
-    depending on the value of NI, which is intensification level. Note from
+    depending on the value of NI, which is intensification level.
+    
+    When NI parameter is used (from to 4), conversion rate txConversion 
+    is computed using the following formula :
+    NIYo + NIp * (1-exp(-NIp * NI)) - (exp(-0.5*((NI - LGauss)/AGauss)* (NI- LGauss)/AGauss))/(AGauss*2.506628274631)
+
+
+    
+    Note from
     CB : correction of the conversion rate depending on the intensification
     level
 
@@ -556,7 +616,9 @@ def update_assimPot(j, data, paramVariete, paramITK):
     """
     if ~np.isnan(paramITK["NI"]): 
         #? the following (stupidly long) line was found commented, need to check why and if this is correct
-        # paramVariete["txConversion"] = paramVariete["NIYo"] + paramVariete["NIp"] * (1-np.exp(-paramVariete["NIp"] * paramITK["NI"])) - (np.exp(-0.5*((paramITK["NI"] - paramVariete["LGauss"])/paramVariete["AGauss"])* (paramITK["NI"]- paramVariete["LGauss"])/paramVariete["AGauss"]))/(paramVariete["AGauss"]*2.506628274631)
+        
+        paramVariete["txConversion"] = paramVariete["NIYo"] + paramVariete["NIp"] * (1-np.exp(-paramVariete["NIp"] * paramITK["NI"])) - (np.exp(-0.5*((paramITK["NI"] - paramVariete["LGauss"])/paramVariete["AGauss"])* (paramITK["NI"]- paramVariete["LGauss"])/paramVariete["AGauss"]))/(paramVariete["AGauss"]*2.506628274631)
+        # NIYo + NIp * (1-exp(-NIp * NI)) - (exp(-0.5*((NI - LGauss)/AGauss)* (NI- LGauss)/AGauss))/(AGauss*2.506628274631)
         data["assimPot"][j,:,:] = data["par"][j,:,:] * \
             (1-np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])) * \
             paramVariete["txConversion"] * 10
@@ -1410,48 +1472,27 @@ def update_yield(j, data):
 
 def BiomDensiteSarraV42(j, data, paramITK, paramVariete):
     # depuis bilancarbonsarra.pas
-    #group 160
     
     if ~np.isnan(paramVariete["densOpti"]):
 
-        #! confusion entre rapDensite dataset et parametre
-        #group 151
-        paramITK["rapDensite"] = paramVariete["densiteA"] + paramVariete["densiteP"] * np.exp(-(paramITK["densite"] / ( paramVariete["densOpti"]/- np.log((1 - paramVariete['densiteA'])/ paramVariete["densiteP"]))))
+        data["rdt"][j:,:,:] = (data["rdt"][j,:,:] / data["rapDensite"])
 
-        # group 152
-        data["rdt"][j:,:,:] = (data["rdt"][j,:,:] / data["rapDensite"])#[...,np.newaxis]
+        data["rdtPot"][j:,:,:] = (data["rdtPot"][j,:,:]/ data["rapDensite"])
 
+        data["biomasseRacinaire"][j:,:,:] = (data["biomasseRacinaire"][j,:,:] / data["rapDensite"])
 
-        # group 153
-        data["rdtPot"][j:,:,:] = (data["rdtPot"][j,:,:]/ data["rapDensite"])#[...,np.newaxis]
+        data["biomasseTige"][j:,:,:] = (data["biomasseTige"][j,:,:] / data["rapDensite"])
 
-        # group 154
-        data["biomasseRacinaire"][j:,:,:] = (data["biomasseRacinaire"][j,:,:] / data["rapDensite"])#[...,np.newaxis]
+        data["biomasseFeuille"][j:,:,:] = (data["biomasseFeuille"][j,:,:] / data["rapDensite"])
 
-        # group 155
-        data["biomasseTige"][j:,:,:] = (data["biomasseTige"][j,:,:] / data["rapDensite"])#[...,np.newaxis]
-
-        # group 156
-        data["biomasseFeuille"][j:,:,:] = (data["biomasseFeuille"][j,:,:] / data["rapDensite"])#[...,np.newaxis]
-
-        # group 157
-        data["biomasseAerienne"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:] + data["rdt"][j,:,:])#[...,np.newaxis] 
-        #data["biomasseAerienne"][j:,:,:] = data["biomasseAerienne"][j,:,:] / data["rapDensite"]
-
+        data["biomasseAerienne"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:] + data["rdt"][j,:,:])
 
         #? conflit avec fonction evolLAIphase ?
-        #  group 158
         #data["lai"][j:,:,:]  = data["biomasseFeuille"][j,:,:] * data["sla"][j,:,:]
         data["lai"][j:,:,:]  = data["lai"][j:,:,:]  / data["rapDensite"]
 
-        # group 159
         data["biomasseTotale"][j:,:,:] = (data["biomasseAerienne"][j,:,:] + data["biomasseRacinaire"][j,:,:])#[...,np.newaxis]
         #data["biomasseTotale"][j:,:,:] = data["biomasseTotale"][j:,:,:] / data["rapDensite"]
-
-
-
-
-
 
     return data
 
@@ -1586,4 +1627,10 @@ def MAJBiomMcSV3(data):
 #       BiomMC := LitFeuille + LitTige;
 #  {     BiomasseFeuilles := 0;
 #       BiomasseTiges := 0;
+    return data
+
+
+def estimate_critical_nitrogen_concentration(j, data):
+    # estimate critical nitrogen concentration from plant dry matter using the Justes et al (1994) relationship
+    data["Ncrit"][j,:,:] = 5.35 * (data["biomasseTotale"][j,:,:]/1000) ** (-0.44)
     return data

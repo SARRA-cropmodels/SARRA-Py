@@ -6,7 +6,21 @@ from .data_preparation import *
 
 from tqdm import tqdm as tqdm
 
+
 def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
+    """
+    This is the functions list adapted from the procedures of the SARRA-H v42 model.
+
+    Args:
+        paramVariete (_type_): _description_
+        paramITK (_type_): _description_
+        paramTypeSol (_type_): _description_
+        data (_type_): _description_
+        duration (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     
     for j in tqdm(range(duration)):
 
@@ -59,7 +73,8 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
         data = estimate_KAssim(j, data, paramVariete)
         data = estimate_conv(j,data,paramVariete)
 
-        # data = BiomDensOptSarV42(j, data, paramITK, paramVariete) # ***bilancarbonsarra*** # trad OK
+        # adjusting for sowing densité, in
+        data = adjust_for_sowing_density(j, data, paramVariete, direction = "in") # ***bilancarbonsarra*** # trad OK
         
         data = update_assimPot(j, data, paramVariete, paramITK)
         data = update_assim(j, data)
@@ -90,9 +105,15 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
         data = update_photoperiodism(j, data, paramVariete)
         
         # # bilan carbone
-        # data = MortaliteSarraV3(j, data, paramITK, paramVariete) # ***bilancarbonsarra***, exmodules 1 & 2 ### trad OK
-        # # data = BiomDensiteSarraV42(j, data, paramITK, paramVariete)# ***bilancarbonsarra*** ### trad OK
+        data = MortaliteSarraV3(j, data, paramITK, paramVariete)
+        
+        
+        data = adjust_for_sowing_density(j, data, paramVariete, direction="out")
+        
+        
         # data = BiomMcUBTSV3(j, data, paramITK) # ***bilancarbonsarra***, exmodules 2
         # data = MAJBiomMcSV3(data) # ***bilancarbonsarra***, exmodules 2
+
+        data = estimate_critical_nitrogen_concentration(j, data)
 
     return data

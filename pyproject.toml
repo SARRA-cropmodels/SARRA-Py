@@ -1,2 +1,20 @@
 [tool.portray]
 modules = ["sarra_py"]
+
+[tool.portray.mkdocs.theme]
+name = "readthedocs"
+palette = {primary = "green", accent = "pink"}
+
+[tool.portray.mkdocs.theme.icon]
+repo='fontawesome/brands/gitlab'
+
+[[tool.portray.mkdocs.nav]]
+Home = "README.md"
+[[tool.portray.mkdocs.nav]]
+"Model formalisms" = "docs/model_formalisms.md"
+[[tool.portray.mkdocs.nav]]
+"Spatialization strategy" = "docs/spatialization_strategy.md"
+
+[[tool.portray.mkdocs.nav]]
+    [[tool.portray.mkdocs.nav.Tutorial]]
+    "00 - Running a simulation" = "docs/tutorial/00_-_Running_a_simulation.md"
