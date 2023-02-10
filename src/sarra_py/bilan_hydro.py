@@ -108,24 +108,20 @@ def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
 
 def update_irrigation_tank_stock(j, data):
     """
-    stockIrr : "water stock in the irrigation tank" (mm) // irrigation_tank_stock
-    
-    If we are in automatic irrigation mode, and between phases 0 and 6, and if
-    root_tank_capacity is less than surface_tank_capacity, meaning in the
-    simulation that roots haven't reached yet the limit between the surface
-    compartment and deep compartment, then we define irrigation_tank_stock as
-    equal to surface_tank_stock, that is to say, we give to
-    irrigation_tank_stock a minimum value that equals surface_tank_stock. Else,
-    we do not modify irrigation_tank_stock value.
-    
-    N.B. : for phase 7, we keep the existing irrigation_tank_stock value
+    Update the Irrigation Tank Stock 
+
+    In case of automatic irrigation mode and if the simulation is between phases 0 and 6 and 
+    root_tank_capacity is lower than surface_tank_capacity (which indicates that the roots have not yet 
+    reached the limit between the surface compartment and deep compartment), the irrigation_tank_stock 
+    will be set to the value of surface_tank_stock, which means, it will take the minimum value equal to 
+    surface_tank_stock. For phase 7, the existing irrigation_tank_stock value will be kept unchanged.
 
     Args:
-        j (_type_): _description_
-        data (_type_): _description_
+        j (int): Index of time step in data
+        data (xarray Dataset): Dataset that contains various data fields
 
     Returns:
-        _type_: _description_
+        xarray Dataset: updated data set with the irrigation_tank_stock field updated based on the conditions.
     """
 
     condition = (data["irrigAuto"][j, :, :] == True) & \
@@ -156,9 +152,22 @@ def update_irrigation_tank_stock(j, data):
 
 
 
+
+
 def update_irrigation_tank_capacity(j, data):
     """
-    ruIrr : "maximum water capacity of irrigation tank" (mm) // irrigation_tank_capacity
+    Update Irrigation Tank Capacity
+
+    The function updates the maximum water capacity of irrigation tank based on
+    the conditions specified in the function. If the automatic irrigation mode
+    is ON, and if the current phase is between 0 and 6, and if the root tank
+    capacity is less than the surface tank capacity, meaning that the roots have
+    not reached the limit between the surface compartment and deep compartment,
+    then the irrigation tank capacity is set to the surface tank capacity, which
+    is given a minimum value equal to the surface tank capacity. Otherwise, the
+    irrigation tank capacity remains unchanged.
+
+    
     
     If we are in automatic irrigation mode, and between phases 0 and 6, and if
     root_tank_capacity is less than surface_tank_capacity, meaning that roots
@@ -169,11 +178,11 @@ def update_irrigation_tank_capacity(j, data):
     irrigation_tank_capacity value
 
     Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
+        j (int): Index of the time step being processed.
+        data (xarray dataset): The input dataset containing all the information necessary to run the model.
+    
     Returns:
-        _type_: _description_
+        xarray dataset: The input dataset with updated values of the irrigation tank capacity.
     """
 
     # group 2
@@ -201,8 +210,29 @@ def update_irrigation_tank_capacity(j, data):
 
     return data
 
-def update_irrigTotDay(j, data, paramITK):
+
+
+
+
+def compute_daily_irrigation(j, data, paramITK):
     """
+    Computes the Total Daily Irrigation (mm)
+
+    If we are in the automatic irrigation mode, and between phases 0 and 6, and if
+    the filling of the irrigation tank is below the target filling value
+    (irrigAutoTarget, decimal percentage), we first compute 90% of the difference
+    between the current volume of water in the irrigation tank (irrigation_tank_stock)
+    and the total capacity of the irrigation tank (irrigation_tank_capacity), 
+    bounded by a minimum of 0 and a maximum of maxIrrig. 
+    This computed value represents the amount of water to be added to the irrigation tank.
+    If the above conditions are not met, the computed value is 0.
+
+    Then, we calculate the total irrigation of the day by summing the
+    estimated irrigation need (irrigation) with the previous irrigation history of the day 
+    (irrigTotDay).
+
+
+
     irrigTotDay : "total irrigation of the day, both from the irrigation history
     and the estimated irrigation need" (mm) // irrigation_total_day
     
@@ -216,8 +246,13 @@ def update_irrigTotDay(j, data, paramITK):
     Then, we calculate the total irrigation of the day by summing the
     estimated irrigation need with the irrigation history of the day.
 
+    Args:
+        j: An integer representing the current day.
+        data: A xarray dataset.
+        paramITK: A dictionary of parameters.
+
     Returns:
-        _type_: _description_
+        data: A xarray dataset with the updated irrigationTotDay field.
     """
 
     #! renaming stockIrr with irrigation_tank_stock
@@ -258,6 +293,28 @@ def update_irrigTotDay(j, data, paramITK):
 
 def EvalIrrigPhase(j, data, paramITK):
     """
+    Computes the irrigation state for a given day, including the size and
+    filling of the irrigation tank and the irrigation demand.
+
+    The computation of the irrigation state is based on the irrigation target
+    (irrigAutoTarget), the maximum irrigation capacity (maxIrrig), the size and
+    filling of the root zone (stRurMax, stRur) and the surface reservoir
+    (stRuSurf, ruSurf). The water stock in the irrigation tank (stockIrr) and
+    the maximum water capacity of the irrigation tank (ruIrr) are first
+    calculated, with minimum boundaries determined by properties of the surface
+    reservoir. The irrigation demand (irrigTotDay) is then computed.
+
+    The irrigation tank stock and capacity are only computed to avoid issues
+    with very shallow rooting, where the calculation of the filling of
+    root_tank_capacity by root_tank_stock can be inappropriate and result in
+    inadapted results for automatic irrigation.
+
+    Note: In this irrigation management, the daily rainfall is not taken into
+    account.
+
+
+
+
     Translated from the procedure EvalIrrigPhase, of the original Pascal codes
     bileau.pas and exmodules2.pas.
 
@@ -285,6 +342,14 @@ def EvalIrrigPhase(j, data, paramITK):
     pas prise en compte
 
     N.B.: here, precision is not taken into account anymore
+
+    Args:
+        j (int): Index of the day for which the irrigation state is being computed.
+        data (xarray.Dataset): The input data, including the arrays for irrigation and correctedIrrigation.
+        paramITK (dict): The parameters for the ITK model.
+
+    Returns:
+        xarray.Dataset: The updated data, including the computed values for the irrigation state.
     """
 
     # First, we store initial irrigation value of the day in the
@@ -295,7 +360,7 @@ def EvalIrrigPhase(j, data, paramITK):
     
     data = update_irrigation_tank_stock(j, data)
     data = update_irrigation_tank_capacity(j, data)
-    data = update_irrigTotDay(j, data, paramITK)
+    data = compute_daily_irrigation(j, data, paramITK)
 
     return data
 
@@ -303,8 +368,23 @@ def EvalIrrigPhase(j, data, paramITK):
 
 
 
-def PluieIrrig(j, data):
+def calculate_total_water_availability(j, data):
     """
+    Calculates the total water available for a day by adding the rainfall and
+    the irrigation.
+
+    The total water available is computed by adding the rainfall for the day,
+    which is stored in the "rain" array, and the total daily irrigation, which
+    is stored in the "irrigTotDay" array.
+
+    This calculation is performed to allow for subsequent calculations of the
+    mulch filling and runoff. The mulch layer is considered to be directly under
+    the rainfall and irrigation, which is represented by the "irrigTotDay"
+    value.
+
+
+
+    
     Translated from the procedure PluieIrrig, of the original Pascal codes
     bileau.pas and exmodules2.pas
 
@@ -316,12 +396,20 @@ def PluieIrrig(j, data):
     irrigTotDay qui est l'irrigation observée ou calculée, d'où on regroupe les
     deux avant calcul de remplissage du mulch et ensuite calcul du ruissellement.
 
-    group 5
+    Args:
+        j (int): The index of the current day.
+        data (xarray.Dataset): The data set containing information about the rainfall, irrigation, and water availability.
+
+    Returns:
+        xarray.Dataset: The data set with updated information about the total water availability for the current day.
     """
 
     data["eauDispo"][j,:,:] = data["rain"][j,:,:] + data["irrigTotDay"][j,:,:]
 
     return data
+
+
+
 
 
 def estimate_water_captured_by_mulch(j, data, paramITK):
@@ -561,6 +649,29 @@ def initialize_root_tank_capacity(j, data, paramITK):
 
 def estimate_delta_root_tank_capacity(j, data):
     """
+    Updates daily root capacity variation (delta_root_tank_capacity, in mm
+    water/day) based on the current phase of the plant, the daily root growth
+    speed, and the drought stress coefficient.
+
+    The daily root capacity variation is calculated as the product of soil water
+    storage capacity (ru), the daily root growth speed (vRac), and a coefficient
+    (cstr + 0.3). This coefficient is capped at 1.0.
+
+    The daily root capacity variation is modulated by drought stress only when the
+    root tank capacity is greater than the surface tank capacity and the current
+    phase is strictly greater than 1 and at the day of phase change. If the root
+    tank capacity is lower than the surface tank capacity or if the current phase is
+    1 or below or not at the day of phase change, the daily root capacity variation
+    remains unchanged. 
+
+    The drought stress coefficient, cstr, measures the level of drought stress with
+    0 being full stress. The root growth speed is assumed to still occur during a
+    drought stress as a matter of survival, with a certain level of tolerance given
+    by the [0.3, 1] bound of the coefficient.
+
+    
+
+    
     Updating delta_root_tank_capacity / dayVrac (daily variation in water height
     accessible to roots, mm water/day) :
     
@@ -589,10 +700,11 @@ def estimate_delta_root_tank_capacity(j, data):
     allowing for a certain level of tolerance of the plant. 
     
     Args:
-        j (_type_): _description_
-        data (_type_): _description_
+        j (int): The current iteration step of the process.
+        data (xarray.Dataset): The input data containing relevant information.
+
     Returns:
-        _type_: _description_
+        xarray.Dataset: The updated input data with the daily root capacity variation calculated and stored.
     """
 
     # group 15  
