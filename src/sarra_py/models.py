@@ -37,7 +37,7 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
         # evalIrrigPhase sp&cifique de l'irrigation automatique, on peut presque le conditionner au irrigAuto==True
         data = EvalIrrigPhase(j, data, paramITK)
         # sums rainfall and irrigation history
-        data = PluieIrrig(j, data)
+        data = calculate_total_water_availability(j, data)
         # can be conditioned to the presence of mulch
         data = RempliMc(j, data, paramITK)
         data = EvalRunOff(j, data, paramTypeSol)
@@ -79,7 +79,7 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
         data = update_assimPot(j, data, paramVariete, paramITK)
         data = update_assim(j, data)
 
-        data = estimate_maintainance_respiration(j, data, paramVariete)
+        data = calculate_maintainance_respiration(j, data, paramVariete)
         data = update_total_biomass(j, data, paramVariete, paramITK)
 
 
@@ -96,10 +96,10 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
         data = EvalFeuilleTigeSarrahV4(j, data, paramVariete)
         data = update_vegetative_biomass(j, data)
 
-        data = update_sla(j, data, paramVariete)
-        data = update_LAI(j, data)
+        data = calculate_canopy_specific_leaf_area(j, data, paramVariete)
+        data = calculate_leaf_area_index(j, data)
         
-        data = update_yield(j, data) 
+        data = update_yield_during_filling_phase(j, data) 
         
         #phenologie
         data = update_photoperiodism(j, data, paramVariete)
