@@ -101,17 +101,16 @@ def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
 
     TAMSAT_files_df = build_rainfall_files_df(TAMSAT_path, date_start, duration)
 
+    dataarray_full = None
+
     for i in range(len(TAMSAT_files_df)):
 
         dataarray = rioxarray.open_rasterio(os.path.join(TAMSAT_path,TAMSAT_files_df.loc[i,"filename"]))
         dataarray = dataarray.squeeze("band").drop_vars(["band", "spatial_ref"])
         dataarray.attrs = {}
 
-        if 'dataarray_full' in locals():
-            dataarray_full = xr.concat([dataarray_full, dataarray],"time")
-        else:
-            dataarray_full = dataarray
-            
+        dataarray_full = xr.concat([dataarray_full, dataarray],"time")
+
         # try:
         #     dataarray_full = xr.concat([dataarray_full, dataarray],"time")
         # except:
@@ -182,6 +181,8 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
                 del dataarray_full
             except:
                 pass
+
+            dataarray_full = None
             
             for i in range(duration) :
                 dataarray = rioxarray.open_rasterio(os.path.join(AgERA5_data_path,variable,AgERA5_files_df_collection[variable].loc[i,"filename"]))
@@ -189,10 +190,13 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
                 dataarray = dataarray.squeeze("band").drop_vars(["band"])
                 # TODO: add dataarray.attrs = {} to precise units and long_name
 
-                try:
-                    dataarray_full = xr.concat([dataarray_full, dataarray],"time")
-                except:
-                    dataarray_full = dataarray
+                # try:
+                #     dataarray_full = xr.concat([dataarray_full, dataarray],"time")
+                # except:
+                #     dataarray_full = dataarray
+
+                dataarray_full = xr.concat([dataarray_full, dataarray],"time")
+
 
             # storing the variable in the data dictionary
             data[AgERA5_SARRA_correspondance[variable]] = dataarray_full
