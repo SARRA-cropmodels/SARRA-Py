@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../../img/favicon.ico" />
+    <title>Comparison Tools Old - SARRA-Py</title>
+    <link rel="stylesheet" href="../../../css/theme.css" />
+    <link rel="stylesheet" href="../../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Comparison Tools Old";
+        var mkdocs_page_input_path = "reference/sarra_py/comparison_tools_old.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <script src="../../../js/jquery-3.6.0.min.js" defer></script>
+    <!--[if lt IE 9]>
+      <script src="../../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js"></script>
+      <script>hljs.initHighlightingOnLoad();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../../.." class="icon icon-home"> SARRA-Py
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../../docs/model_formalisms/">Model formalisms</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../../docs/spatialization_strategy/">Spatialization strategy</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Tutorial</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../docs/tutorial/00_-_Running_a_simulation/">00 - Running a simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Reference</span></p>
+              <ul class="current">
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Sarra Py</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../bilan_carbo/">Bilan Carbo</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../bilan_hydro/">Bilan Hydro</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../bilan_pheno/">Bilan Pheno</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="./">Comparison Tools Old</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#functions">Functions</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#compute_earliest_diff">compute_earliest_diff</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#get_var_correspondance">get_var_correspondance</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#graph_comparison">graph_comparison</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../data_preparation/">Data Preparation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../">Index</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../models/">Models</a>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../..">SARRA-Py</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../.." class="icon icon-home" alt="Docs"></a> &raquo;</li>
+          <li>Reference &raquo;</li>
+          <li>Sarra Py &raquo;</li>
+      <li>Comparison Tools Old</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="module-sarra_pycomparison_tools_old">Module sarra_py.comparison_tools_old</h1>
+<details class="example">
+<summary>View Source</summary>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span> <span class="nn">matplotlib</span> <span class="kn">import</span> <span class="n">pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="k">def</span> <span class="nf">get_var_correspondance</span><span class="p">():</span>
+
+    <span class="n">var_correspondance</span> <span class="o">=</span> <span class="p">{</span>
+
+        <span class="s1">&#39;DegresDuJour&#39;</span><span class="p">:</span><span class="s2">&quot;ddj&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Lai&#39;</span><span class="p">:</span><span class="s2">&quot;lai&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;FTSW&#39;</span><span class="p">:</span><span class="s2">&quot;ftsw&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Cstr&#39;</span><span class="p">:</span><span class="s2">&quot;cstr&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Eto&#39;</span><span class="p">:</span><span class="s2">&quot;ET0&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;ETM&#39;</span><span class="p">:</span><span class="s2">&quot;etm&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;ETR&#39;</span><span class="p">:</span><span class="s2">&quot;etr&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Sla&#39;</span><span class="p">:</span><span class="s2">&quot;sla&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Assim&#39;</span><span class="p">:</span><span class="s2">&quot;assim&quot;</span><span class="p">,</span>
+
+        <span class="c1"># &#39;DayLength&#39;,</span>
+
+        <span class="s1">&#39;Par&#39;</span><span class="p">:</span><span class="s1">&#39;par&#39;</span><span class="p">,</span>
+
+        <span class="c1"># &#39;RgCalc&#39;,</span>
+
+        <span class="c1"># &#39;VDPCalc&#39;,</span>
+
+        <span class="s1">&#39;TMoyCalc&#39;</span><span class="p">:</span><span class="s2">&quot;tpMoy&quot;</span><span class="p">,</span>
+
+        <span class="c1"># &#39;HMoyCalc&#39;,</span>
+
+        <span class="s1">&#39;EauDispo&#39;</span><span class="p">:</span><span class="s1">&#39;eauDispo&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;StockSurface&#39;</span><span class="p">:</span><span class="s2">&quot;stRuSurf&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;StockRac&#39;</span><span class="p">:</span><span class="s2">&quot;stRur&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;RURac&#39;</span><span class="p">:</span><span class="s1">&#39;stRurMax&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Kcp&#39;</span><span class="p">:</span><span class="s1">&#39;kcp&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Kce&#39;</span><span class="p">:</span><span class="s2">&quot;kce&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;EvapPot&#39;</span><span class="p">:</span><span class="s1">&#39;evapPot&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Evap&#39;</span><span class="p">:</span><span class="s2">&quot;evap&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;TrPot&#39;</span><span class="p">:</span><span class="s2">&quot;trPot&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Tr&#39;</span><span class="p">:</span><span class="s2">&quot;tr&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Lr&#39;</span><span class="p">:</span><span class="s1">&#39;lr&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Dr&#39;</span><span class="p">:</span><span class="s1">&#39;dr&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;SumDegresDay&#39;</span><span class="p">:</span><span class="s2">&quot;sdj&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;BiomasseTotale&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseTotale&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;BiomasseAerienne&#39;</span><span class="p">:</span><span class="s1">&#39;biomasseAerienne&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;BiomasseFeuilles&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseFeuille&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;BiomasseTiges&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseTige&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;BiomasseVegetative&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseVegetative&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;BiomasseRacinaire&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseRacinaire&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Rdt&#39;</span><span class="p">:</span><span class="s2">&quot;rdt&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;VitesseRacinaire&#39;</span><span class="p">:</span><span class="s2">&quot;vRac&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;FESW&#39;</span><span class="p">:</span><span class="s2">&quot;fesw&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Kc&#39;</span><span class="p">:</span><span class="s2">&quot;kcTot&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Ltr&#39;</span><span class="p">:</span><span class="s1">&#39;ltr&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;DRespMaint&#39;</span><span class="p">:</span><span class="s1">&#39;respMaint&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;DBiomTot&#39;</span><span class="p">:</span><span class="s2">&quot;deltaBiomasseTotale&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;DRdtPot&#39;</span><span class="p">:</span><span class="s2">&quot;dRdtPot&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Reallocation&#39;</span><span class="p">:</span><span class="s1">&#39;reallocation&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;RdtPot&#39;</span><span class="p">:</span><span class="s1">&#39;rdtPot&#39;</span><span class="p">,</span>
+
+        <span class="c1"># &#39;RayExtra&#39;,</span>
+
+        <span class="c1"># &#39;SumDDPhasePrec&#39;,</span>
+
+        <span class="c1"># &#39;SeuilTemp&#39;,</span>
+
+        <span class="c1"># &#39;TMinMoy&#39;,</span>
+
+        <span class="c1"># &#39;TMaxMoy&#39;,</span>
+
+        <span class="c1"># &#39;FtswMoy&#39;,</span>
+
+        <span class="s1">&#39;IrrigTotDay&#39;</span><span class="p">:</span><span class="s1">&#39;irrigTotDay&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Conversion&#39;</span><span class="p">:</span><span class="s1">&#39;conv&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;StockTotal&#39;</span><span class="p">:</span><span class="s1">&#39;stTot&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;BiomMc&#39;</span><span class="p">:</span><span class="s1">&#39;biomMc&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;StockMc&#39;</span><span class="p">:</span><span class="s1">&#39;stockMc&#39;</span><span class="p">,</span>
+
+        <span class="s1">&#39;LitFeuilles&#39;</span><span class="p">:</span><span class="s2">&quot;litFeuilles&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;LitTiges&#39;</span><span class="p">:</span><span class="s2">&quot;litTiges&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;FeuillesUp&#39;</span><span class="p">:</span><span class="s2">&quot;feuillesUp&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;TigesUp&#39;</span><span class="p">:</span><span class="s2">&quot;tigesUp&quot;</span><span class="p">,</span>
+
+        <span class="s1">&#39;Hum&#39;</span><span class="p">:</span><span class="s2">&quot;hum&quot;</span><span class="p">,</span>
+
+        <span class="c1">#&#39;EToCO2&#39;,</span>
+
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">var_correspondance</span>
+
+<span class="k">def</span> <span class="nf">graph_comparison</span><span class="p">(</span><span class="n">var_gt</span><span class="p">,</span> <span class="n">var_sim</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">df_weather</span><span class="p">,</span> <span class="n">df_gt</span><span class="p">):</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s2">&quot;figure.figsize&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mf">7.50</span><span class="p">,</span> <span class="mf">3.50</span><span class="p">]</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s2">&quot;figure.autolayout&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="n">ax1</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">()</span>
+
+    <span class="n">l1</span><span class="p">,</span> <span class="o">=</span> <span class="n">ax1</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df_weather</span><span class="p">[</span><span class="s2">&quot;Jour&quot;</span><span class="p">],</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;numPhase&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,:],</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;sim&quot;</span><span class="p">)</span>
+
+    <span class="n">ax2</span> <span class="o">=</span> <span class="n">ax1</span><span class="o">.</span><span class="n">twinx</span><span class="p">()</span>
+
+    <span class="n">l2</span><span class="p">,</span> <span class="o">=</span> <span class="n">ax2</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df_weather</span><span class="p">[</span><span class="s2">&quot;Jour&quot;</span><span class="p">],</span> <span class="n">data</span><span class="p">[</span><span class="n">var_sim</span><span class="p">][</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,:],</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;red&#39;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">var_sim</span><span class="o">+</span><span class="s2">&quot; (sim)&quot;</span><span class="p">)</span>
+
+    <span class="n">l3</span><span class="p">,</span> <span class="o">=</span> <span class="n">ax2</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df_gt</span><span class="p">[</span><span class="s2">&quot;Jour&quot;</span><span class="p">],</span> <span class="n">df_gt</span><span class="p">[</span><span class="n">var_gt</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;orange&#39;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">var_gt</span><span class="o">+</span><span class="s2">&quot; (sarrah)&quot;</span><span class="p">)</span>
+
+    <span class="c1"># plt.plot(df_weather[&quot;Jour&quot;], data[&quot;numPhase&quot;][0,0,:], label=&quot;numPhase&quot;, alpha=0.5)</span>
+
+    <span class="c1"># plt.plot(df_weather[&quot;Jour&quot;], data[var_sim][0,0,:], color=&#39;red&#39;, label=var_sim+&quot; (sim)&quot;)</span>
+
+    <span class="c1"># plt.plot(df_gt[&quot;Jour&quot;], df_gt[var_gt], color=&#39;orange&#39;, label=var_gt+&quot; (sarrah)&quot;)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">([</span><span class="n">l1</span><span class="p">,</span> <span class="n">l2</span><span class="p">,</span> <span class="n">l3</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;numPhase&quot;</span><span class="p">,</span><span class="n">var_sim</span><span class="o">+</span><span class="s2">&quot; (sim)&quot;</span><span class="p">,</span> <span class="n">var_gt</span><span class="o">+</span><span class="s2">&quot; (sarrah)&quot;</span><span class="p">])</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">(</span><span class="n">rotation</span><span class="o">=</span><span class="mi">45</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<span class="k">def</span> <span class="nf">compute_earliest_diff</span><span class="p">(</span><span class="n">var_gt</span><span class="p">,</span> <span class="n">var_sim</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">df_weather</span><span class="p">,</span> <span class="n">df_gt</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">10E-6</span><span class="p">):</span>
+
+    <span class="k">try</span><span class="p">:</span>
+
+        <span class="n">df_gt_2</span> <span class="o">=</span> <span class="n">df_gt</span>
+
+        <span class="n">df_gt_2</span> <span class="o">=</span> <span class="n">df_gt_2</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">&quot;Jour&quot;</span><span class="p">:</span><span class="n">df_weather</span><span class="p">[</span><span class="s2">&quot;Jour&quot;</span><span class="p">],</span><span class="n">var_sim</span><span class="p">:</span><span class="n">data</span><span class="p">[</span><span class="n">var_sim</span><span class="p">][</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,:]}),</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;Jour&quot;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;Jour&quot;</span><span class="p">)</span>
+
+        <span class="n">df_gt_2</span><span class="p">[</span><span class="s2">&quot;delta&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="kp">abs</span><span class="p">(</span><span class="n">df_gt_2</span><span class="p">[</span><span class="n">var_sim</span><span class="p">]</span> <span class="o">-</span> <span class="n">df_gt_2</span><span class="p">[</span><span class="n">var_gt</span><span class="p">])</span>
+
+        <span class="n">df_gt_2</span><span class="p">[</span><span class="s2">&quot;signif&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="n">df_gt_2</span><span class="p">[</span><span class="s2">&quot;signif&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_gt_2</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s2">&quot;delta&quot;</span><span class="p">]</span><span class="o">&gt;</span><span class="n">tol</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="kp">nansum</span><span class="p">(</span><span class="n">df_gt_2</span><span class="p">[</span><span class="s2">&quot;signif&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">:</span>
+
+            <span class="n">earliest</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">(</span><span class="mi">1990</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+
+            <span class="n">earliest</span> <span class="o">=</span> <span class="n">df_gt_2</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">df_gt_2</span><span class="p">[</span><span class="s2">&quot;signif&quot;</span><span class="p">]</span><span class="o">==</span><span class="kc">True</span><span class="p">,</span><span class="s2">&quot;Jour&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">meandiff</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmean</span><span class="p">(</span><span class="n">df_gt_2</span><span class="p">[</span><span class="s2">&quot;delta&quot;</span><span class="p">])</span>
+
+    <span class="k">except</span><span class="p">:</span>
+
+        <span class="n">earliest</span><span class="p">,</span><span class="n">meandiff</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="kp">nan</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="kp">nan</span>
+
+    <span class="k">return</span> <span class="n">earliest</span><span class="p">,</span><span class="n">meandiff</span>
+</code></pre></div>
+
+</details>
+<h2 id="functions">Functions</h2>
+<h3 id="compute_earliest_diff">compute_earliest_diff</h3>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">compute_earliest_diff</span><span class="p">(</span>
+    <span class="n">var_gt</span><span class="p">,</span>
+    <span class="n">var_sim</span><span class="p">,</span>
+    <span class="n">data</span><span class="p">,</span>
+    <span class="n">df_weather</span><span class="p">,</span>
+    <span class="n">df_gt</span><span class="p">,</span>
+    <span class="n">tol</span><span class="o">=</span><span class="mf">1e-05</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<details class="example">
+<summary>View Source</summary>
+<div class="codehilite"><pre><span></span><code><span class="n">def</span><span class="w"> </span><span class="n">compute_earliest_diff</span><span class="p">(</span><span class="n">var_gt</span><span class="p">,</span><span class="w"> </span><span class="n">var_sim</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">df_weather</span><span class="p">,</span><span class="w"> </span><span class="n">df_gt</span><span class="p">,</span><span class="w"> </span><span class="n">tol</span><span class="o">=</span><span class="mf">10E-6</span><span class="p">)</span><span class="err">:</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">try</span><span class="err">:</span><span class="w"></span>
+
+<span class="w">        </span><span class="n">df_gt_2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">df_gt</span><span class="w"></span>
+
+<span class="w">        </span><span class="n">df_gt_2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">df_gt_2</span><span class="p">.</span><span class="k">merge</span><span class="p">(</span><span class="n">pd</span><span class="p">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="err">{</span><span class="ss">&quot;Jour&quot;</span><span class="err">:</span><span class="n">df_weather</span><span class="o">[</span><span class="n">&quot;Jour&quot;</span><span class="o">]</span><span class="p">,</span><span class="nl">var_sim</span><span class="p">:</span><span class="k">data</span><span class="o">[</span><span class="n">var_sim</span><span class="o">][</span><span class="n">0,0,:</span><span class="o">]</span><span class="err">}</span><span class="p">),</span><span class="w"> </span><span class="n">left_on</span><span class="o">=</span><span class="ss">&quot;Jour&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">right_on</span><span class="o">=</span><span class="ss">&quot;Jour&quot;</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="n">df_gt_2</span><span class="o">[</span><span class="n">&quot;delta&quot;</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">np</span><span class="p">.</span><span class="nf">abs</span><span class="p">(</span><span class="n">df_gt_2</span><span class="o">[</span><span class="n">var_sim</span><span class="o">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">df_gt_2</span><span class="o">[</span><span class="n">var_gt</span><span class="o">]</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="n">df_gt_2</span><span class="o">[</span><span class="n">&quot;signif&quot;</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">False</span><span class="w"></span>
+
+<span class="w">        </span><span class="n">df_gt_2</span><span class="o">[</span><span class="n">&quot;signif&quot;</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">df_gt_2</span><span class="p">.</span><span class="n">apply</span><span class="p">(</span><span class="n">lambda</span><span class="w"> </span><span class="nl">x</span><span class="p">:</span><span class="w"> </span><span class="n">x</span><span class="o">[</span><span class="n">&quot;delta&quot;</span><span class="o">]&gt;</span><span class="n">tol</span><span class="p">,</span><span class="w"> </span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">np</span><span class="p">.</span><span class="n">nansum</span><span class="p">(</span><span class="n">df_gt_2</span><span class="o">[</span><span class="n">&quot;signif&quot;</span><span class="o">]</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0</span><span class="err">:</span><span class="w"></span>
+
+<span class="w">            </span><span class="n">earliest</span><span class="o">=</span><span class="nc">datetime</span><span class="p">.</span><span class="nc">date</span><span class="p">(</span><span class="mi">1990</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="k">else</span><span class="err">:</span><span class="w"></span>
+
+<span class="w">            </span><span class="n">earliest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">df_gt_2</span><span class="p">.</span><span class="n">loc</span><span class="o">[</span><span class="n">df_gt_2[&quot;signif&quot;</span><span class="o">]==</span><span class="k">True</span><span class="p">,</span><span class="ss">&quot;Jour&quot;</span><span class="err">]</span><span class="p">.</span><span class="k">values</span><span class="o">[</span><span class="n">0</span><span class="o">]</span><span class="w"></span>
+
+<span class="w">        </span><span class="n">meandiff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">np</span><span class="p">.</span><span class="n">nanmean</span><span class="p">(</span><span class="n">df_gt_2</span><span class="o">[</span><span class="n">&quot;delta&quot;</span><span class="o">]</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="ow">except</span><span class="err">:</span><span class="w"></span>
+
+<span class="w">        </span><span class="n">earliest</span><span class="p">,</span><span class="n">meandiff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">np</span><span class="p">.</span><span class="n">nan</span><span class="p">,</span><span class="n">np</span><span class="p">.</span><span class="n">nan</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">earliest</span><span class="p">,</span><span class="n">meandiff</span><span class="w"></span>
+</code></pre></div>
+
+</details>
+<h3 id="get_var_correspondance">get_var_correspondance</h3>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">get_var_correspondance</span><span class="p">(</span>
+
+<span class="p">)</span>
+</code></pre></div>
+
+<details class="example">
+<summary>View Source</summary>
+<div class="codehilite"><pre><span></span><code><span class="n">def</span><span class="w"> </span><span class="n">get_var_correspondance</span><span class="p">():</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">var_correspondance</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;DegresDuJour&#39;</span><span class="p">:</span><span class="s2">&quot;ddj&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Lai&#39;</span><span class="p">:</span><span class="s2">&quot;lai&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;FTSW&#39;</span><span class="p">:</span><span class="s2">&quot;ftsw&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Cstr&#39;</span><span class="p">:</span><span class="s2">&quot;cstr&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Eto&#39;</span><span class="p">:</span><span class="s2">&quot;ET0&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;ETM&#39;</span><span class="p">:</span><span class="s2">&quot;etm&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;ETR&#39;</span><span class="p">:</span><span class="s2">&quot;etr&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Sla&#39;</span><span class="p">:</span><span class="s2">&quot;sla&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Assim&#39;</span><span class="p">:</span><span class="s2">&quot;assim&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;DayLength&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Par&#39;</span><span class="p">:</span><span class="s1">&#39;par&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;RgCalc&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;VDPCalc&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;TMoyCalc&#39;</span><span class="p">:</span><span class="s2">&quot;tpMoy&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;HMoyCalc&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;EauDispo&#39;</span><span class="p">:</span><span class="s1">&#39;eauDispo&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;StockSurface&#39;</span><span class="p">:</span><span class="s2">&quot;stRuSurf&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;StockRac&#39;</span><span class="p">:</span><span class="s2">&quot;stRur&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;RURac&#39;</span><span class="p">:</span><span class="s1">&#39;stRurMax&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Kcp&#39;</span><span class="p">:</span><span class="s1">&#39;kcp&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Kce&#39;</span><span class="p">:</span><span class="s2">&quot;kce&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;EvapPot&#39;</span><span class="p">:</span><span class="s1">&#39;evapPot&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Evap&#39;</span><span class="p">:</span><span class="s2">&quot;evap&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;TrPot&#39;</span><span class="p">:</span><span class="s2">&quot;trPot&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Tr&#39;</span><span class="p">:</span><span class="s2">&quot;tr&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Lr&#39;</span><span class="p">:</span><span class="s1">&#39;lr&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Dr&#39;</span><span class="p">:</span><span class="s1">&#39;dr&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;SumDegresDay&#39;</span><span class="p">:</span><span class="s2">&quot;sdj&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;BiomasseTotale&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseTotale&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;BiomasseAerienne&#39;</span><span class="p">:</span><span class="s1">&#39;biomasseAerienne&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;BiomasseFeuilles&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseFeuille&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;BiomasseTiges&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseTige&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;BiomasseVegetative&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseVegetative&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;BiomasseRacinaire&#39;</span><span class="p">:</span><span class="s2">&quot;biomasseRacinaire&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Rdt&#39;</span><span class="p">:</span><span class="s2">&quot;rdt&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;VitesseRacinaire&#39;</span><span class="p">:</span><span class="s2">&quot;vRac&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;FESW&#39;</span><span class="p">:</span><span class="s2">&quot;fesw&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Kc&#39;</span><span class="p">:</span><span class="s2">&quot;kcTot&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Ltr&#39;</span><span class="p">:</span><span class="s1">&#39;ltr&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;DRespMaint&#39;</span><span class="p">:</span><span class="s1">&#39;respMaint&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;DBiomTot&#39;</span><span class="p">:</span><span class="s2">&quot;deltaBiomasseTotale&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;DRdtPot&#39;</span><span class="p">:</span><span class="s2">&quot;dRdtPot&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Reallocation&#39;</span><span class="p">:</span><span class="s1">&#39;reallocation&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;RdtPot&#39;</span><span class="p">:</span><span class="s1">&#39;rdtPot&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;RayExtra&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;SumDDPhasePrec&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;SeuilTemp&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;TMinMoy&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;TMaxMoy&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1"># &#39;FtswMoy&#39;,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;IrrigTotDay&#39;</span><span class="p">:</span><span class="s1">&#39;irrigTotDay&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Conversion&#39;</span><span class="p">:</span><span class="s1">&#39;conv&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;StockTotal&#39;</span><span class="p">:</span><span class="s1">&#39;stTot&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;BiomMc&#39;</span><span class="p">:</span><span class="s1">&#39;biomMc&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;StockMc&#39;</span><span class="p">:</span><span class="s1">&#39;stockMc&#39;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;LitFeuilles&#39;</span><span class="p">:</span><span class="s2">&quot;litFeuilles&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;LitTiges&#39;</span><span class="p">:</span><span class="s2">&quot;litTiges&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;FeuillesUp&#39;</span><span class="p">:</span><span class="s2">&quot;feuillesUp&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;TigesUp&#39;</span><span class="p">:</span><span class="s2">&quot;tigesUp&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="s1">&#39;Hum&#39;</span><span class="p">:</span><span class="s2">&quot;hum&quot;</span><span class="p">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1">#&#39;EToCO2&#39;,</span><span class="w"></span>
+
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">var_correspondance</span><span class="w"></span>
+</code></pre></div>
+
+</details>
+<h3 id="graph_comparison">graph_comparison</h3>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">graph_comparison</span><span class="p">(</span>
+    <span class="n">var_gt</span><span class="p">,</span>
+    <span class="n">var_sim</span><span class="p">,</span>
+    <span class="n">data</span><span class="p">,</span>
+    <span class="n">df_weather</span><span class="p">,</span>
+    <span class="n">df_gt</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<details class="example">
+<summary>View Source</summary>
+<div class="codehilite"><pre><span></span><code><span class="n">def</span><span class="w"> </span><span class="n">graph_comparison</span><span class="p">(</span><span class="n">var_gt</span><span class="p">,</span><span class="w"> </span><span class="n">var_sim</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">df_weather</span><span class="p">,</span><span class="w"> </span><span class="n">df_gt</span><span class="p">)</span><span class="err">:</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">plt</span><span class="p">.</span><span class="n">rcParams</span><span class="o">[</span><span class="n">&quot;figure.figsize&quot;</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">[</span><span class="n">7.50, 3.50</span><span class="o">]</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">plt</span><span class="p">.</span><span class="n">rcParams</span><span class="o">[</span><span class="n">&quot;figure.autolayout&quot;</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">True</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">ax1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">plt</span><span class="p">.</span><span class="n">subplot</span><span class="p">()</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">l1</span><span class="p">,</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ax1</span><span class="p">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df_weather</span><span class="o">[</span><span class="n">&quot;Jour&quot;</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="o">[</span><span class="n">&quot;numPhase&quot;</span><span class="o">][</span><span class="n">0,0,:</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">label</span><span class="o">=</span><span class="ss">&quot;sim&quot;</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">ax2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ax1</span><span class="p">.</span><span class="n">twinx</span><span class="p">()</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">l2</span><span class="p">,</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ax2</span><span class="p">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df_weather</span><span class="o">[</span><span class="n">&quot;Jour&quot;</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="o">[</span><span class="n">var_sim</span><span class="o">][</span><span class="n">0,0,:</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;red&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">label</span><span class="o">=</span><span class="n">var_sim</span><span class="o">+</span><span class="ss">&quot; (sim)&quot;</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">l3</span><span class="p">,</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ax2</span><span class="p">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df_gt</span><span class="o">[</span><span class="n">&quot;Jour&quot;</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">df_gt</span><span class="o">[</span><span class="n">var_gt</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;orange&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">label</span><span class="o">=</span><span class="n">var_gt</span><span class="o">+</span><span class="ss">&quot; (sarrah)&quot;</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="err">#</span><span class="w"> </span><span class="n">plt</span><span class="p">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df_weather</span><span class="o">[</span><span class="n">&quot;Jour&quot;</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="o">[</span><span class="n">&quot;numPhase&quot;</span><span class="o">][</span><span class="n">0,0,:</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">label</span><span class="o">=</span><span class="ss">&quot;numPhase&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="err">#</span><span class="w"> </span><span class="n">plt</span><span class="p">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df_weather</span><span class="o">[</span><span class="n">&quot;Jour&quot;</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="o">[</span><span class="n">var_sim</span><span class="o">][</span><span class="n">0,0,:</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;red&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">label</span><span class="o">=</span><span class="n">var_sim</span><span class="o">+</span><span class="ss">&quot; (sim)&quot;</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="err">#</span><span class="w"> </span><span class="n">plt</span><span class="p">.</span><span class="n">plot</span><span class="p">(</span><span class="n">df_gt</span><span class="o">[</span><span class="n">&quot;Jour&quot;</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">df_gt</span><span class="o">[</span><span class="n">var_gt</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;orange&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">label</span><span class="o">=</span><span class="n">var_gt</span><span class="o">+</span><span class="ss">&quot; (sarrah)&quot;</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">plt</span><span class="p">.</span><span class="n">legend</span><span class="p">(</span><span class="o">[</span><span class="n">l1, l2, l3</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="o">[</span><span class="n">&quot;numPhase&quot;,var_sim+&quot; (sim)&quot;, var_gt+&quot; (sarrah)&quot;</span><span class="o">]</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">plt</span><span class="p">.</span><span class="n">legend</span><span class="p">()</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">plt</span><span class="p">.</span><span class="n">xticks</span><span class="p">(</span><span class="n">rotation</span><span class="o">=</span><span class="mi">45</span><span class="p">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="n">plt</span><span class="p">.</span><span class="n">show</span><span class="p">()</span><span class="w"></span>
+</code></pre></div>
+
+</details>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../bilan_pheno/" class="btn btn-neutral float-left" title="Bilan Pheno"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../data_preparation/" class="btn btn-neutral float-right" title="Data Preparation">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../bilan_pheno/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../data_preparation/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script>var base_url = '../../..';</script>
+    <script src="../../../js/theme_extra.js" defer></script>
+    <script src="../../../js/theme.js" defer></script>
+      <script src="../../../search/main.js" defer></script>
+    <script defer>
+        window.onload = function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        };
+    </script>
+
+</body>
+</html>

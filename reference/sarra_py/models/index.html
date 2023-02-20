@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../../img/favicon.ico" />
+    <title>Models - SARRA-Py</title>
+    <link rel="stylesheet" href="../../../css/theme.css" />
+    <link rel="stylesheet" href="../../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Models";
+        var mkdocs_page_input_path = "reference/sarra_py/models.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <script src="../../../js/jquery-3.6.0.min.js" defer></script>
+    <!--[if lt IE 9]>
+      <script src="../../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js"></script>
+      <script>hljs.initHighlightingOnLoad();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../../.." class="icon icon-home"> SARRA-Py
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../../docs/model_formalisms/">Model formalisms</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../../docs/spatialization_strategy/">Spatialization strategy</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Tutorial</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../../docs/tutorial/00_-_Running_a_simulation/">00 - Running a simulation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Reference</span></p>
+              <ul class="current">
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Sarra Py</a>
+    <ul class="current">
+                <li class="toctree-l2"><a class="reference internal" href="../bilan_carbo/">Bilan Carbo</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../bilan_hydro/">Bilan Hydro</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../bilan_pheno/">Bilan Pheno</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../comparison_tools_old/">Comparison Tools Old</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../data_preparation/">Data Preparation</a>
+                </li>
+                <li class="toctree-l2"><a class="reference internal" href="../">Index</a>
+                </li>
+                <li class="toctree-l2 current"><a class="reference internal current" href="./">Models</a>
+    <ul class="current">
+    <li class="toctree-l3"><a class="reference internal" href="#functions">Functions</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#run_model">run_model</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../..">SARRA-Py</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../.." class="icon icon-home" alt="Docs"></a> &raquo;</li>
+          <li>Reference &raquo;</li>
+          <li>Sarra Py &raquo;</li>
+      <li>Models</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="module-sarra_pymodels">Module sarra_py.models</h1>
+<details class="example">
+<summary>View Source</summary>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span> <span class="nn">.bilan_pheno</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="kn">from</span> <span class="nn">.bilan_carbo</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="kn">from</span> <span class="nn">.bilan_hydro</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="kn">from</span> <span class="nn">.data_preparation</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span> <span class="k">as</span> <span class="n">tqdm</span>
+
+<span class="k">def</span> <span class="nf">run_model</span><span class="p">(</span><span class="n">paramVariete</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">,</span> <span class="n">paramTypeSol</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    This is the functions list adapted from the procedures of the SARRA-H v42 model.</span>
+
+<span class="sd">    Args:</span>
+
+<span class="sd">        paramVariete (_type_): _description_</span>
+
+<span class="sd">        paramITK (_type_): _description_</span>
+
+<span class="sd">        paramTypeSol (_type_): _description_</span>
+
+<span class="sd">        data (_type_): _description_</span>
+
+<span class="sd">        duration (_type_): _description_</span>
+
+<span class="sd">    Returns:</span>
+
+<span class="sd">        _type_: _description_</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">duration</span><span class="p">)):</span>
+
+        <span class="c1"># calculating daily thermal time, independently of sowing date</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">calculate_daily_thermal_time</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="c1"># updating phenological stages</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">EvalPhenoSarrahV3</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="c1"># sum of thermal sime is being computed from the day the crop is sown, including the day of sowing</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">calculate_sum_of_thermal_time</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="c1"># water balance</span>
+
+        <span class="c1"># evalIrrigPhase sp&amp;cifique de l&#39;irrigation automatique, on peut presque le conditionner au irrigAuto==True</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">EvalIrrigPhase</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">)</span>
+
+        <span class="c1"># sums rainfall and irrigation history</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">calculate_total_water_availability</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="c1"># can be conditioned to the presence of mulch</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">RempliMc</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">EvalRunOff</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramTypeSol</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">EvolRurCstr2</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">)</span>
+
+        <span class="c1"># computation of filling of the tanks is done after other computations related to water,</span>
+
+        <span class="c1"># as we consider filling is taken into consideration at the end of the day</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">rempliRes</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="c1"># transpiration</span>
+
+        <span class="c1"># estimation of the fraction of evaporable soil water (fesw)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_fesw</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_kce</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_soil_potential_evaporation</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_soil_evaporation</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_FEMcW_and_update_mulch_water_stock</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_ftsw</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_kcp</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_potential_plant_transpiration</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_kcTot</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_pFact</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_cstr</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_plant_transpiration</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="c1"># water consumption</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">ConsoResSep</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span> <span class="c1"># ***bileau***; exmodules 1 &amp; 2 # trad O</span>
+
+        <span class="c1"># # phenologie</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_root_growth_speed</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="c1"># # bilan carbone</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_ltr</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_KAssim</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_conv</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="n">data</span><span class="p">,</span><span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="c1"># adjusting for sowing densité, in</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">adjust_for_sowing_density</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">,</span> <span class="n">direction</span> <span class="o">=</span> <span class="s2">&quot;in&quot;</span><span class="p">)</span> <span class="c1"># ***bilancarbonsarra*** # trad OK</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_assimPot</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_assim</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">calculate_maintainance_respiration</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_total_biomass</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_total_biomass_stade_ip</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_total_biomass_at_flowering_stage</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_potential_yield</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_potential_yield_delta</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_aboveground_biomass</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_reallocation</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_root_biomass</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">EvalFeuilleTigeSarrahV4</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_vegetative_biomass</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">calculate_canopy_specific_leaf_area</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">calculate_leaf_area_index</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_yield_during_filling_phase</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="c1">#phenologie</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">update_photoperiodism</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="c1"># # bilan carbone</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">MortaliteSarraV3</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramITK</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">)</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">adjust_for_sowing_density</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">paramVariete</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s2">&quot;out&quot;</span><span class="p">)</span>
+
+        <span class="c1"># data = BiomMcUBTSV3(j, data, paramITK) # ***bilancarbonsarra***, exmodules 2</span>
+
+        <span class="c1"># data = MAJBiomMcSV3(data) # ***bilancarbonsarra***, exmodules 2</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">estimate_critical_nitrogen_concentration</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span>
+</code></pre></div>
+
+</details>
+<h2 id="functions">Functions</h2>
+<h3 id="run_model">run_model</h3>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">run_model</span><span class="p">(</span>
+    <span class="n">paramVariete</span><span class="p">,</span>
+    <span class="n">paramITK</span><span class="p">,</span>
+    <span class="n">paramTypeSol</span><span class="p">,</span>
+    <span class="n">data</span><span class="p">,</span>
+    <span class="n">duration</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p>This is the functions list adapted from the procedures of the SARRA-H v42 model.</p>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>paramVariete</td>
+<td><em>type</em></td>
+<td><em>description</em></td>
+<td>None</td>
+</tr>
+<tr>
+<td>paramITK</td>
+<td><em>type</em></td>
+<td><em>description</em></td>
+<td>None</td>
+</tr>
+<tr>
+<td>paramTypeSol</td>
+<td><em>type</em></td>
+<td><em>description</em></td>
+<td>None</td>
+</tr>
+<tr>
+<td>data</td>
+<td><em>type</em></td>
+<td><em>description</em></td>
+<td>None</td>
+</tr>
+<tr>
+<td>duration</td>
+<td><em>type</em></td>
+<td><em>description</em></td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>type</em></td>
+<td><em>description</em></td>
+</tr>
+</tbody>
+</table>
+<details class="example">
+<summary>View Source</summary>
+<div class="codehilite"><pre><span></span><code><span class="nt">def</span><span class="w"> </span><span class="nt">run_model</span><span class="o">(</span><span class="nt">paramVariete</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">,</span><span class="w"> </span><span class="nt">paramTypeSol</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">duration</span><span class="o">):</span><span class="w"></span>
+
+<span class="w">    </span><span class="s2">&quot;&quot;&quot;</span>
+
+<span class="s2">    This is the functions list adapted from the procedures of the SARRA-H v42 model.</span>
+
+<span class="s2">    Args:</span>
+
+<span class="s2">        paramVariete (_type_): _description_</span>
+
+<span class="s2">        paramITK (_type_): _description_</span>
+
+<span class="s2">        paramTypeSol (_type_): _description_</span>
+
+<span class="s2">        data (_type_): _description_</span>
+
+<span class="s2">        duration (_type_): _description_</span>
+
+<span class="s2">    Returns:</span>
+
+<span class="s2">        _type_: _description_</span>
+
+<span class="s2">    &quot;&quot;&quot;</span><span class="w"></span>
+
+<span class="w">    </span><span class="nt">for</span><span class="w"> </span><span class="nt">j</span><span class="w"> </span><span class="nt">in</span><span class="w"> </span><span class="nt">tqdm</span><span class="o">(</span><span class="nt">range</span><span class="o">(</span><span class="nt">duration</span><span class="o">)):</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">calculating</span><span class="w"> </span><span class="nt">daily</span><span class="w"> </span><span class="nt">thermal</span><span class="w"> </span><span class="nt">time</span><span class="o">,</span><span class="w"> </span><span class="nt">independently</span><span class="w"> </span><span class="nt">of</span><span class="w"> </span><span class="nt">sowing</span><span class="w"> </span><span class="nt">date</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">calculate_daily_thermal_time</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">updating</span><span class="w"> </span><span class="nt">phenological</span><span class="w"> </span><span class="nt">stages</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">EvalPhenoSarrahV3</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">sum</span><span class="w"> </span><span class="nt">of</span><span class="w"> </span><span class="nt">thermal</span><span class="w"> </span><span class="nt">sime</span><span class="w"> </span><span class="nt">is</span><span class="w"> </span><span class="nt">being</span><span class="w"> </span><span class="nt">computed</span><span class="w"> </span><span class="nt">from</span><span class="w"> </span><span class="nt">the</span><span class="w"> </span><span class="nt">day</span><span class="w"> </span><span class="nt">the</span><span class="w"> </span><span class="nt">crop</span><span class="w"> </span><span class="nt">is</span><span class="w"> </span><span class="nt">sown</span><span class="o">,</span><span class="w"> </span><span class="nt">including</span><span class="w"> </span><span class="nt">the</span><span class="w"> </span><span class="nt">day</span><span class="w"> </span><span class="nt">of</span><span class="w"> </span><span class="nt">sowing</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">calculate_sum_of_thermal_time</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">water</span><span class="w"> </span><span class="nt">balance</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">evalIrrigPhase</span><span class="w"> </span><span class="nt">sp</span><span class="o">&amp;</span><span class="nt">cifique</span><span class="w"> </span><span class="nt">de</span><span class="w"> </span><span class="nt">l</span><span class="err">&#39;</span><span class="nt">irrigation</span><span class="w"> </span><span class="nt">automatique</span><span class="o">,</span><span class="w"> </span><span class="nt">on</span><span class="w"> </span><span class="nt">peut</span><span class="w"> </span><span class="nt">presque</span><span class="w"> </span><span class="nt">le</span><span class="w"> </span><span class="nt">conditionner</span><span class="w"> </span><span class="nt">au</span><span class="w"> </span><span class="nt">irrigAuto</span><span class="o">==</span><span class="nt">True</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">EvalIrrigPhase</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">sums</span><span class="w"> </span><span class="nt">rainfall</span><span class="w"> </span><span class="nt">and</span><span class="w"> </span><span class="nt">irrigation</span><span class="w"> </span><span class="nt">history</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">calculate_total_water_availability</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">can</span><span class="w"> </span><span class="nt">be</span><span class="w"> </span><span class="nt">conditioned</span><span class="w"> </span><span class="nt">to</span><span class="w"> </span><span class="nt">the</span><span class="w"> </span><span class="nt">presence</span><span class="w"> </span><span class="nt">of</span><span class="w"> </span><span class="nt">mulch</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">RempliMc</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">EvalRunOff</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramTypeSol</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">EvolRurCstr2</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">computation</span><span class="w"> </span><span class="nt">of</span><span class="w"> </span><span class="nt">filling</span><span class="w"> </span><span class="nt">of</span><span class="w"> </span><span class="nt">the</span><span class="w"> </span><span class="nt">tanks</span><span class="w"> </span><span class="nt">is</span><span class="w"> </span><span class="nt">done</span><span class="w"> </span><span class="nt">after</span><span class="w"> </span><span class="nt">other</span><span class="w"> </span><span class="nt">computations</span><span class="w"> </span><span class="nt">related</span><span class="w"> </span><span class="nt">to</span><span class="w"> </span><span class="nt">water</span><span class="o">,</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">as</span><span class="w"> </span><span class="nt">we</span><span class="w"> </span><span class="nt">consider</span><span class="w"> </span><span class="nt">filling</span><span class="w"> </span><span class="nt">is</span><span class="w"> </span><span class="nt">taken</span><span class="w"> </span><span class="nt">into</span><span class="w"> </span><span class="nt">consideration</span><span class="w"> </span><span class="nt">at</span><span class="w"> </span><span class="nt">the</span><span class="w"> </span><span class="nt">end</span><span class="w"> </span><span class="nt">of</span><span class="w"> </span><span class="nt">the</span><span class="w"> </span><span class="nt">day</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">rempliRes</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">transpiration</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">estimation</span><span class="w"> </span><span class="nt">of</span><span class="w"> </span><span class="nt">the</span><span class="w"> </span><span class="nt">fraction</span><span class="w"> </span><span class="nt">of</span><span class="w"> </span><span class="nt">evaporable</span><span class="w"> </span><span class="nt">soil</span><span class="w"> </span><span class="nt">water</span><span class="w"> </span><span class="o">(</span><span class="nt">fesw</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_fesw</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_kce</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_soil_potential_evaporation</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_soil_evaporation</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_FEMcW_and_update_mulch_water_stock</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_ftsw</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_kcp</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_potential_plant_transpiration</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_kcTot</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_pFact</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_cstr</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_plant_transpiration</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">water</span><span class="w"> </span><span class="nt">consumption</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">ConsoResSep</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="o">***</span><span class="nt">bileau</span><span class="o">***;</span><span class="w"> </span><span class="nt">exmodules</span><span class="w"> </span><span class="nt">1</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="nt">2</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nt">trad</span><span class="w"> </span><span class="nt">O</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nt">phenologie</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_root_growth_speed</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nt">bilan</span><span class="w"> </span><span class="nt">carbone</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_ltr</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_KAssim</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_conv</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="nt">data</span><span class="o">,</span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">adjusting</span><span class="w"> </span><span class="nt">for</span><span class="w"> </span><span class="nt">sowing</span><span class="w"> </span><span class="nt">densité</span><span class="o">,</span><span class="w"> </span><span class="nt">in</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">adjust_for_sowing_density</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">,</span><span class="w"> </span><span class="nt">direction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;in&quot;</span><span class="o">)</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="o">***</span><span class="nt">bilancarbonsarra</span><span class="o">***</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nt">trad</span><span class="w"> </span><span class="nt">OK</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_assimPot</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_assim</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">calculate_maintainance_respiration</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_total_biomass</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_total_biomass_stade_ip</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_total_biomass_at_flowering_stage</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_potential_yield</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_potential_yield_delta</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_aboveground_biomass</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_reallocation</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_root_biomass</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">EvalFeuilleTigeSarrahV4</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_vegetative_biomass</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">calculate_canopy_specific_leaf_area</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">calculate_leaf_area_index</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_yield_during_filling_phase</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="p">#</span><span class="nn">phenologie</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">update_photoperiodism</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nt">bilan</span><span class="w"> </span><span class="nt">carbone</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">MortaliteSarraV3</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">adjust_for_sowing_density</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramVariete</span><span class="o">,</span><span class="w"> </span><span class="nt">direction</span><span class="o">=</span><span class="s2">&quot;out&quot;</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">BiomMcUBTSV3</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">,</span><span class="w"> </span><span class="nt">paramITK</span><span class="o">)</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="o">***</span><span class="nt">bilancarbonsarra</span><span class="o">***,</span><span class="w"> </span><span class="nt">exmodules</span><span class="w"> </span><span class="nt">2</span><span class="w"></span>
+
+<span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">MAJBiomMcSV3</span><span class="o">(</span><span class="nt">data</span><span class="o">)</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="o">***</span><span class="nt">bilancarbonsarra</span><span class="o">***,</span><span class="w"> </span><span class="nt">exmodules</span><span class="w"> </span><span class="nt">2</span><span class="w"></span>
+
+<span class="w">        </span><span class="nt">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">estimate_critical_nitrogen_concentration</span><span class="o">(</span><span class="nt">j</span><span class="o">,</span><span class="w"> </span><span class="nt">data</span><span class="o">)</span><span class="w"></span>
+
+<span class="w">    </span><span class="nt">return</span><span class="w"> </span><span class="nt">data</span><span class="w"></span>
+</code></pre></div>
+
+</details>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../" class="btn btn-neutral float-left" title="Index"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+  </span>
+</div>
+    <script>var base_url = '../../..';</script>
+    <script src="../../../js/theme_extra.js" defer></script>
+    <script src="../../../js/theme.js" defer></script>
+      <script src="../../../search/main.js" defer></script>
+    <script defer>
+        window.onload = function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        };
+    </script>
+
+</body>
+</html>
