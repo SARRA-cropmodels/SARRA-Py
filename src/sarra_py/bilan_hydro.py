@@ -1,5 +1,6 @@
 import numpy as np
 import xarray as xr
+from bilan_carbo import estimate_kcp
 
 def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
     """
