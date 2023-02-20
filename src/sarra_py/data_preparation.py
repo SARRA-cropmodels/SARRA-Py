@@ -107,10 +107,15 @@ def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
         dataarray = dataarray.squeeze("band").drop_vars(["band", "spatial_ref"])
         dataarray.attrs = {}
 
-        try:
-            dataarray_full = xr.concat([dataarray_full, dataarray],"time")
-        except:
+        if not dataarray_full :
             dataarray_full = dataarray
+        else: 
+            dataarray_full = xr.concat([dataarray_full, dataarray],"time")
+
+        # try:
+        #     dataarray_full = xr.concat([dataarray_full, dataarray],"time")
+        # except:
+        #     dataarray_full = dataarray
 
     dataarray_full.rio.write_crs(4326,inplace=True)
     data["rain"] = dataarray_full
@@ -217,7 +222,7 @@ def load_paramVariete(file_paramVariete) :
     with open(os.path.join('../data/params/variety/',file_paramVariete), 'r') as stream:
         paramVariete = yaml.safe_load(stream)
     if paramVariete["feuilAeroBase"] == 0.1 :
-        raise exception()
+        raise Exception()
     return paramVariete
 
 
