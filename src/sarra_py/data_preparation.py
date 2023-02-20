@@ -107,11 +107,11 @@ def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
         dataarray = dataarray.squeeze("band").drop_vars(["band", "spatial_ref"])
         dataarray.attrs = {}
 
-        if not dataarray_full :
-            dataarray_full = dataarray
-        else: 
+        if 'dataarray_full' in locals():
             dataarray_full = xr.concat([dataarray_full, dataarray],"time")
-
+        else:
+            dataarray_full = dataarray
+            
         # try:
         #     dataarray_full = xr.concat([dataarray_full, dataarray],"time")
         # except:
