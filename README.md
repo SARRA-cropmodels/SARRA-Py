@@ -20,6 +20,8 @@ SARRA-Py integrates tools to facilitate regional scale analyses. We aim its code
 
 These instructions will get you a copy of the project up and running on your machine.
 
+This package will work with Python 3.8.x and 3.9.x. It will not work with Python 3.10.x because of a dependency issue with pcse.
+
 Clone this repository and navigate to the directory:
 
     git clone https://github.com/SARRA-cropmodels/SARRA-Py/
