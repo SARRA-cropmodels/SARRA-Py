@@ -9,38 +9,43 @@ SARRA-Py formalisms are based on those of its predecessors. Its main difference 
 SARRA-Py integrates tools to facilitate regional scale analyses. We aim its code and formalisms to be open and evolutive, recognizing that any new scientific application may require some adaptation of the tool. SARRA-Py package is provided with notebook examples to illustrate multiple use cases.
 
 ## Table of Contents
-- [Getting Started](#getting-started)
-- [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Contributing](#contributing)
 - [Support](#support)
 - [License](#license)
 
-## Getting Started
-
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See [deployment](#deployment) for notes on how to deploy the project on a live system.
-
-### Prerequisites
-
-What things you need to install the software and how to install them:
-
-
 ### Installation
 
-A step by step series of examples that tell you how to get a development env running:
+These instructions will get you a copy of the project up and running on your machine.
 
+Clone this repository and navigate to the directory:
+
+    ```
+    git clone https://github.com/SARRA-cropmodels/SARRA-Py/
+    cd SARRA-Py
+    ```
+
+(optional) set up and activate a virtual environment:
+
+    ```
+    python3 -m venv venv
+    pyenv activate venv
+    ```
+
+Install package and its dependencies with pip:
+    
+    ```
+    pip install .
+    ```
 
 ## Usage
 
-[Instructions on how to use the project]
-
-## Future work
-A discussion of any planned updates or improvements to the module, and how users can contribute to its development.
+This package is provided with a set of notebooks to illustrate its use. You can find them in the `notebooks` folder. 
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](https://github.com/[your-github-username]/SARRA-Py/blob/main/CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
+Please read [CONTRIBUTING.md](https://github.com/SARRA-cropmodels/SARRA-Py/blob/main/CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
 
 ## Support
 
@@ -48,4 +53,4 @@ If you have any questions, feel free to [post an issue in our GitHub repo](https
 
 ## License
 
-This project is licensed under the [license name] license - see the [LICENSE](https://github.com/[your-github-username]/SARRA-Py/blob/main/LICENSE) file for details.
+This project is licensed under the GNU GPLv3 license - see the [LICENSE](https://github.com/SARRA-cropmodels/SARRA-Py/blob/main/LICENSE) file for details.
