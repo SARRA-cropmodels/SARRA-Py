@@ -21,27 +21,21 @@ These instructions will get you a copy of the project up and running on your mac
 
 Clone this repository and navigate to the directory:
 
-    ```
     git clone https://github.com/SARRA-cropmodels/SARRA-Py/
     cd SARRA-Py
-    ```
 
-(optional) set up and activate a virtual environment:
+(optional) set up and activate a virtual environment for a clean installation of dependencies:
 
-    ```
-    python3 -m venv venv
-    pyenv activate venv
-    ```
+    pyenv virtualenv 3.x.x venv_sarra_py
+    pyenv activate venv_sarra_py
 
 Install package and its dependencies with pip:
     
-    ```
     pip install .
-    ```
 
 ## Usage
 
-This package is provided with a set of notebooks to illustrate its use. You can find them in the `notebooks` folder. 
+This package is provided with a set of Jupyter notebooks to illustrate its use. You can find them in the `notebooks` folder. Do not forget to switch to a IPython kernel calling for your virtual environment if created.
 
 ## Contributing
 
