@@ -1,5 +1,9 @@
 numpy
 pandas
+xarray
 pcse
 astral
-xarray
+matplotlib
+tqdm
+rasterio
+rioxarray
