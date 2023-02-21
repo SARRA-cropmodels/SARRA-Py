@@ -31,7 +31,7 @@ def build_rainfall_files_df(rainfall_path, date_start, duration):
         _type_: _description_
     """
     rainfall_files = [f for f in listdir(rainfall_path) if isfile(join(rainfall_path, f))]
-    rainfall_files_df = pd.DataFrame({"filename":rainfall_files})
+    rainfall_files_df = pd.DataFrame({"filename":rainfall_files}).sort_values("filename").reset_index(drop=True)
 
     rainfall_files_df["date"] = rainfall_files_df.apply(
         lambda x: datetime.date(
@@ -101,20 +101,16 @@ def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
 
     TAMSAT_files_df = build_rainfall_files_df(TAMSAT_path, date_start, duration)
 
-    dataarray_full = None
-
     for i in range(len(TAMSAT_files_df)):
 
         dataarray = rioxarray.open_rasterio(os.path.join(TAMSAT_path,TAMSAT_files_df.loc[i,"filename"]))
         dataarray = dataarray.squeeze("band").drop_vars(["band", "spatial_ref"])
         dataarray.attrs = {}
 
-        dataarray_full = xr.concat([dataarray_full, dataarray],"time")
-
-        # try:
-        #     dataarray_full = xr.concat([dataarray_full, dataarray],"time")
-        # except:
-        #     dataarray_full = dataarray
+        try:
+            dataarray_full = xr.concat([dataarray_full, dataarray],"time")
+        except:
+            dataarray_full = dataarray
 
     dataarray_full.rio.write_crs(4326,inplace=True)
     data["rain"] = dataarray_full
@@ -181,8 +177,6 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
                 del dataarray_full
             except:
                 pass
-
-            dataarray_full = None
             
             for i in range(duration) :
                 dataarray = rioxarray.open_rasterio(os.path.join(AgERA5_data_path,variable,AgERA5_files_df_collection[variable].loc[i,"filename"]))
@@ -190,12 +184,10 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
                 dataarray = dataarray.squeeze("band").drop_vars(["band"])
                 # TODO: add dataarray.attrs = {} to precise units and long_name
 
-                # try:
-                #     dataarray_full = xr.concat([dataarray_full, dataarray],"time")
-                # except:
-                #     dataarray_full = dataarray
-
-                dataarray_full = xr.concat([dataarray_full, dataarray],"time")
+                try:
+                    dataarray_full = xr.concat([dataarray_full, dataarray],"time")
+                except:
+                    dataarray_full = dataarray
 
 
             # storing the variable in the data dictionary
