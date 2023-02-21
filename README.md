@@ -11,6 +11,7 @@ SARRA-Py integrates tools to facilitate regional scale analyses. We aim its code
 ## Table of Contents
 - [Installation](#installation)
 - [Usage](#usage)
+- [Documentation](#documentation)
 - [Contributing](#contributing)
 - [Support](#support)
 - [License](#license)
@@ -36,6 +37,10 @@ Install package and its dependencies with pip:
 ## Usage
 
 This package is provided with a set of Jupyter notebooks to illustrate its use. You can find them in the `notebooks` folder. Do not forget to switch to a IPython kernel calling for your virtual environment if created.
+
+## Documentation
+
+The documentation is available at [https://sarra-cropmodels.github.io/SARRA-Py/](https://sarra-cropmodels.github.io/SARRA-Py/).
 
 ## Contributing
 
