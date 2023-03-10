@@ -29,8 +29,13 @@ Clone this repository and navigate to the directory:
 
 (optional) set up and activate a virtual environment for a clean installation of dependencies:
 
-    pyenv virtualenv 3.x.x venv_sarra_py
-    pyenv activate venv_sarra_py
+```bash
+conda create --name sarra_py
+conda activate sarra_py
+conda install pip
+pip install -r requirements.txt
+pip install jupyterlab
+```
 
 Install package and its dependencies with pip:
     
@@ -38,7 +43,7 @@ Install package and its dependencies with pip:
 
 ## Usage
 
-This package is provided with a set of Jupyter notebooks to illustrate its use. You can find them in the `notebooks` folder. Do not forget to switch to a IPython kernel calling for your virtual environment if created.
+This package is provided with a set of Jupyter notebooks to illustrate its use. You can find them in the `notebooks` folder (to use it you can install jupyter `pip install jupyterlab` and run it `jupyter-lab`. Do not forget to switch to a IPython kernel calling for your virtual environment if created.
 
 ## Documentation
 
