@@ -30,14 +30,13 @@ Clone this repository and navigate to the directory:
 (optional) set up and activate a virtual environment for a clean installation of dependencies:
 
 ```bash
-conda create --name sarra_py
+conda create --name sarra_py python=3.9
 conda activate sarra_py
 conda install pip
 pip install -r requirements.txt
-pip install jupyterlab
 ```
 
-Install package and its dependencies with pip:
+Install **sarra_py** package and its dependencies with pip:
     
     pip install .
 
