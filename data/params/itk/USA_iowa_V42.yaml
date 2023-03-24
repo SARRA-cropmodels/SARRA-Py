@@ -1,0 +1,32 @@
+DateSemis: 2021-2-1
+KI: 0.0
+KNLit: 0.0
+KNUp: 0.0
+KT: 0.0
+NI: .nan
+coefMc: 0.0
+dateFin: 300.0
+
+densite: 86500.0 # sowing density (ha-1)
+
+nbjTestSemis: 0
+precision: 0.0
+profRacIni: 0.0
+seuilEauSemis: 5.0
+
+# irrigation related
+irrigAuto: false
+irrigAutoTarget: 0.0
+maxIrrig: 0.0
+
+# mulch related
+surfMc: 1.0 # overing capacity of the mulch (ha/t)
+biomIniMc: 0.0 # initial mulch biomass (kg/ha)
+humSatMc: 0.0 # saturation point of mulch, kg H2O/kg biomass (% m/m)
+mulch: 1.0 # permanent mulch effect
+
+# non utilisés dans le modèle python
+DisMc: 0
+TxRecolte: 0.0
+TxaTerre: 0.0
+NbUBT: 10.0
