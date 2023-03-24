@@ -1,0 +1,9 @@
+numpy
+pandas
+xarray
+pcse
+astral
+matplotlib
+tqdm
+rasterio
+rioxarray
