@@ -1,0 +1,33 @@
+DateSemis: 2017-2-1
+NI: .nan # intensification parameter ; if .nan computation will be done without taking intensification into consideration
+coefMc: 0.0 # impact of permanent covering effect on estimation of coefficient of evaporation from the soil (kce)
+
+densite: 53333.0 # sowing density (ha-1)
+
+nbjTestSemis: 0 # parameter for testing sowing date
+profRacIni: 0.0 # used in the initiatlization of root_tank_capacity
+seuilEauSemis: 8.0 # if surface_tank_stock is above this threshold, crop is initiated
+
+# irrigation related
+irrigAuto: false
+irrigAutoTarget: 0.0
+maxIrrig: 0.0
+
+# mulch related
+surfMc: 1.0 # overing capacity of the mulch (ha/t)
+biomIniMc: 0.0 # initial mulch biomass (kg/ha)
+humSatMc: 0.0 # saturation point of mulch, kg H2O/kg biomass (% m/m)
+mulch: 1.0 # permanent mulch effect
+
+KI: 0.0 # coefficient used in mulch calculations
+KNLit: 0.0 # coefficient used in mulch calculations
+KNUp: 0.0 # coefficient used in mulch calculations
+KT: 0.0 # coefficient used in mulch calculations
+
+# non utilisés dans le modèle python
+DisMc: 0
+TxRecolte: 0.0
+TxaTerre: 0.0
+NbUBT: 10.0
+dateFin: 300.0 # does not seem to be used ?
+precision: 0.0 
