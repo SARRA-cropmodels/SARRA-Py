@@ -325,17 +325,31 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
     soil_type_file_path = "../data/assets/iSDA_at_TAMSAT_resolution_zeroclass_1E6.tif"
     dataarray = rioxarray.open_rasterio(soil_type_file_path)
 
+    #TODO: adjust this code so it does not have to be changed manually when working on another country
+    #TODO: it should probably use the boundaries of the xarray dataset instead
     # crop to the area of interest
     area = {
         'burkina': [16, -6, 9, 3], #lat,lon lat,lon
+        'niger':[23.8, -0.5, 11.3, 15.9],
         }
-    selected_area = "burkina"
+    selected_area = "niger"
 
     dataarray = dataarray.where((dataarray.y < area[selected_area][0])
                                 & (dataarray.y > area[selected_area][2])
                                 & (dataarray.x > area[selected_area][1])
                                 & (dataarray.x < area[selected_area][3])
                             ).dropna(dim='y', how='all').dropna(dim='x', how='all')
+    
+    # proposed fix :
+    # # determine the boundaries of the data xarray before cropping
+    # xmin, ymax, ymin, xmax = dataarray.x.min(), dataarray.y.max(), dataarray.y.min(), dataarray.x.max()
+
+    # # crop to the area of interest
+    # dataarray = dataarray.where((dataarray.y < ymax)
+    #                             & (dataarray.y > ymin)
+    #                             & (dataarray.x > xmin)
+    #                             & (dataarray.x < xmax)
+    #                         ).dropna(dim='y', how='all').dropna(dim='x', how='all')
 
     # resample to match the grid resolution
     dataarray = dataarray.rio.reproject_match(data, nodata=np.nan)
