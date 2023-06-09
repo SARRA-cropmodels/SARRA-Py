@@ -179,6 +179,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     #   BiomMc := BiomIniMc;
     data["biomMc"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
     data["biomMc"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of crop residues (mulch)"}
+    data["biomMc"] = data["biomMc"].astype("float32")
 
 
     # ?
@@ -189,6 +190,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     # ?
     #   Ltr := 1;
     data["ltr"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), 1.0))
+    data["ltr"] = data["ltr"].astype("float32")
 
 
     # Initial biomass of stem residues as litter (kg/ha)
@@ -196,6 +198,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     #   LitTiges := BiomIniMc;
     data["LitTige"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
     data["LitTige"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of stem residues as litter"}
+    data["LitTige"] = data["LitTige"].astype("float32")
 
     ####### fin variables qui viennent de initplotMc
 
@@ -314,6 +317,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     for variable in variables :
         data[variable] = (data["rain"].dims, np.zeros(shape=(duration, grid_width, grid_height)))
         data[variable].attrs = {"units":variables[variable][1], "long_name":variables[variable][0]}
+        data[variable] = data[variable].astype("float32")
 
     return data
 
