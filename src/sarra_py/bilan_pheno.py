@@ -585,6 +585,40 @@ def calculate_daily_thermal_time(j, data, paramVariete):
 
 
 
+def calculate_once_daily_thermal_time(data, paramVariete):
+    """calculating daily thermal time
+    Translated from the EvalDegresJourSarrahV3 procedure of the phenologie.pas and exmodules.pas files of theSarra-H model, Pascal version.
+    Pb de méthode !?
+    v1:= ((Max(TMin,TBase)+Min(TOpt1,TMax))/2 -TBase )/( TOpt1 - TBase);
+    v2:= (TL - max(TMax,TOpt2)) / (TL - TOpt2);
+    v:= (v1 * (min(TMax,TOpt1) - TMin)+(min(TOpt2,max(TOpt1,TMax)) - TOpt1) + v2 * (max(TOpt2,TMax)-TOpt2))/( TMax-TMin);
+    DegresDuJour:= v * (TOpt1-TBase);
+
+    
+    #   If Tmoy <= Topt2 then
+    #      DegresDuJour:= max(min(TOpt1,TMoy),TBase)-Tbase
+    #   else
+    #      DegresDuJour := (TOpt1-TBase) * (1 - ( (min(TL, TMoy) - TOpt2 )/(TL -TOpt2)));
+    #    If (Numphase >=1) then
+    #         SomDegresJour := SomDegresJour + DegresDuJour
+    #    else SomDegresJour := 0;
+
+    Returns:
+        _type_: _description_
+    """
+
+    data["ddj"].data = np.where(
+        data["tpMoy"] <= paramVariete["TOpt2"],
+        np.maximum(np.minimum(paramVariete["TOpt1"], data["tpMoy"]), paramVariete["TBase"]) - paramVariete["TBase"],
+        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], data["tpMoy"]) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
+    ) 
+
+    return data
+
+
+
+
+
 
 def calculate_sum_of_thermal_time(j, data, paramVariete):
     """
