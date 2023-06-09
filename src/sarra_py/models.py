@@ -4,9 +4,8 @@ from .bilan_hydro import *
 from .data_preparation import *
 
 from tqdm import tqdm as tqdm
-from numba import jit
 
-@jit(nopython=True)
+
 def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
     """
     This is the functions list adapted from the procedures of the SARRA-H v42 model.
@@ -22,8 +21,7 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
         _type_: _description_
     """
     
-    # for j in tqdm(range(duration)):
-    for j in range(duration):
+    for j in tqdm(range(duration)):
 
         # calculating daily thermal time, independently of sowing date
         data = calculate_daily_thermal_time(j, data, paramVariete)
