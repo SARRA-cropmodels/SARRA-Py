@@ -332,7 +332,7 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
         'burkina': [16, -6, 9, 3], #lat,lon lat,lon
         'niger':[23.8, -0.5, 11.3, 15.9],
         }
-    selected_area = "niger"
+    selected_area = "burkina"
 
     dataarray = dataarray.where((dataarray.y < area[selected_area][0])
                                 & (dataarray.y > area[selected_area][2])
@@ -359,6 +359,7 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
     # add soil type identifier to the dataset
     data["soil_type"] = dataarray
     data["soil_type"] = data["soil_type"] / 1000000 # conversion from 1E6 to 1E0
+    data["soil_type"] = data["soil_type"].astype("float32")
 
     # load correspondance table
     path_soil_type_correspondance = "../data/assets/TypeSol_Moy13_HWSD.csv"
@@ -381,6 +382,7 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
         dict_values[0] = np.nan
         soil_types_converted = np.reshape([dict_values[x.astype(int)] for x in data["soil_type"].to_numpy().flatten()], (grid_width, grid_height))
         data[soil_variable] = (data["soil_type"].dims,soil_types_converted)
+        data[soil_variable] = data[soil_variable].astype("float32")
         # TODO: add dataarray.attrs = {} to precise units and long_name
 
     # converting pourcRuiss to decimal %
@@ -434,6 +436,8 @@ def calc_day_length_raster(data, date_start, duration):
     for j in tqdm(range(duration)):
         for y in range(len(data["y"])):
             data["dureeDuJour"][j,y,:] = calc_day_length(date_start + datetime.timedelta(days=j), data["y"][y])
+
+    data["dureeDuJour"] = data["dureeDuJour"].astype("float32")       
 
     # optional : plot the day length raster
     # data["dureeDuJour"][:,:,0].plot()

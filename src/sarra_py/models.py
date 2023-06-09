@@ -23,9 +23,6 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
     
     for j in tqdm(range(duration)):
 
-        # calculating daily thermal time, independently of sowing date
-        data = calculate_daily_thermal_time(j, data, paramVariete)
-
         # updating phenological stages
         data = EvalPhenoSarrahV3(j, data, paramITK, paramVariete)
 
