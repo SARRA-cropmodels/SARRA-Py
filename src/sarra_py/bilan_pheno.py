@@ -535,14 +535,28 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
     model, Pascal version.
     """
 
+    # testing if there is a value 0 in data["numPhase"]
+    if 0 in data["numPhase"][j,:,:]:
+        # if there is a value 0, we initialize the phenological phases
+        data = testing_for_initialization(j, data, paramITK, paramVariete)
+
+    if 1 in data["numPhase"][j,:,:]:
+        data = update_pheno_phase_1_to_2(j, data, paramVariete)
+
+    if 2 in data["numPhase"][j,:,:]:    
+        data = update_pheno_phase_2_to_3(j, data, paramVariete)
     
-    data = testing_for_initialization(j, data, paramITK, paramVariete)
-    data = update_pheno_phase_1_to_2(j, data, paramVariete)
-    data = update_pheno_phase_2_to_3(j, data, paramVariete)
-    data = update_pheno_phase_3_to_4(j, data)
-    data = update_pheno_phase_4_to_5(j, data, paramVariete)
-    data = update_pheno_phase_5_to_6(j, data, paramVariete)
-    data = update_pheno_phase_6_to_7(j, data, paramVariete)
+    if 3 in data["numPhase"][j,:,:]:    
+        data = update_pheno_phase_3_to_4(j, data)
+    
+    if 4 in data["numPhase"][j,:,:]:    
+        data = update_pheno_phase_4_to_5(j, data, paramVariete)
+
+    if 5 in data["numPhase"][j,:,:]:    
+        data = update_pheno_phase_5_to_6(j, data, paramVariete)
+    
+    if 6 in data["numPhase"][j,:,:]:    
+        data = update_pheno_phase_6_to_7(j, data, paramVariete)
 
     return data
 
