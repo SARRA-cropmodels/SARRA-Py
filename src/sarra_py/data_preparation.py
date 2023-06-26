@@ -136,6 +136,7 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
     Returns:
         _type_: _description_
     """
+    # TODO : make the file listing error-proof regarding the structure of the folder and the file extensions
 
     # getting list of variables
     AgERA5_variables = [path.split("/")[-1] for path in [x[0] for x in os.walk(AgERA5_data_path)][1:]]
