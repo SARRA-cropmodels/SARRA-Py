@@ -1480,7 +1480,7 @@ def calculate_leaf_area_index(j, data):
         xarray.Dataset: The updated xarray dataset with the calculated LAI.
     """
 
-    data["lai"][j:,:,:] = xr.where(
+    data["lai"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] <= 1),
         0,
         np.where(
