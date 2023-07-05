@@ -1760,6 +1760,12 @@ def rempliRes(j, data):
     """
 
     # section 1 : updating the end_of_cycle memory variables
+
+    # in order to save resources, we test if there is at least one pixel at phase 7
+    # and one pixel at changePhase 1 in the current time step before applying the "end_of_cycle" functions
+
+    # if (np.any(data["numPhase"][j,:,:] == 7)) & (np.any(data["changePhase"][j,:,:] == 1)):
+        
     data = update_humPrec_for_end_of_cycle(j, data)
     data = update_hum_for_end_of_cycle(j, data)
     data = update_stRurMaxPrec_for_end_of_cycle(j, data)

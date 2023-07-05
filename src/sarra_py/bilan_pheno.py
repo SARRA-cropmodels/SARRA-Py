@@ -1,6 +1,8 @@
 import numpy as np
 import copy
 import xarray as xr
+from numba import njit
+
 
 def reset(j, data):
 
@@ -16,8 +18,6 @@ def reset(j, data):
   data["numPhase"][j:,:,:] = np.where(data["numPhase"][j,:,:] == 7, 0, data["numPhase"][j,:,:])#[np.newaxis,...]
 
   return data
-
-
 
 
 def testing_for_initialization(j, data, paramITK, paramVariete):
@@ -54,13 +54,13 @@ def testing_for_initialization(j, data, paramITK, paramVariete):
         (data["surface_tank_stock"][j, :, :] >= paramITK["seuilEauSemis"])
         # & (data["startLock"][j,:,:] == 0)
 
-    data["numPhase"][j:, :, :] = xr.where(
+    data["numPhase"][j:, :, :] = np.where(
         condition, 1, data["numPhase"][j, :, :])
 
-    data["changePhase"][j, :, :] = xr.where(
+    data["changePhase"][j, :, :] = np.where(
         condition, 1, data["changePhase"][j, :, :])
 
-    data["seuilTempPhaseSuivante"][j:, :, :] = xr.where(
+    data["seuilTempPhaseSuivante"][j:, :, :] = np.where(
         condition,
         paramVariete["SDJLevee"],
         data["seuilTempPhaseSuivante"][j, :, :],
@@ -521,6 +521,10 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
        grain laiteux au jour de récolte)
     
     7. the day of the harvest
+
+    We first test if the considered day has any pixel with the considered
+    phases, and only if it is the case we either test for initialization or
+    update the phenological phases.
     
     Notes :
 
@@ -535,27 +539,29 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
     model, Pascal version.
     """
 
-    # testing if there is a value 0 in data["numPhase"]
-    if 0 in data["numPhase"][j,:,:]:
-        # if there is a value 0, we initialize the phenological phases
+    # in order to save computational resources, we test if there is
+    # the time step contains any pixel with the considered phases
+    # before testing for initialization or updating the phenological phases
+
+    if np.any(data["numPhase"][j,:,:]==0) :
         data = testing_for_initialization(j, data, paramITK, paramVariete)
 
-    if 1 in data["numPhase"][j,:,:]:
+    if np.any(data["numPhase"][j,:,:]==1) :
         data = update_pheno_phase_1_to_2(j, data, paramVariete)
 
-    if 2 in data["numPhase"][j,:,:]:    
+    if np.any(data["numPhase"][j,:,:]==2) :    
         data = update_pheno_phase_2_to_3(j, data, paramVariete)
     
-    if 3 in data["numPhase"][j,:,:]:    
+    if np.any(data["numPhase"][j,:,:]==3) :    
         data = update_pheno_phase_3_to_4(j, data)
     
-    if 4 in data["numPhase"][j,:,:]:    
+    if np.any(data["numPhase"][j,:,:]==4) :    
         data = update_pheno_phase_4_to_5(j, data, paramVariete)
 
-    if 5 in data["numPhase"][j,:,:]:    
+    if np.any(data["numPhase"][j,:,:]==5) :    
         data = update_pheno_phase_5_to_6(j, data, paramVariete)
     
-    if 6 in data["numPhase"][j,:,:]:    
+    if np.any(data["numPhase"][j,:,:]==6) :    
         data = update_pheno_phase_6_to_7(j, data, paramVariete)
 
     return data
@@ -673,28 +679,92 @@ def update_root_growth_speed(j, data, paramVariete):
         _type_: _description_
     """
 
-    phase_correspondances = {
-        1: paramVariete['VRacLevee'],
-        2: paramVariete['VRacBVP'],
-        3: paramVariete['VRacPSP'],
-        4: paramVariete['VRacRPR'],
-        5: paramVariete['VRacMatu1'],
-        6: paramVariete['VRacMatu2'],
-    }
 
-    for phase in range(1,6):
-        data["vRac"][j:,:,:] = np.where(
-            data["numPhase"][j,:,:] == phase,
-            phase_correspondances[phase],
+    # phase_correspondances = {
+    #     1: paramVariete['VRacLevee'],
+    #     2: paramVariete['VRacBVP'],
+    #     3: paramVariete['VRacPSP'],
+    #     4: paramVariete['VRacRPR'],
+    #     5: paramVariete['VRacMatu1'],
+    #     6: paramVariete['VRacMatu2'],
+    # }
+
+    # for phase in range(1,6):
+    #     data["vRac"][j:,:,:] = np.where(
+    #         data["numPhase"][j,:,:] == phase,
+    #         phase_correspondances[phase],
+    #         data["vRac"][j,:,:],
+    #     )
+
+    # # phase 0 ou 7
+    # data["vRac"][j:,:,:] = np.where(
+    #     (data["numPhase"][j,:,:] == 0) | (data["numPhase"][j,:,:] == 7),
+    #     0,
+    #     data["vRac"][j,:,:],
+    # )
+
+
+    # version that first for presence of given numPhase before applying the update
+    # also, no broadcasting is done as the test is performed on every time slice
+    #? maybe it would be a good idea to do that kind of thing once for all, ie with EvalPhenoSarrahV3
+
+    if np.any(data["numPhase"][j,:,:]==0) :
+        data["vRac"][j,:,:] = np.where(
+            data["numPhase"][j,:,:] == 0,
+            0,
             data["vRac"][j,:,:],
         )
 
-    # phase 0 ou 7
-    data["vRac"][j:,:,:] = np.where(
-        (data["numPhase"][j,:,:] == 0) | (data["numPhase"][j,:,:] == 7),
-        0,
-        data["vRac"][j,:,:],
-    )
+    if np.any(data["numPhase"][j,:,:]==1) :
+        data["vRac"][j,:,:] = np.where(
+            data["numPhase"][j,:,:] == 1,
+            paramVariete['VRacLevee'],
+            data["vRac"][j,:,:],
+        )
+    
+    if np.any(data["numPhase"][j,:,:]==2) :
+        data["vRac"][j,:,:] = np.where(
+            data["numPhase"][j,:,:] == 2,
+            paramVariete['VRacBVP'],
+            data["vRac"][j,:,:],
+        )
+
+    if np.any(data["numPhase"][j,:,:]==3) :
+        data["vRac"][j,:,:] = np.where(
+            data["numPhase"][j,:,:] == 3,
+            paramVariete['VRacPSP'],
+            data["vRac"][j,:,:],
+        )
+
+    if np.any(data["numPhase"][j,:,:]==4) :
+        data["vRac"][j,:,:] = np.where(
+            data["numPhase"][j,:,:] == 4,
+            paramVariete['VRacRPR'],
+            data["vRac"][j,:,:],
+        )
+
+    if np.any(data["numPhase"][j,:,:]==5) :
+        data["vRac"][j,:,:] = np.where(
+            data["numPhase"][j,:,:] == 5,
+            paramVariete['VRacMatu1'],
+            data["vRac"][j,:,:],
+        )
+
+    if np.any(data["numPhase"][j,:,:]==6) :
+        data["vRac"][j,:,:] = np.where(
+            data["numPhase"][j,:,:] == 6,
+            paramVariete['VRacMatu2'],
+            data["vRac"][j,:,:],
+        )
+
+    if np.any(data["numPhase"][j,:,:]==7) :
+        data["vRac"][j,:,:] = np.where(
+            data["numPhase"][j,:,:] == 7,
+            0,
+            data["vRac"][j,:,:],
+        )
+
+
 
     return data
 

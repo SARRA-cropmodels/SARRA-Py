@@ -1,4 +1,4 @@
-DateSemis: 2017-5-1
+DateSemis: 2016-5-1
 NI: .nan # intensification parameter ; if .nan computation will be done without taking intensification into consideration
 coefMc: 0.0 # impact of permanent covering effect on estimation of coefficient of evaporation from the soil (kce)
 

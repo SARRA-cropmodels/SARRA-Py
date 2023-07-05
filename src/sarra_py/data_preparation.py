@@ -30,7 +30,9 @@ def build_rainfall_files_df(rainfall_path, date_start, duration):
     Returns:
         _type_: _description_
     """
-    rainfall_files = [f for f in listdir(rainfall_path) if isfile(join(rainfall_path, f))]
+    #rainfall_files = [f for f in listdir(rainfall_path) if isfile(join(rainfall_path, f))]
+    # version that should be quicker
+    rainfall_files = [f for f in listdir(rainfall_path)]# if isfile(join(rainfall_path, f))]
     rainfall_files_df = pd.DataFrame({"filename":rainfall_files}).sort_values("filename").reset_index(drop=True)
 
     rainfall_files_df["date"] = rainfall_files_df.apply(
@@ -121,6 +123,33 @@ def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
 
 
 
+def load_TAMSAT_data_fast(data, rainfall_data_path, date_start, duration):
+    """
+    This function loops over the rainfall raster files, and loads them into a
+    xarray DataArray, which is then added to the rain data dictionary. It is
+    tailored to the TAMSAT rainfall data files, hence its name.
+
+    Args:
+        data (_type_): _description_
+        TAMSAT_path (_type_): _description_
+        date_start (_type_): _description_
+        duration (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    rainfall_data_path_df = build_rainfall_files_df(rainfall_data_path, date_start, duration)
+    dataarray_full = xr.open_mfdataset([os.path.join(rainfall_data_path,rainfall_data_path_df.loc[i,"filename"]) for i in range(len(rainfall_data_path_df))], concat_dim="time", combine="nested", chunks={"x":100,"y":100})
+    dataarray_full = dataarray_full.squeeze("band").drop_vars(["band"])
+    dataarray_full.rio.write_crs(4326,inplace=True)
+    data["rain"] = dataarray_full["band_data"]
+
+    return data
+
+
+
+
 
 def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
     """
@@ -145,7 +174,9 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
     AgERA5_files_df_collection = {}
 
     for variable in AgERA5_variables:
-        AgERA5_files = [f for f in listdir(os.path.join(AgERA5_data_path,variable)) if isfile(join(os.path.join(AgERA5_data_path,variable), f))]
+        #AgERA5_files = [f for f in listdir(os.path.join(AgERA5_data_path,variable)) if isfile(join(os.path.join(AgERA5_data_path,variable), f))]
+        # alternate version that should be quicker
+        AgERA5_files = [f for f in listdir(os.path.join(AgERA5_data_path,variable))]
         AgERA5_files_df_collection[variable] = pd.DataFrame({"filename":AgERA5_files})
 
         AgERA5_files_df_collection[variable]["date"] = AgERA5_files_df_collection[variable].apply(
@@ -190,7 +221,6 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
                 except:
                     dataarray_full = dataarray
 
-
             # storing the variable in the data dictionary
             data[AgERA5_SARRA_correspondance[variable]] = dataarray_full
             
@@ -198,6 +228,101 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
     data["rg"] = data["rg"]/1000
     
     return data
+
+
+
+
+
+def load_AgERA5_data_fast_dask(data, AgERA5_data_path, date_start, duration):
+    """
+    This function loops over the AgERA5 raster files, and loads them into 
+    xarray DataArray, which are then added to the data dictionary.
+
+    Args:
+        data (_type_): _description_
+        AgERA5_data_path (_type_): _description_
+        date_start (_type_): _description_
+        duration (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    # TODO : make the file listing error-proof regarding the structure of the folder and the file extensions
+
+    # getting list of variables
+    AgERA5_variables = [path.split("/")[-1] for path in [x[0] for x in os.walk(AgERA5_data_path)][1:]]
+
+    # building a dictionary of dataframes containing the list of files for each variable
+    AgERA5_files_df_collection = {}
+
+    for variable in AgERA5_variables:
+        #AgERA5_files = [f for f in listdir(os.path.join(AgERA5_data_path,variable)) if isfile(join(os.path.join(AgERA5_data_path,variable), f))]
+        # alternate version that should be quicker
+        AgERA5_files = [f for f in listdir(os.path.join(AgERA5_data_path,variable))]
+        AgERA5_files_df_collection[variable] = pd.DataFrame({"filename":AgERA5_files})
+
+        AgERA5_files_df_collection[variable]["date"] = AgERA5_files_df_collection[variable].apply(
+            lambda x: datetime.date(
+                int(x["filename"].replace(".tif","").split("_")[-3]),
+                int(x["filename"].replace(".tif","").split("_")[-2]),
+                int(x["filename"].replace(".tif","").split("_")[-1]),
+            ),
+            axis=1,
+        )
+
+        AgERA5_files_df_collection[variable] = AgERA5_files_df_collection[variable][(AgERA5_files_df_collection[variable]["date"]>=date_start) & (AgERA5_files_df_collection[variable]["date"]<date_start+datetime.timedelta(days=duration))].reset_index(drop=True)
+
+    # building a dictionary of correspondance between AgERA5 variables and SARRA variables
+    AgERA5_SARRA_correspondance = {
+        '10m_wind_speed_24_hour_mean':None,
+        '2m_temperature_24_hour_maximum':None,
+        '2m_temperature_24_hour_mean':'tpMoy',
+        '2m_temperature_24_hour_minimum':None,
+        'ET0Hargeaves':'ET0',
+        'solar_radiation_flux_daily':'rg',
+        'vapour_pressure_24_hour_mean':None,
+    }
+
+    # loading the data
+    for variable in tqdm(AgERA5_variables) :
+        if AgERA5_SARRA_correspondance[variable] != None :
+
+            try:
+                del dataarray_full
+            except:
+                pass
+            
+            # for i in range(duration) :
+            #     dataarray = rioxarray.open_rasterio(os.path.join(AgERA5_data_path,variable,AgERA5_files_df_collection[variable].loc[i,"filename"]))
+            #     dataarray = dataarray.rio.reproject_match(data, nodata=np.nan)
+            #     dataarray = dataarray.squeeze("band").drop_vars(["band"])
+            #     # TODO: add dataarray.attrs = {} to precise units and long_name
+
+            #     try:
+            #         dataarray_full = xr.concat([dataarray_full, dataarray],"time")
+            #     except:
+            #         dataarray_full = dataarray
+
+
+            dataarray_full = xr.open_mfdataset([os.path.join(AgERA5_data_path,variable,AgERA5_files_df_collection[variable].loc[i,"filename"]) for i in range(len(AgERA5_files_df_collection[variable]))], concat_dim="time", combine="nested", chunks={"x":1000,"y":1000})
+            dataarray_full = dataarray_full.squeeze("band").drop_vars(["band"])
+            dataarray_full = dataarray_full.rio.reproject_match(data, nodata=np.nan)
+
+            
+            dataarray_full.rio.write_crs(4326,inplace=True)
+            
+            
+            data[AgERA5_SARRA_correspondance[variable]] = dataarray_full["band_data"]
+
+            
+    # unit conversion for solar radiation (kJ/m2 as provided by AgERA5 to MJ/m2/day)
+    data["rg"] = data["rg"]/1000
+    
+    return data
+
+
+
+
 
 
 
@@ -400,34 +525,21 @@ def calc_day_length(day, lat):
 
 
 
-def calc_day_length_raster(data, date_start, duration):
-    """
-    This function calculates the day length raster for a given period of time.
+def calc_day_length_raster_fast(data, date_start, duration):
 
-    Args:
-        data (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
+    vectorized_func = np.vectorize(calc_day_length)
 
-    Returns:
-        _type_: _description_
-    """
-    days = [date_start + datetime.timedelta(days=i) for i in range(duration)]
+    days = np.array([date_start + datetime.timedelta(days=i) for i in range(duration)])[...,np.newaxis]
+    latitudes = np.array(data["y"])[np.newaxis,...]
+
+    result = vectorized_func(days, latitudes)
 
     # we will first define an empty array of the same shape as the rain array
     data["dureeDuJour"] = (data["rain"].dims, np.zeros(data["rain"].shape))
-
-    # we will apply the calc_day_length function using a for loop on the y dimension, as well as on the j dimension
-    for j in tqdm(range(duration)):
-        for y in range(len(data["y"])):
-            data["dureeDuJour"][j,y,:] = calc_day_length(date_start + datetime.timedelta(days=j), data["y"][y])
-
-    data["dureeDuJour"] = data["dureeDuJour"].astype("float32")       
-
-    # optional : plot the day length raster
-    # data["dureeDuJour"][:,:,0].plot()
+    data["dureeDuJour"].values = np.repeat(result[...,np.newaxis], data["dureeDuJour"].shape[2], axis=2)
 
     return data
+
 
 
 
