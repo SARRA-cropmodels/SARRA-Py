@@ -1,7 +1,6 @@
 import numpy as np
 import copy
 import xarray as xr
-from numba import njit
 
 
 def reset(j, data):
@@ -54,13 +53,13 @@ def testing_for_initialization(j, data, paramITK, paramVariete):
         (data["surface_tank_stock"][j, :, :] >= paramITK["seuilEauSemis"])
         # & (data["startLock"][j,:,:] == 0)
 
-    data["numPhase"][j:, :, :] = np.where(
+    data["numPhase"][j:, :, :] = xr.where(
         condition, 1, data["numPhase"][j, :, :])
 
-    data["changePhase"][j, :, :] = np.where(
+    data["changePhase"][j, :, :] = xr.where(
         condition, 1, data["changePhase"][j, :, :])
 
-    data["seuilTempPhaseSuivante"][j:, :, :] = np.where(
+    data["seuilTempPhaseSuivante"][j:, :, :] = xr.where(
         condition,
         paramVariete["SDJLevee"],
         data["seuilTempPhaseSuivante"][j, :, :],
@@ -543,26 +542,13 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
     # the time step contains any pixel with the considered phases
     # before testing for initialization or updating the phenological phases
 
-    if np.any(data["numPhase"][j,:,:]==0) :
-        data = testing_for_initialization(j, data, paramITK, paramVariete)
-
-    if np.any(data["numPhase"][j,:,:]==1) :
-        data = update_pheno_phase_1_to_2(j, data, paramVariete)
-
-    if np.any(data["numPhase"][j,:,:]==2) :    
-        data = update_pheno_phase_2_to_3(j, data, paramVariete)
-    
-    if np.any(data["numPhase"][j,:,:]==3) :    
-        data = update_pheno_phase_3_to_4(j, data)
-    
-    if np.any(data["numPhase"][j,:,:]==4) :    
-        data = update_pheno_phase_4_to_5(j, data, paramVariete)
-
-    if np.any(data["numPhase"][j,:,:]==5) :    
-        data = update_pheno_phase_5_to_6(j, data, paramVariete)
-    
-    if np.any(data["numPhase"][j,:,:]==6) :    
-        data = update_pheno_phase_6_to_7(j, data, paramVariete)
+    data = testing_for_initialization(j, data, paramITK, paramVariete)
+    data = update_pheno_phase_1_to_2(j, data, paramVariete)
+    data = update_pheno_phase_2_to_3(j, data, paramVariete)
+    data = update_pheno_phase_3_to_4(j, data)
+    data = update_pheno_phase_4_to_5(j, data, paramVariete)
+    data = update_pheno_phase_5_to_6(j, data, paramVariete)
+    data = update_pheno_phase_6_to_7(j, data, paramVariete)
 
     return data
 
@@ -627,7 +613,7 @@ def calculate_once_daily_thermal_time(data, paramVariete):
         _type_: _description_
     """
 
-    data["ddj"].data = np.where(
+    data["ddj"].data = xr.where(
         data["tpMoy"] <= paramVariete["TOpt2"],
         np.maximum(np.minimum(paramVariete["TOpt1"], data["tpMoy"]), paramVariete["TBase"]) - paramVariete["TBase"],
         (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], data["tpMoy"]) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
@@ -680,89 +666,89 @@ def update_root_growth_speed(j, data, paramVariete):
     """
 
 
-    # phase_correspondances = {
-    #     1: paramVariete['VRacLevee'],
-    #     2: paramVariete['VRacBVP'],
-    #     3: paramVariete['VRacPSP'],
-    #     4: paramVariete['VRacRPR'],
-    #     5: paramVariete['VRacMatu1'],
-    #     6: paramVariete['VRacMatu2'],
-    # }
+    phase_correspondances = {
+        1: paramVariete['VRacLevee'],
+        2: paramVariete['VRacBVP'],
+        3: paramVariete['VRacPSP'],
+        4: paramVariete['VRacRPR'],
+        5: paramVariete['VRacMatu1'],
+        6: paramVariete['VRacMatu2'],
+    }
 
-    # for phase in range(1,6):
-    #     data["vRac"][j:,:,:] = np.where(
-    #         data["numPhase"][j,:,:] == phase,
-    #         phase_correspondances[phase],
+    for phase in range(1,6):
+        data["vRac"][j:,:,:] = np.where(
+            data["numPhase"][j,:,:] == phase,
+            phase_correspondances[phase],
+            data["vRac"][j,:,:],
+        )
+
+    # phase 0 ou 7
+    data["vRac"][j:,:,:] = np.where(
+        (data["numPhase"][j,:,:] == 0) | (data["numPhase"][j,:,:] == 7),
+        0,
+        data["vRac"][j,:,:],
+    )
+
+
+    # # version that first for presence of given numPhase before applying the update
+    # # also, no broadcasting is done as the test is performed on every time slice
+    # #? maybe it would be a good idea to do that kind of thing once for all, ie with EvalPhenoSarrahV3
+
+    # if np.any(data["numPhase"][j,:,:]==0) :
+    #     data["vRac"][j,:,:] = xr.where(
+    #         data["numPhase"][j,:,:] == 0,
+    #         0,
     #         data["vRac"][j,:,:],
     #     )
 
-    # # phase 0 ou 7
-    # data["vRac"][j:,:,:] = np.where(
-    #     (data["numPhase"][j,:,:] == 0) | (data["numPhase"][j,:,:] == 7),
-    #     0,
-    #     data["vRac"][j,:,:],
-    # )
-
-
-    # version that first for presence of given numPhase before applying the update
-    # also, no broadcasting is done as the test is performed on every time slice
-    #? maybe it would be a good idea to do that kind of thing once for all, ie with EvalPhenoSarrahV3
-
-    if np.any(data["numPhase"][j,:,:]==0) :
-        data["vRac"][j,:,:] = np.where(
-            data["numPhase"][j,:,:] == 0,
-            0,
-            data["vRac"][j,:,:],
-        )
-
-    if np.any(data["numPhase"][j,:,:]==1) :
-        data["vRac"][j,:,:] = np.where(
-            data["numPhase"][j,:,:] == 1,
-            paramVariete['VRacLevee'],
-            data["vRac"][j,:,:],
-        )
+    # if np.any(data["numPhase"][j,:,:]==1) :
+    #     data["vRac"][j,:,:] = xr.where(
+    #         data["numPhase"][j,:,:] == 1,
+    #         paramVariete['VRacLevee'],
+    #         data["vRac"][j,:,:],
+    #     )
     
-    if np.any(data["numPhase"][j,:,:]==2) :
-        data["vRac"][j,:,:] = np.where(
-            data["numPhase"][j,:,:] == 2,
-            paramVariete['VRacBVP'],
-            data["vRac"][j,:,:],
-        )
+    # if np.any(data["numPhase"][j,:,:]==2) :
+    #     data["vRac"][j,:,:] = xr.where(
+    #         data["numPhase"][j,:,:] == 2,
+    #         paramVariete['VRacBVP'],
+    #         data["vRac"][j,:,:],
+    #     )
 
-    if np.any(data["numPhase"][j,:,:]==3) :
-        data["vRac"][j,:,:] = np.where(
-            data["numPhase"][j,:,:] == 3,
-            paramVariete['VRacPSP'],
-            data["vRac"][j,:,:],
-        )
+    # if np.any(data["numPhase"][j,:,:]==3) :
+    #     data["vRac"][j,:,:] = xr.where(
+    #         data["numPhase"][j,:,:] == 3,
+    #         paramVariete['VRacPSP'],
+    #         data["vRac"][j,:,:],
+    #     )
 
-    if np.any(data["numPhase"][j,:,:]==4) :
-        data["vRac"][j,:,:] = np.where(
-            data["numPhase"][j,:,:] == 4,
-            paramVariete['VRacRPR'],
-            data["vRac"][j,:,:],
-        )
+    # if np.any(data["numPhase"][j,:,:]==4) :
+    #     data["vRac"][j,:,:] = xr.where(
+    #         data["numPhase"][j,:,:] == 4,
+    #         paramVariete['VRacRPR'],
+    #         data["vRac"][j,:,:],
+    #     )
 
-    if np.any(data["numPhase"][j,:,:]==5) :
-        data["vRac"][j,:,:] = np.where(
-            data["numPhase"][j,:,:] == 5,
-            paramVariete['VRacMatu1'],
-            data["vRac"][j,:,:],
-        )
+    # if np.any(data["numPhase"][j,:,:]==5) :
+    #     data["vRac"][j,:,:] = xr.where(
+    #         data["numPhase"][j,:,:] == 5,
+    #         paramVariete['VRacMatu1'],
+    #         data["vRac"][j,:,:],
+    #     )
 
-    if np.any(data["numPhase"][j,:,:]==6) :
-        data["vRac"][j,:,:] = np.where(
-            data["numPhase"][j,:,:] == 6,
-            paramVariete['VRacMatu2'],
-            data["vRac"][j,:,:],
-        )
+    # if np.any(data["numPhase"][j,:,:]==6) :
+    #     data["vRac"][j,:,:] = xr.where(
+    #         data["numPhase"][j,:,:] == 6,
+    #         paramVariete['VRacMatu2'],
+    #         data["vRac"][j,:,:],
+    #     )
 
-    if np.any(data["numPhase"][j,:,:]==7) :
-        data["vRac"][j,:,:] = np.where(
-            data["numPhase"][j,:,:] == 7,
-            0,
-            data["vRac"][j,:,:],
-        )
+    # if np.any(data["numPhase"][j,:,:]==7) :
+    #     data["vRac"][j,:,:] = xr.where(
+    #         data["numPhase"][j,:,:] == 7,
+    #         0,
+    #         data["vRac"][j,:,:],
+    #     )
 
 
 
