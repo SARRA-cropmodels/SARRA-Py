@@ -503,6 +503,110 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
 
 
 
+def load_iSDA_soil_data_alternate(data, grid_width, grid_height): 
+
+    """
+    This function loads iSDA soil data and crop to the area of interest remark :
+    it would be nice to try to modulate the percentage of runoff according to
+    slope
+
+    First, this function loads the iSDA soil data, crops it to the area of
+    interest and resamples it to match the grid resolution. The iSDA soil class
+    raster map obtained is passed to the xarray dataset as a new variable.
+
+    For the sake of example, the file that is used here already has been
+    downsampled at TAMSAT resolution. Its specs are available on the CIRAD
+    Dataverse at the following adress :
+    https://doi.org/10.1038/s41598-021-85639-y
+
+    Second, a correspondance table matching the iSDA soil classes to the soil
+    physical properties is loaded. Maps of soil physical properties are then
+    created and added to the xarray dataset.
+
+    Returns:
+        _type_: _description_
+    """
+    # loading soil depth data
+    # soil data is Africa SoilGrids - Root zone depth (cm) 
+    # reference of the dataset is https://data.isric.org/geonetwork/srv/fre/catalog.search#/metadata/c77d1209-56e9-4cac-b76e-bbf6c7e3a617
+    # reference publication : https://doi.org/10.1016/j.geoderma.2018.02.046
+    soil_depth_file_path = "../data/assets/gyga_af_erzd__m_1km.tif"
+    dataarray = rioxarray.open_rasterio(soil_depth_file_path)
+    dataarray = dataarray.astype('float32') # converting to float32 to allow for NaNs
+    dataarray = dataarray.rio.reproject_match(data, nodata=np.nan) # reprojecting to match the base data
+    dataarray = dataarray.squeeze("band").drop_vars(["band"]) # removing the band dimension and variable
+    dataarray = dataarray * 10 # converting from cm to mm
+    data["profRu"] = dataarray # we add the soil depth data to the base data
+    data["profRu"].attrs = {"units": "mm", "long_name": "Soil root zone depth (mm) adapted from Africa SoilGrids RZD"}
+    del dataarray # we delete the temporary dataarray
+
+
+    # defining the soil surface reservoir depth with default values
+    data["epaisseurSurf"] = 200 * xr.ones_like(data["profRu"])
+    data["epaisseurSurf"].attrs = {"units": "mm", "long_name": "Soil surface reservoir depth (mm)"}
+
+
+    # defining the initial water stock in the deep surface reservoir
+    data["stockIniProf"] = 0 * xr.ones_like(data["profRu"])
+    data["stockIniProf"].attrs = {"units": "mm", "long_name": "Initial water stock in the deep surface reservoir (mm)"}
+
+
+    # loading soil texture data
+    # soil data is adapted from iSDA Africa - USDA Soil Texture Class
+    # reference of the original dataset is https://zenodo.org/record/4094616
+    # reference of the adapted dataset is https://doi.org/10.18167/DVN1/YSVTS2 
+    soil_texture_class_file_path = "../data/assets/iSDA_at_TAMSAT_resolution_zeroclass_1E6.tif"
+    dataarray = rioxarray.open_rasterio(soil_texture_class_file_path)
+    dataarray = dataarray.rio.reproject_match(data, nodata=np.nan) # reprojecting to match the base data
+    dataarray = dataarray.squeeze("band").drop_vars(["band"]) # removing the band dimension and variable
+    dataarray.attrs = {"units":"arbitrary", "long_name":"soil_type"} # adding attributes
+
+    data["soil_type"] = dataarray # add soil type identifier to the dataset
+    data["soil_type"] = data["soil_type"] / 1000000 # conversion from 1E6 to 1E0
+    data["soil_type"] = data["soil_type"].astype("float32")
+
+    # load correspondance table
+    path_soil_type_correspondance = "../data/assets/TypeSol_Moy13_HWSD.csv"
+    df_soil_type_correspondance = pd.read_csv(path_soil_type_correspondance, sep=";", skiprows=1)
+
+    # correspondance between soil properties naming in the csv file and in the dataset
+    soil_variables = {
+        "seuilRuiss" : "SeuilRuiss", # utilisé dans bilan_hydro.estimate_runoff pour le calcul de lr
+        "pourcRuiss" : "PourcRuiss", # utilisé dans bilan_hydro.estimate_runoff pour le calcul de lr
+    }
+
+    # create maps of soil properties and add them to the dataset
+    for soil_variable in soil_variables :
+        dict_values = dict(zip(df_soil_type_correspondance["Id"], df_soil_type_correspondance[soil_variables[soil_variable]]))
+        dict_values[0] = np.nan
+        soil_types_converted = np.reshape([dict_values[x.astype(int)] for x in data["soil_type"].to_numpy().flatten()], (grid_width, grid_height))
+        data[soil_variable] = (data["soil_type"].dims,soil_types_converted)
+        data[soil_variable] = data[soil_variable].astype("float32")
+        # TODO: add dataarray.attrs = {} to precise units and long_name
+
+    # converting pourcRuiss to decimal %
+    data["pourcRuiss"] = data["pourcRuiss"] / 100
+    del dataarray # we delete the temporary dataarray
+
+
+    # loading RU
+    soil_RZPAWC_file_path = "../data/assets/gyga_af_agg_erzd_tawcpf23mm__m_1km.tif"
+    dataarray = rioxarray.open_rasterio(soil_RZPAWC_file_path)
+    dataarray = dataarray.astype('float32')
+    dataarray = dataarray.rio.reproject_match(data, nodata=np.nan) # reprojecting to match the base data
+    dataarray = dataarray.squeeze("band").drop_vars(["band"]) # removing the band dimension and variable
+    dataarray.attrs = {"units":"mm", "long_name":"Root zone plant available water capacity (mm)"} # adding attributes
+    data["RZPAWC"] = dataarray # add soil type identifier to the dataset
+    del dataarray # we delete the temporary dataarray
+
+    #calculating RU (mm/m)
+    data["ru"] = data["RZPAWC"] / (data["profRu"]/1000)
+
+    return data
+
+
+
+
 
 def calc_day_length(day, lat):
     """

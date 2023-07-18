@@ -250,9 +250,9 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     # Soil maximal depth (mm)
     # Profondeur maximale de sol (mm)
     #   ProfRU := EpaisseurSurf + EpaisseurProf;
-    data["profRu"] = data["epaisseurProf"] + data["epaisseurSurf"]
-    data["profRu"].attrs = {"units": "mm", "long_name": "Soil maximal depth"}
-
+    #! data["profRu"] = data["epaisseurProf"] + data["epaisseurSurf"]
+    #! data["profRu"].attrs = {"units": "mm", "long_name": "Soil maximal depth"}
+    # déplacé dans l'initialisation du sol
 
     # Maximum water capacity to humectation front (mm)
     # Quantité d'eau maximum jusqu'au front d'humectation (mm)
