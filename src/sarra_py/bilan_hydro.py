@@ -1896,7 +1896,7 @@ def estimate_kce(j, data, paramITK):
         _type_: _description_
     """
 
-    data["kce"][j,:,:] = data["ltr"][j,:,:] * paramITK["mulch"] / 100 * \
+    data["kce"][j,:,:] = data["ltr"][j,:,:] * paramITK["mulch"] * \
         np.exp(-paramITK["coefMc"] * paramITK["surfMc"] * data["biomMc"][j,:,:]/1000)
     
     return data
