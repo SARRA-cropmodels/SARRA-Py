@@ -109,13 +109,19 @@ def InitPlotMc(data, grid_width, grid_height, paramITK, paramTypeSol, duration):
 
 def update_irrigation_tank_stock(j, data):
     """
-    Update the Irrigation Tank Stock 
+    This function updates the water stock of the irrigation tank.
+    
+    If the simulation is run with automatic irrigation mode
+    (`data["irrigAuto"]==True`), if the simulation is between phases 0 and 6,
+    and if `root_tank_capacity` is lower than `surface_tank_capacity` (which
+    indicates that the roots have not yet reached the limit between the surface
+    compartment and deep compartment), `irrigation_tank_stock` will be set to
+    the value of `surface_tank_stock`, which means, it will take the minimum
+    value equal to `surface_tank_stock`. For phase 7, the existing
+    `irrigation_tank_stock` value will be kept unchanged.
 
-    In case of automatic irrigation mode and if the simulation is between phases 0 and 6 and 
-    root_tank_capacity is lower than surface_tank_capacity (which indicates that the roots have not yet 
-    reached the limit between the surface compartment and deep compartment), the irrigation_tank_stock 
-    will be set to the value of surface_tank_stock, which means, it will take the minimum value equal to 
-    surface_tank_stock. For phase 7, the existing irrigation_tank_stock value will be kept unchanged.
+    Note : the logic of this function has not yet been validated in SARRA-Py, as
+    simulations are mainly based on rainfed conditions.
 
     Args:
         j (int): Index of time step in data
@@ -129,21 +135,11 @@ def update_irrigation_tank_stock(j, data):
         (data["numPhase"][j, :, :] > 0) & \
         (data["numPhase"][j, :, :] < 6)
 
-    # group 1
-    #! renaming stockIrr with irrigation_tank_stock
-    #//data["stockIrr"][j, :, :] = np.where(
     data["irrigation_tank_stock"][j, :, :] = np.where(
         condition,
         xr.where(
-            #! renaming stRurMax to root_tank_capacity
-            #! renaming ruSurf with surface_tank_capacity
-            #// (data["stRurMax"] < data["ruSurf"]),
             (data["root_tank_capacity"] < data["surface_tank_capacity"])[j, :, :],
-            #! renaming stRuSurf to surface_tank_stock
-            #// data["stRuSurf"][j, :, :],
             data["surface_tank_stock"][j, :, :],
-            #! renaming stRur to root_tank_stock
-            #// data["stRur"][j, :, :],
             data["root_tank_stock"][j, :, :],
         ),
         data["irrigation_tank_stock"][j, :, :],
@@ -157,26 +153,19 @@ def update_irrigation_tank_stock(j, data):
 
 def update_irrigation_tank_capacity(j, data):
     """
-    Update Irrigation Tank Capacity
+    This function updates the capacity if the irrigation tank.
 
-    The function updates the maximum water capacity of irrigation tank based on
-    the conditions specified in the function. If the automatic irrigation mode
-    is ON, and if the current phase is between 0 and 6, and if the root tank
-    capacity is less than the surface tank capacity, meaning that the roots have
-    not reached the limit between the surface compartment and deep compartment,
-    then the irrigation tank capacity is set to the surface tank capacity, which
-    is given a minimum value equal to the surface tank capacity. Otherwise, the
-    irrigation tank capacity remains unchanged.
+    If the simulation is run with automatic irrigation mode
+    (`data["irrigAuto"]==True`), if the current phase is between 0 and 6, and if
+    the root tank capacity is less than the surface tank capacity (meaning that
+    the roots have not reached the limit between the surface compartment and
+    deep compartment), then `irrigation_tank_capacity` is set to the value of
+    `surface_tank_capacity`, which is given a minimum value equal to the
+    `surface_tank_capacity`. Otherwise, the irrigation tank capacity remains
+    unchanged.
 
-    
-    
-    If we are in automatic irrigation mode, and between phases 0 and 6, and if
-    root_tank_capacity is less than surface_tank_capacity, meaning that roots
-    haven't reached the limit between the surface compartment and deep
-    compartment, then we define irrigation_tank_capacity as equal to
-    surface_tank_capacity, that is to say, we give to irrigation_tank_capacity a
-    minimum value that equals surface_tank_capacity. else, we do not modify
-    irrigation_tank_capacity value
+    Note : the logic of this function has not yet been validated in SARRA-Py, as
+    simulations are mainly based on rainfed conditions.
 
     Args:
         j (int): Index of the time step being processed.
@@ -186,24 +175,16 @@ def update_irrigation_tank_capacity(j, data):
         xarray dataset: The input dataset with updated values of the irrigation tank capacity.
     """
 
-    # group 2
     condition = \
         (data["irrigAuto"][j, :, :] == True) & \
         (data["numPhase"][j, :, :] > 0) & \
         (data["numPhase"][j, :, :] < 6)
 
-    # renaming ruIrr with irrigation_tank_capacity
-    #// data["ruIrr"][j, :, :] = np.where(
     data["irrigation_tank_capacity"][j, :, :] = np.where(
         condition,
         np.where(
-            #! renaming stRurMax to root_tank_capacity
-            #! renaming ruSurf with surface_tank_capacity
-            #// (data["stRurMax"] < data["ruSurf"]),
             data["root_tank_capacity"][j,:,:] < data["surface_tank_capacity"],
-            #// data["ruSurf"],
             data["surface_tank_capacity"],
-            #// data["stRurMax"],
             data["root_tank_capacity"][j,:,:],
         ),
         data["irrigation_tank_capacity"][j, :, :],
@@ -217,35 +198,25 @@ def update_irrigation_tank_capacity(j, data):
 
 def compute_daily_irrigation(j, data, paramITK):
     """
-    Computes the Total Daily Irrigation (mm)
+    This function computes the total daily irrigation
 
-    If we are in the automatic irrigation mode, and between phases 0 and 6, and if
-    the filling of the irrigation tank is below the target filling value
-    (irrigAutoTarget, decimal percentage), we first compute 90% of the difference
-    between the current volume of water in the irrigation tank (irrigation_tank_stock)
-    and the total capacity of the irrigation tank (irrigation_tank_capacity), 
-    bounded by a minimum of 0 and a maximum of maxIrrig. 
-    This computed value represents the amount of water to be added to the irrigation tank.
-    If the above conditions are not met, the computed value is 0.
+    If the simulation is run with automatic irrigation mode
+    (`data["irrigAuto"]==True`), if the current phase is between 0 and 6, and if
+    the filling rate the irrigation tank is below the target filling value
+    (`irrigAutoTarget`, decimal percentage), we first compute 90% of the
+    difference between the current volume of water in the irrigation tank
+    (`irrigation_tank_stock`) and the total capacity of the irrigation tank
+    (`irrigation_tank_capacity`), bounded by a minimum of 0 and a maximum of
+    `maxIrrig`. This computed value represents the amount of water to be added
+    to the irrigation tank. If the above conditions are not met, the computed
+    value is 0.
 
-    Then, we calculate the total irrigation of the day by summing the
-    estimated irrigation need (irrigation) with the previous irrigation history of the day 
-    (irrigTotDay).
+    Then, we calculate the total irrigation of the day by summing the estimated
+    irrigation need (`irrigation`) with the previous irrigation history of the
+    day (`irrigTotDay`).
 
-
-
-    irrigTotDay : "total irrigation of the day, both from the irrigation history
-    and the estimated irrigation need" (mm) // irrigation_total_day
-    
-    if we are in automatic irrigation mode, and between phases 0 and 6, and if
-    the filling of the irrigation tank is below the target filling value
-    (irrigAutoTarget, decimal percentage), we first compute 90% of the difference
-    between irrigation_tank_stock and irrigation_tank_capacity (that is to say,
-    90% of the volume needed to fill the irrigation tank), bounded by a minimum
-    of 0 and a maximum of maxIrrig. Else, the computed value is 0.
-
-    Then, we calculate the total irrigation of the day by summing the
-    estimated irrigation need with the irrigation history of the day.
+    Note : the logic of this function has not yet been validated in SARRA-Py, as
+    simulations are mainly based on rainfed conditions.
 
     Args:
         j: An integer representing the current day.
@@ -256,24 +227,17 @@ def compute_daily_irrigation(j, data, paramITK):
         data: A xarray dataset with the updated irrigationTotDay field.
     """
 
-    #! renaming stockIrr with irrigation_tank_stock
-    #! renaming ruIrr with irrigation_tank_capacity
     condition = (data["irrigAuto"][j, :, :] == True) & \
         (data["numPhase"][j, :, :] > 0) & \
         (data["numPhase"][j, :, :] < 6) & \
         (data["irrigation_tank_stock"][j, :, :] / data["irrigation_tank_capacity"][j,:,:] \
             < paramITK["irrigAutoTarget"])
         
-    # group 3
     data["irrigTotDay"][j, :, :] = xr.where(
         condition,
         np.minimum(
             np.maximum(
                 0,
-                # ! replacing correctedIrrigation by irrigation
-                #! renaming stockIrr with irrigation_tank_stock
-                #! renaming ruIrr with irrigation_tank_capacity
-                # // ((data["ruIrr"][j, :, :] - data["stockIrr"][j, :, :]) * 0.9) - data["correctedIrrigation"][j, :, :]),
                 ((data["irrigation_tank_capacity"][j, :, :] - data["irrigation_tank_stock"][j, :, :]) * 0.9) \
                     - data["irrigation"][j, :, :]
                 ),
@@ -282,67 +246,35 @@ def compute_daily_irrigation(j, data, paramITK):
         0,
     )
     
-    # group 4
     data["irrigTotDay"][j, :, :] = (
-        # ! replacing correctedIrrigation by irrigation
-        # // data["correctedIrrigation"][j, :, :] + data["irrigTotDay"][j, :, :]).copy()
         data["irrigation"][j, :, :] + data["irrigTotDay"][j, :, :])
 
     return data
 
 
 
-def EvalIrrigPhase(j, data, paramITK):
+def compute_irrigation_state(j, data, paramITK):
     """
-    Computes the irrigation state for a given day, including the size and
-    filling of the irrigation tank and the irrigation demand.
+    This wrapper function computes the irrigation state for a given day,
+    including the size and filling of the irrigation tank and the irrigation
+    demand. It is computed only if `paramITK["irrigAuto"] == True` ; this means
+    that irrigAuto shall be the same all over the grid, which is a reasonable
+    assumption
 
-    The computation of the irrigation state is based on the irrigation target
-    (irrigAutoTarget), the maximum irrigation capacity (maxIrrig), the size and
-    filling of the root zone (stRurMax, stRur) and the surface reservoir
-    (stRuSurf, ruSurf). The water stock in the irrigation tank (stockIrr) and
-    the maximum water capacity of the irrigation tank (ruIrr) are first
-    calculated, with minimum boundaries determined by properties of the surface
-    reservoir. The irrigation demand (irrigTotDay) is then computed.
-
-    The irrigation tank stock and capacity are only computed to avoid issues
-    with very shallow rooting, where the calculation of the filling of
-    root_tank_capacity by root_tank_stock can be inappropriate and result in
-    inadapted results for automatic irrigation.
-
-    Note: In this irrigation management, the daily rainfall is not taken into
-    account.
-
-
-
-
-    Translated from the procedure EvalIrrigPhase, of the original Pascal codes
-    bileau.pas and exmodules2.pas.
-
-    In irrigAuto mode, this function computes the size and filling of the
-    irrigation tank, and the irrigation demand, according to the irrigation
-    target (irrigAutoTarget), the maximum irrigation capacity (maxIrrig), and
-    the size and filling of the root zone (stRurMax, stRur) and the surface
-    reservoir (stRuSurf, ruSurf).
-
-    It first calculates stockIrr, the water stock in the irrigation tank, and
-    ruIrr, the maximum water capacity of irrigation tank. Both stockIrr and
-    ruIrr are given minimum boundaries related to properties of the surface
-    reservoir. Then, it calculates the irrigation demand, irrigTotDay.
+    It has been Translated from the procedure EvalIrrigPhase, of the original
+    Pascal codes bileau.pas and exmodules2.pas. Calculation precision is not
+    taken into account anymore.
 
     irrigation_tank_stock and irrigation_tank_capacity are only computed in
     order to avoid issues with very shallow rooting, where calculation of
     filling of root_tank_capacity by root_tank_stock can be inappropriate and
     lead to inadapted results for automatic irrigation
 
-    Notes from CB, 2014 :
-    Modification due à la prise en compte effet Mulch Soit on a une irrigation
-    observée, soit on calcul la dose d'irrigation Elle est calculée en fonction
-    d'un seuil d'humidité (IrrigAutoTarget) et de possibilité technique ou choix
-    (MaxIrrig, Precision) Dans cette gestion d'irrigation la pluie du jour n'est
-    pas prise en compte
-
-    N.B.: here, precision is not taken into account anymore
+    Notes from CB, 2014 : "Modification due à la prise en compte effet Mulch
+    Soit on a une irrigation observée, soit on calcul la dose d'irrigation. Elle
+    est calculée en fonction d'un seuil d'humidité (IrrigAutoTarget) et de
+    possibilité technique ou choix (MaxIrrig, Precision). Dans cette gestion
+    d'irrigation la pluie du jour n'est pas prise en compte."
 
     Args:
         j (int): Index of the day for which the irrigation state is being computed.
@@ -353,15 +285,10 @@ def EvalIrrigPhase(j, data, paramITK):
         xarray.Dataset: The updated data, including the computed values for the irrigation state.
     """
 
-    # First, we store initial irrigation value of the day in the
-    # correctedIrrigation array
-    # ! it does not seem definition and use of correctedIrrigation is useful
-    # ! instead we will just use the already defined irrigation array
-    # // data["correctedIrrigation"][j, :, :] = data["irrigation"][j, :, :].copy(deep=True)
-    
-    data = update_irrigation_tank_stock(j, data)
-    data = update_irrigation_tank_capacity(j, data)
-    data = compute_daily_irrigation(j, data, paramITK)
+    if paramITK["irrigAuto"] == True :
+        data = update_irrigation_tank_stock(j, data)
+        data = update_irrigation_tank_capacity(j, data)
+        data = compute_daily_irrigation(j, data, paramITK)
 
     return data
 
