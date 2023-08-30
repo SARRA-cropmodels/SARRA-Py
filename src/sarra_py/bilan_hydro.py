@@ -296,33 +296,20 @@ def compute_irrigation_state(j, data, paramITK):
 
 
 
-def calculate_total_water_availability(j, data):
+def compute_total_available_water(j, data):
     """
-    Calculates the total water available for a day by adding the rainfall and
-    the irrigation.
-
-    The total water available is computed by adding the rainfall for the day,
-    which is stored in the "rain" array, and the total daily irrigation, which
-    is stored in the "irrigTotDay" array.
+    This function computes the total available water for a day (mm) by adding
+    rainfall and irrigation.
 
     This calculation is performed to allow for subsequent calculations of the
-    mulch filling and runoff. The mulch layer is considered to be directly under
-    the rainfall and irrigation, which is represented by the "irrigTotDay"
-    value.
+    mulch filling and water runoff.
 
+    The available_water variable is later updated during the same day process
+    list, so its value is not the same at the beginning and the end of the daily
+    computation loop.
 
-
-    
-    Translated from the procedure PluieIrrig, of the original Pascal codes
-    bileau.pas and exmodules2.pas
-
-    This function computes the total water available for the day, by summing the
-    rain and the irrigation.
-
-    Notes from CB, 2014 :
-    Hypotheses : Le mulch ajoute une couche direct sous la pluie et irrig, ici
-    irrigTotDay qui est l'irrigation observée ou calculée, d'où on regroupe les
-    deux avant calcul de remplissage du mulch et ensuite calcul du ruissellement.
+    This function has benn translated from the procedure PluieIrrig, of the
+    original Pascal codes bileau.pas and exmodules2.pas.
 
     Args:
         j (int): The index of the current day.
@@ -332,7 +319,7 @@ def calculate_total_water_availability(j, data):
         xarray.Dataset: The data set with updated information about the total water availability for the current day.
     """
 
-    data["eauDispo"][j,:,:] = data["rain"][j,:,:] + data["irrigTotDay"][j,:,:]
+    data["available_water"][j,:,:] = data["rain"][j,:,:] + data["irrigTotDay"][j,:,:]
 
     return data
 
@@ -340,17 +327,33 @@ def calculate_total_water_availability(j, data):
 
 
 
-def estimate_water_captured_by_mulch(j, data, paramITK):
+def compute_water_captured_by_mulch(j, data, paramITK):
     """
-    Determination of water gathered by the mulch (eauCaptee, mm):
+    This function computes the height of water captured by the mulch.
     
-    We determine the quantity of water gathered by mulch by multiplying the
-    available water (eauDispo, from rain and irrigation, mm) with a
-    exponential function of covering capacity of the considered mulch
-    (surfMc, ha/t) and the mulch biomass (biomMc, kg/ha), representing the
-    fraction of soil covered by mulch. The value of eauCaptee is bounded by
-    the maximum capacity of the mulch to gather water (humSatMc, kg H2O/kg
-    biomass), minus stock of water already present in it (stockMc, mm).
+    For this, we multiply the 'available_water' (rain + irrigation, in mm) by an
+    exponential function taking both into consideration the mulch covering
+    capacity (surfMc, ha/t) and mulch biomass (biomMc, kg/ha), representing the
+    fraction of soil covered by mulch. If the fraction is 0 (no mulch), the
+    value of water_captured_by_mulch is 0. 
+    
+    The value of water_captured_by_mulch is bounded by the maximum capacity of
+    the mulch to gather water (humSatMc, kg H2O/kg biomass), minus stock of
+    water already present in it (mulch_water_stock, mm).
+
+    Notes from CB, 2014 :
+    Hypotheses : A chaque pluie, on estime la quantité d'eau pour saturer le
+    couvert. On la retire à l'eauDispo (pluie + irrig). On calcule la capacité
+    maximum de stockage fonction de la biomasse et du taux de saturation
+    rapportée en mm (humSatMc en kg H2O/kg de biomasse). La pluie est en mm : 1
+    mm = 1 litre d'eau / m2 1 mm = 10 tonnes d'eau / hectare = 10 000 kg/ha La
+    biomasse est en kg/ha pour se rapporter à la quantité de pluie captée en mm
+    Kg H2O/kg Kg/ha et kg/m2 on divise par 10 000 (pour 3000 kg/ha à humSat 2.8
+    kg H2O/kg on a un stockage max de 0.84 mm de pluie !?) Cette capacité à
+    capter est fonction du taux de couverture du sol calculé comme le LTR SurfMc
+    est spécifié en ha/t (0.39), on rapporte en ha/kg en divisant par 1000 On
+    retire alors les mm d'eau captées à la pluie incidente. Le ruisselement est
+    ensuite calculé avec l'effet de contrainte du mulch
 
     Args:
         j (_type_): _description_
@@ -361,14 +364,8 @@ def estimate_water_captured_by_mulch(j, data, paramITK):
         _type_: _description_
     """
 
-    # group 7
-    #! modyfing variable names to improve readability
-    #! replacing eauCaptee by water_gathered_by_mulch
-    #! replacing stockMc by mulch_water_stock
-    #// data["eauCaptee"][j,:,:] = np.minimum(
-    data["water_gathered_by_mulch"][j,:,:] = np.minimum(
-        data["eauDispo"][j,:,:] * (1 - np.exp(-paramITK["surfMc"] / 1000 * data["biomMc"][j,:,:])),
-        #// (paramITK["humSatMc"] * data["biomMc"][j,:,:] / 10000) - data["stockMc"][j,:,:],
+    data["water_captured_by_mulch"][j,:,:] = np.minimum(
+        data["available_water"][j,:,:] * (1 - np.exp(-paramITK["surfMc"] / 1000 * data["biomMc"][j,:,:])),
         (paramITK["humSatMc"] * data["biomMc"][j,:,:] / 10000) - data["mulch_water_stock"][j,:,:],
     )
 
@@ -377,11 +374,13 @@ def estimate_water_captured_by_mulch(j, data, paramITK):
 
 def update_available_water_after_mulch_filling(j, data):
     """
-    Updating available water (eauDispo, mm) : 
+    This function updates available water after mulch filling.
     
-    As some water is gathered by the mulch, the available water is updated by
-    subtracting the gathered water (eauCaptee, mm) from the total available
-    water (eauDispo, mm). This value is bounded by 0, as the available water
+    As some water is captured by the mulch (rain or irrigation water falling on
+    it), the available_water is updated by subtracting the captured water
+    (water_captured_by_mulch, mm) from the total available water
+    (available_water, mm), to represent the remaining available water after
+    capture by the mulch. This value is bounded by 0, as the available water
     cannot be negative.
 
     Args:
@@ -391,19 +390,17 @@ def update_available_water_after_mulch_filling(j, data):
     Returns:
         _type_: _description_
     """
-    # ! correction as broadcasting on xarray seems less constrained than on numpy
-    #! modyfing variable names to improve readability
-    #! replacing eauCaptee by water_gathered_by_mulch
-    # group 8
-    #// data["eauDispo"][j:,:,:] =  np.maximum(data["eauDispo"][j,:,:] - data["eauCaptee"][j,:,:], 0) # //[...,np.newaxis]
-    data["eauDispo"][j:,:,:] =  np.maximum(data["eauDispo"][j,:,:] - data["water_gathered_by_mulch"][j,:,:], 0) # //[...,np.newaxis]
+
+    data["available_water"][j:,:,:] =  np.maximum(data["available_water"][j,:,:] - data["water_captured_by_mulch"][j,:,:], 0) 
     
     return data
 
+
 def update_mulch_water_stock(j, data):
     """
-    Updating water stock in mulch (stockMc, mm) :
-    The water stock in mulch is updated by adding the gathered water (eauCaptee, mm)
+    This function updates the water stock in mulch.
+
+    The water stock in mulch is updated by adding the captured water (water_captured_by_mulch, mm)
 
     Args:
         j (_type_): _description_
@@ -413,51 +410,25 @@ def update_mulch_water_stock(j, data):
         _type_: _description_
     """
 
-    # ! correction as broadcasting on xarray seems less constrained than on numpy
-    # group 9
-    #! replacing eauCaptee by water_gathered_by_mulch
-    #! replacing stockMc by mulch_water_stock
-    #// data["stockMc"][j:,:,:] = (data["stockMc"][j,:,:] + data["eauCaptee"][j,:,:]) # //[...,np.newaxis]
-    data["mulch_water_stock"][j:,:,:] = (data["mulch_water_stock"][j,:,:] + data["water_gathered_by_mulch"][j,:,:]) # //[...,np.newaxis]
+    data["mulch_water_stock"][j:,:,:] = (data["mulch_water_stock"][j,:,:] + data["water_captured_by_mulch"][j,:,:])
     
     return data
 
 
 
-def RempliMc(j, data, paramITK):
+def fill_mulch(j, data, paramITK):
 
     """
-    Translated from the procedure PluieIrrig, of the original Pascal codes
-    bileau.pas and exmodules2.pas
+    This wrapper function computes the filling of the mulch for a given day.
 
-    wrapper function,
-    updates water_gathered_by_mulch, eauDispo, and mulch_water_stock
+    It has been translated from the procedure PluieIrrig, of the original Pascal codes
+    bileau.pas and exmodules2.pas
 
     For more details, it is advised to refer to the works of Eric Scopel (UR
     AIDA), and the PhD dissertation of Fernando Maceina. 
-
-    Notes from CB, 2014 :
-
-    Hypotheses :
-    A chaque pluie, on estime la quantité d'eau pour saturer le couvert. On la
-    retire à l'eauDispo (pluie + irrig). On calcule la capacité maximum de
-    stockage fonction de la biomasse et du taux de saturation rapportée en mm
-    (humSatMc en kg H2O/kg de biomasse).
-    La pluie est en mm :
-    1 mm = 1 litre d'eau / m2
-    1 mm = 10 tonnes d'eau / hectare = 10 000 kg/ha
-    La biomasse est en kg/ha pour se rapporter à la quantité de pluie captée en
-    mm Kg H2O/kg Kg/ha et kg/m2 on divise par 10 000 (pour 3000 kg/ha à humSat
-    2.8 kg H2O/kg on a un stockage max de 0.84 mm de pluie !?) Cette capacité à
-    capter est fonction du taux de couverture du sol calculé comme le LTR SurfMc
-    est spécifié en ha/t (0.39), on rapporte en ha/kg en divisant par 1000 On
-    retire alors les mm d'eau captées à la pluie incidente. Le ruisselement est
-    ensuite calculé avec l'effet de contrainte du mulch
-
-    group 10
     """
 
-    data = estimate_water_captured_by_mulch(j, data, paramITK)
+    data = compute_water_captured_by_mulch(j, data, paramITK)
     data = update_available_water_after_mulch_filling(j, data)
     data = update_mulch_water_stock(j, data)
 
@@ -488,7 +459,7 @@ def estimate_runoff(j, data):
     # group 11
     data["lr"][j,:,:] = xr.where(
         data["rain"][j,:,:] > data["seuilRuiss"],
-        (data["eauDispo"][j,:,:]  - data["seuilRuiss"]) * data["pourcRuiss"],
+        (data["available_water"][j,:,:]  - data["seuilRuiss"]) * data["pourcRuiss"],
         0,
     )
 
@@ -508,7 +479,7 @@ def update_available_water_after_runoff(j, data):
     """
 
     # group 12
-    data["eauDispo"][j:,:,:] = (data["eauDispo"][j,:,:] - data["lr"][j,:,:])
+    data["available_water"][j:,:,:] = (data["available_water"][j,:,:] - data["lr"][j,:,:])
     return data
 
 
@@ -1099,7 +1070,7 @@ def update_surface_tank_stock(j, data):
     #// data["stRuSurf"][j:,:,:] = np.minimum(
     data["surface_tank_stock"][j:,:,:] = np.minimum(
         #// data["stRuSurf"][j,:,:] + data["eauDispo"][j,:,:],
-        data["surface_tank_stock"][j,:,:] + data["eauDispo"][j,:,:],
+        data["surface_tank_stock"][j,:,:] + data["available_water"][j,:,:],
         #! renaming ruSurf to surface_tank_capacity
         #// 1.1 * data["ruSurf"][j,:,:]
         1.1 * data["surface_tank_capacity"]
@@ -1154,9 +1125,9 @@ def estimate_transpirable_water(j, data):
             #! renaming ruSurf to surface_tank_capacity
             #! renaming stRuSurf to surface_tank_stock
             # //data["eauDispo"][j,:,:] - (data["ruSurf"][j,:,:]/10 - data["stRuSurfPrec"][j,:,:])
-            data["eauDispo"][j,:,:] - (0.1 * data["surface_tank_capacity"] - data["surface_tank_stock"][j-1,:,:])
+            data["available_water"][j,:,:] - (0.1 * data["surface_tank_capacity"] - data["surface_tank_stock"][j-1,:,:])
             ),
-        data["eauDispo"][j,:,:],
+        data["available_water"][j,:,:],
     )
 
     return data

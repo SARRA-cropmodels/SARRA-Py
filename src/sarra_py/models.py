@@ -33,9 +33,11 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
         data = compute_irrigation_state(j, data, paramITK)
 
         # sums rainfall and irrigation history
-        data = calculate_total_water_availability(j, data)
+        data = compute_total_available_water(j, data)
+
+
         # can be conditioned to the presence of mulch
-        data = RempliMc(j, data, paramITK)
+        data = fill_mulch(j, data, paramITK)
         data = EvalRunOff(j, data, paramTypeSol)
         data = EvolRurCstr2(j, data, paramITK) 
         
@@ -143,12 +145,16 @@ def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration)
         # sum of thermal sime is being computed from the day the crop is sown, including the day of sowing
         data = calculate_sum_of_thermal_time(j, data)
 
-        # water balance
+        ### water balance
+        # computing irrigation state
         data = compute_irrigation_state(j, data, paramITK)
+
         # sums rainfall and irrigation history
-        data = calculate_total_water_availability(j, data)
+        data = compute_total_available_water(j, data)
+
         # can be conditioned to the presence of mulch
-        data = RempliMc(j, data, paramITK)
+        data = fill_mulch(j, data, paramITK)
+        
         data = EvalRunOff(j, data, paramTypeSol)
         data = EvolRurCstr2(j, data, paramITK) 
         
