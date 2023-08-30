@@ -626,13 +626,24 @@ def calculate_once_daily_thermal_time(data, paramVariete):
 
 
 
-def calculate_sum_of_thermal_time(j, data, paramVariete):
+def calculate_sum_of_thermal_time(j, data):
     """
-        Translated from the EvalDegresJourSarrahV3 procedure of the phenologie.pas and exmodules.pas files of the Sarra-H model, Pascal version.
-    calculating sum of thermal time
-sdj has to be broadcasted or calculated as the first process to be able to use it with pheno correctly
+    This function calculates the sum of thermal time ("somme de degrés jour",
+    sdj) for the current day. Accumulation of sum of thermal time is performed
+    starting from the sowing date, and only on pixels where numPhase is above 0.
+    If these conditions are not met, sdj is set to 0.
 
-    Note : in SARRA-H, when numPhase > 7, sdj is set to 0 and sdj stops cumulating
+    sdj value has to be broadcasted along time dimension (or computed first in
+    the process list) so that phenology-related functions can work properly.
+    Here, it is broadcasted.
+
+    This function has been translated from the EvalDegresJourSarrahV3 procedure
+    of the phenologie.pas and exmodules.pas files of the Sarra-H model, Pascal
+    version.
+
+    Note : in SARRA-H, when numPhase > 7, sdj is set to 0 and sdj stops
+    accumulating. This behavior has not been translated here.
+
     Returns:
         _type_: _description_
     """
