@@ -60,8 +60,8 @@ def variable_dict():
 
         # water balance
         "consoRur": ["consumption of water stored in the root system", "mm"],
-        "water_gathered_by_mulch" : ["water captured by the mulch in one day","mm"],
-        "eauDispo" : ["available water, sum of rainfall and total irrigation for the day","mm"],
+        "water_captured_by_mulch" : ["water captured by the mulch in one day","mm"],
+        "available_water" : ["available water, sum of rainfall and total irrigation for the day","mm"],
         "eauTranspi": ["water available for transpiration from the surface reservoir","mm"],
         "correctedIrrigation" : ["corrected irrigation amount","mm/d"],
         "cstr" : ["drought stress coefficient", "arbitrary unit"],
