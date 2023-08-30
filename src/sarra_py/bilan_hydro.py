@@ -341,6 +341,9 @@ def compute_water_captured_by_mulch(j, data, paramITK):
     the mulch to gather water (humSatMc, kg H2O/kg biomass), minus stock of
     water already present in it (mulch_water_stock, mm).
 
+    Note : the logic of this function has not yet been validated in SARRA-Py, as
+    simulations are mainly based on situations without mulch.
+
     Notes from CB, 2014 :
     Hypotheses : A chaque pluie, on estime la quantité d'eau pour saturer le
     couvert. On la retire à l'eauDispo (pluie + irrig). On calcule la capacité
