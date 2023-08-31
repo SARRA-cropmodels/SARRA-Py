@@ -440,14 +440,13 @@ def fill_mulch(j, data, paramITK):
 
 def estimate_runoff(j, data):
     """
-    Evaluation of runoff ("lame de ruissellement", lr, mm) :
+    This function evaluates the water runoff (mm).
     
-    If the quantity of rain (mm) is above the runoff threshold (seuilRuiss,
-    mm), runoff is computed as the difference between the available water
-    (eauDispo, mm) and the runoff threshold (seuilRuiss, mm) multiplied by
-    the runoff percentage (pourcRuiss, %). Else, runoff value is set to 0.
+    If the quantity of rain (mm) is above the runoff_threshold (mm), runoff is computed as the difference between the available water
+    (mm) and the runoff_threshold  multiplied by
+    the runoff_rate (%). Else, runoff value is set to 0.
 
-    seuiRuiss and pourcRuiss are defined in load_iSDA_soil_data
+    runoff_threshold and runoff_rate are defined in load_iSDA_soil_data
     
     Question : should runoff be computed taking in consideration water captured by
     mulch to account for mulch effect on runoff mitigation ?
@@ -460,9 +459,9 @@ def estimate_runoff(j, data):
     """
     
     # group 11
-    data["lr"][j,:,:] = xr.where(
-        data["rain"][j,:,:] > data["seuilRuiss"],
-        (data["available_water"][j,:,:]  - data["seuilRuiss"]) * data["pourcRuiss"],
+    data["runoff"][j,:,:] = xr.where(
+        data["rain"][j,:,:] > data["runoff_threshold"],
+        (data["available_water"][j,:,:]  - data["runoff_threshold"]) * data["runoff_rate"],
         0,
     )
 
@@ -482,13 +481,13 @@ def update_available_water_after_runoff(j, data):
     """
 
     # group 12
-    data["available_water"][j:,:,:] = (data["available_water"][j,:,:] - data["lr"][j,:,:])
+    data["available_water"][j:,:,:] = (data["available_water"][j,:,:] - data["runoff"][j,:,:])
     return data
 
 
 
 
-def EvalRunOff(j, data, paramTypeSol):
+def compute_runoff(j, data):
     """
     Translated from the procedure PluieIrrig, of the original Pascal codes
     bileau.pas, exmodules1.pas and exmodules2.pas

@@ -481,8 +481,8 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
         "epaisseurSurf" : "EpaisseurSurf",
         "stockIniProf" : "StockIniProf",
         "stockIniSurf" : "StockIniSurf",
-        "seuilRuiss" : "SeuilRuiss",
-        "pourcRuiss" : "PourcRuiss",
+        "runoff_threshold" : "SeuilRuiss",
+        "runoff_rate" : "PourcRuiss",
         "ru" : "Ru",
     }
 
@@ -496,7 +496,7 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
         # TODO: add dataarray.attrs = {} to precise units and long_name
 
     # converting pourcRuiss to decimal %
-    data["pourcRuiss"] = data["pourcRuiss"] / 100
+    data["runoff_rate"] = data["runoff_rate"] / 100
 
     return data
 
@@ -571,8 +571,8 @@ def load_iSDA_soil_data_alternate(data, grid_width, grid_height):
 
     # correspondance between soil properties naming in the csv file and in the dataset
     soil_variables = {
-        "seuilRuiss" : "SeuilRuiss", # utilisé dans bilan_hydro.estimate_runoff pour le calcul de lr
-        "pourcRuiss" : "PourcRuiss", # utilisé dans bilan_hydro.estimate_runoff pour le calcul de lr
+        "runoff_threshold" : "SeuilRuiss", # utilisé dans bilan_hydro.estimate_runoff pour le calcul de lr
+        "runoff_rate" : "PourcRuiss", # utilisé dans bilan_hydro.estimate_runoff pour le calcul de lr
     }
 
     # create maps of soil properties and add them to the dataset
@@ -585,7 +585,7 @@ def load_iSDA_soil_data_alternate(data, grid_width, grid_height):
         # TODO: add dataarray.attrs = {} to precise units and long_name
 
     # converting pourcRuiss to decimal %
-    data["pourcRuiss"] = data["pourcRuiss"] / 100
+    data["runoff_rate"] = data["runoff_rate"] / 100
     del dataarray # we delete the temporary dataarray
 
 
