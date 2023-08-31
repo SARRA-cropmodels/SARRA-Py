@@ -78,7 +78,7 @@ def variable_dict():
         "irrigTotDay" : ["total irrigation for the day","mm"],
         "vRac" : ["reference daily root growth","mm/day"],
         "ftsw": ["fraction of transpirable surface water","decimal percentage"], 
-        "lr" : ["daily water runoff","mm/d"],
+        "runoff" : ["daily water runoff","mm/d"],
         "pFact": ["FAO reference for critical FTSW value for transpiration response","none"],
 
 
