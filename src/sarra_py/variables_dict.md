@@ -20,3 +20,43 @@ renaming ruIrr with irrigation_tank_capacity
         #! replacing eauCaptee by water_gathered_by_mulch
     #! replacing stockMc by mulch_water_stock
     lr replaced by runoff
+    renaming stRurMax to root_tank_capacity
+    renaming dayVrac to delta_root_tank_capacity
+      #! renaming stRurMax to root_tank_capacity
+            #! renaming ruSurf to surface_tank_capacity
+            renaming deltaRur with delta_root_tank_capacity
+                        #! renaming stRurMax to root_tank_capacity
+            #! renaming dayVrac to delta_root_tank_capacity
+                        #! renaming dayVrac to delta_root_tank_capacity
+                            #! renaming stRurMax to root_tank_capacity
+    #! renaming deltaRur to delta_root_tank_capacity
+      #! renaming stRur to root_tank_stock
+                  #! renaming stRurMax to root_tank_capacity
+            #! renaming ruSurf to surface_tank_capacity
+                        #! renaming stRur to root_tank_stock
+            #! renaming deltaRur to delta_root_tank_capacity
+                        #! renaming stRur to root_tank_stock
+            #! renaming stRuSurf to surface_tank_stock
+            #! renaming ruSurf to surface_tank_capacity
+            replaced humPrec with 
+            renaming ruSurf to surface_tank_capacity
+            #! renaming stRurMaxPrec to root_tank_capacity_previous_season
+                    #! renaming stRurMax to root_tank_capacity
+        #! renaming stRurMaxPrec to root_tank_capacity_previous_season
+                #! renaming stRur to root_tank_stock
+        #! renaming stRurMax to root_tank_capacity
+                #! renaming stRuPrec to total_tank_stock_previous_value
+        #! renaming stTot to total_tank_stock
+        #! renaming stRuSurf with surface_tank_stock
+        #! renaming stRuPrec to total_tank_stock_previous_value
+            #! renaming stRuMax to total_tank_capacity
+                        #! renaming stRuSurf to surface_tank_stock
+        #! renaming ruSurf to surface_tank_capacity
+
+                            # ! modifying to replace stRuSurfPrec by stRuSurf at undex j-1
+        #! renaming ruSurf to surface_tank_capacity
+        #! renaming stRuSurfPrec to surface_tank_stock
+            # ! modifying to replace stRuSurfPrec by stRuSurf at iundex j-1
+            #! renaming ruSurf to surface_tank_capacity
+            #! renaming stRuSurf to surface_tank_stock
+            
