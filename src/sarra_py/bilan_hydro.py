@@ -458,7 +458,6 @@ def estimate_runoff(j, data):
         _type_: _description_
     """
     
-    # group 11
     data["runoff"][j,:,:] = xr.where(
         data["rain"][j,:,:] > data["runoff_threshold"],
         (data["available_water"][j,:,:]  - data["runoff_threshold"]) * data["runoff_rate"],
@@ -480,7 +479,6 @@ def update_available_water_after_runoff(j, data):
         data (_type_): _description_
     """
 
-    # group 12
     data["available_water"][j:,:,:] = (data["available_water"][j,:,:] - data["runoff"][j,:,:])
     return data
 
@@ -516,89 +514,79 @@ def compute_runoff(j, data):
 
 def initialize_root_tank_capacity(j, data, paramITK):
     """
-    updating stRurMax/root_tank_capacity, step 1 :
-    
-    stRurMax, also called ruRac in some versions of the model, is the root_tank_capacity.
+    This function initializes the root tank.
 
-    At the phase change between phases 0 and 1 (initialisation), the maximum
-    root water storage is initialised by multiplying the initial root depth
-    (profRacIni, mm) with the soil water storage capacity (ru, mm/m). This
-    value is broadcasted on the time series. For every other day in the cycle,
-    the value remains unchanged.
+    If during the considered day j there are pixels in phase 1 (initialisation),
+    we test for pixels at phase change between phases 0 and 1 ('changePhase = 1'
+    and 'numPhase = 1').
+
+    On these pixels, the maximum root tank water storage ('root_tank_capacity',
+    mm) is initialised by multiplying the initial root depth ('profRacIni', mm)
+    with the soil water storage capacity ('ru', mm/m). This value is broadcasted
+    on the time series. For every other day in the cycle where there are pixels
+    at , the value remains unchanged.
+
+    https://docs.google.com/presentation/d/1QHhbNjF9ysCG_yZzWXb7ns0vOFlGfNhYw8AYrotm0fY/edit#slide=id.g27a6b3e8a72_0_30
 
     Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
+        j (int): day identifier
+        data (xarray dataset): an xarray dataset of dimensions (day, width,
+        height) containing the variables 'numPhase', 'root_tank_capacity',
+        'changePhase', 'ru'
+        paramITK (dict): a dictionary containing the ITK parameter 'profRacIni'
 
     Returns:
         _type_: _description_
     """
-    # group 14
-    #! renaming stRurMax to root_tank_capacity
-    #// data["stRurMax"][j:,:,:] = np.where(
-    data["root_tank_capacity"][j:,:,:] = xr.where(
-        (data["changePhase"][j,:,:] == 1) & (data["numPhase"][j,:,:] == 1),
-        paramITK["profRacIni"] / 1000 * data["ru"],
-        #// data["stRurMax"][j,:,:],
-        data["root_tank_capacity"][j,:,:],
-    )
+    if np.any(data["numPhase"][j,:,:] == 1) :
+        data["root_tank_capacity"][j:,:,:] = xr.where(
+            (data["changePhase"][j,:,:] == 1) & (data["numPhase"][j,:,:] == 1),
+            paramITK["profRacIni"] / 1000 * data["ru"],
+            data["root_tank_capacity"][j,:,:],
+        )
 
     return data
 
 
 
-def estimate_delta_root_tank_capacity(j, data):
+def initialize_delta_root_tank_capacity(j, data):
     """
-    Updates daily root capacity variation (delta_root_tank_capacity, in mm
-    water/day) based on the current phase of the plant, the daily root growth
-    speed, and the drought stress coefficient.
+    This function initializes the daily variation in root tank capacity. 
 
-    The daily root capacity variation is calculated as the product of soil water
-    storage capacity (ru), the daily root growth speed (vRac), and a coefficient
-    (cstr + 0.3). This coefficient is capped at 1.0.
+    This variable represents daily variation in water height accessible to
+    roots, in mm.
 
-    The daily root capacity variation is modulated by drought stress only when the
-    root tank capacity is greater than the surface tank capacity and the current
-    phase is strictly greater than 1 and at the day of phase change. If the root
-    tank capacity is lower than the surface tank capacity or if the current phase is
-    1 or below or not at the day of phase change, the daily root capacity variation
-    remains unchanged. 
-
-    The drought stress coefficient, cstr, measures the level of drought stress with
-    0 being full stress. The root growth speed is assumed to still occur during a
-    drought stress as a matter of survival, with a certain level of tolerance given
-    by the [0.3, 1] bound of the coefficient.
-
+    For each pixel at a developmental stage different from zero, and that is not
+    at initialization phase ('changePhase = 1' and 'numPhase = 1'), the daily
+    variation in root tank capacity (delta_root_tank_capacity, mm) is updated.
     
+    The updated value depends on the daily root growth speed (itself depending
+    on the current development phase of the plant), the drought stress
+    coefficient ('cstr'), and the soil water storage capacity ('ru', mm/m). 
 
+    https://docs.google.com/presentation/d/1QHhbNjF9ysCG_yZzWXb7ns0vOFlGfNhYw8AYrotm0fY/edit#slide=id.g27a6b3e8a72_0_118
     
-    Updating delta_root_tank_capacity / dayVrac (daily variation in water height
-    accessible to roots, mm water/day) :
+    However, when 'root_tank_capacity' is above 'surface_tank_capacity'
+    (meaning that the roots are prospecting water deeper than the surface tank),
+    the daily root capacity variation is calculated as the product of soil water
+    storage capacity ('ru'), the daily root growth speed ('vRac'), and a
+    coefficient made from 'cstr' shifted by 0.3, capped at 1.0. 
+
+    https://docs.google.com/presentation/d/1QHhbNjF9ysCG_yZzWXb7ns0vOFlGfNhYw8AYrotm0fY/edit#slide=id.g27a6b3e8a72_0_71
+
+    That is to say, when roots are going deep, the root growth speed is
+    modulated by drought stress.
+
+    The drought stress coefficient 'cstr' measures the level of drought stress
+    with 0 being full stress. The root growth speed is assumed to remain
+    non-null during a drought stress as a matter of survival, with a certain
+    level of tolerance given by the [0.3, 1] bound of the coefficient. Using the
+    [0.3, 1] bound is a way to tell that in the [0.7, 1] 'cstr' interval, there
+    is no effect of drought stress on the root growth speed, allowing for a
+    certain level of tolerance of the plant.
     
-    At the day of phase change, for phases strictly above 1, and for which
-    root_tank_capacity is greater than surface_tank_capacity, the variation of
-    root tank capacity delta_root_tank_capacity is computed as the product of
-    soil water storage capacity (ru, mm/m), the daily root growth speed (vRac,
-    mm/day), and a coefficient, the latter being equal to the drought stress
-    coefficient (cstr) plus 0.3, with a maximum bound of 1.0. 
-    
-    That is to say, when the root_tank_capacity is greater than
-    surface_tank_capacity, the root growth speed is modulated by drought stress.
-    When root_tank_capacity is lower than surface_tank_capacity, the root growth
+    When 'root_tank_capacity' is lower than 'surface_tank_capacity', the root growth
     speed is not modulated by drought stress.
-    
-    When we are not at the day of phase change, or if we are at phase of 1 and
-    below, delta_root_change_capacity is unchanged.
-    
-    cstr is the drought stress coefficient, with a value of 0 meaning full stress.
-
-    Why is delta_root_tank_capacity bounded in [0.3, 1] ? According to Chriatian
-    BARON, this is based on the hypothesis that during a drought stress (cstr =
-    0), the plant will still grow roots as a matter of survival. Furthermore,
-    using the [0.3, 1] bound is a way to tell that in the [0.7, 1] cstr
-    interval, there is no effect of drought stress on the root growth speed,
-    allowing for a certain level of tolerance of the plant. 
     
     Args:
         j (int): The current iteration step of the process.
@@ -608,24 +596,16 @@ def estimate_delta_root_tank_capacity(j, data):
         xarray.Dataset: The updated input data with the daily root capacity variation calculated and stored.
     """
 
-    # group 15  
-    # ! simplified conditions
-    # // condition = (data["numPhase"][j,:,:] > 0) & \
-    # //       np.invert((data["numPhase"][j,:,:] == 1) & (data["changePhase"][j,:,:] == 1))
-    condition = (data["numPhase"][j,:,:] > 1) & (data["changePhase"][j,:,:] == 1)
-    #! renaming dayVrac to delta_root_tank_capacity
-    #// data["dayVrac"][j,:,:] = np.where(
+    condition = (data["numPhase"][j,:,:] > 0) & \
+        np.invert((data["numPhase"][j,:,:] == 1) & (data["changePhase"][j,:,:] == 1))
+
     data["delta_root_tank_capacity"][j,:,:] = xr.where(
         condition,
         xr.where(
-            #! renaming stRurMax to root_tank_capacity
-            #! renaming ruSurf to surface_tank_capacity
-            #// (data["stRurMax"][j,:,:] > data["ruSurf"][j,:,:]),
             (data["root_tank_capacity"][j,:,:] > data["surface_tank_capacity"]),
             (data["vRac"][j,:,:] * np.minimum(data["cstr"][j,:,:] + 0.3, 1.0)) / 1000 * data["ru"],
             data["vRac"][j,:,:] / 1000 * data["ru"],
         ),
-        #// data["dayVrac"][j,:,:],
         data["delta_root_tank_capacity"][j,:,:],
     )
 
@@ -636,46 +616,45 @@ def estimate_delta_root_tank_capacity(j, data):
 
 def update_delta_root_tank_capacity(j, data):
     """
-    updating delta_root_tank_capacity : 
+    This function updates the daily variation in root tank capacity
+    (delta_root_tank_capacity, mm) depending on the water height to humectation
+    front (hum, mm) and the root tank capacity (root_tank_capacity, mm).
     
-    At the day of phase change, for phases strictly above 1, and for which the
+    For each pixel at a developmental stage different from zero, and that is not
+    at initialization phase ('changePhase = 1' and 'numPhase = 1'), when the
     difference between the water height to humectation front (hum, mm) and the
-    root_tank_capacity is less than the delta_root_tank_capacity,
+    root_tank_capacity is less than the delta_root_tank_capacity (meaning that
+    the daily variation in root tank capacity is higher that the height of water
+    necessary to reach the height of water of the humectation front),
     delta_root_tank_capacity is updated to be equal to the difference between
-    the water height to humectation front and the root_tank_capacity. In other
-    words, the change in root tank capacity delta_root_tank_capacity is limited
-    by the water height to humectation front.
+    the water height to humectation front and the root_tank_capacity.
+    
+    In other words, the change in root tank capacity delta_root_tank_capacity is
+    limited by the water height to humectation front. Which can be interpreted as :
+    the roots cannot grow deeper than the humectation front.
+
+    ? ...which means the humectation from has to be updated somewhere ?
     
     For any other day or if root_tank_capacity is above
     delta_root_tank_capacity, delta_root_tank_capacity value is unchanged.
+
+    https://docs.google.com/presentation/d/1QHhbNjF9ysCG_yZzWXb7ns0vOFlGfNhYw8AYrotm0fY/edit#slide=id.g27a6b3e8a72_0_161
 
     Args:
         j (_type_): _description_
         data (_type_): _description_
     """
 
-    # group 16
-    # ! simplified conditions
-    # // condition = (data["numPhase"][j,:,:] > 0) & \
-    # //       np.invert((data["numPhase"][j,:,:] == 1) & (data["changePhase"][j,:,:] == 1))
-    condition = (data["numPhase"][j,:,:] > 1) & (data["changePhase"][j,:,:] == 1)
+    condition = (data["numPhase"][j,:,:] > 0) & \
+        np.invert((data["numPhase"][j,:,:] == 1) & (data["changePhase"][j,:,:] == 1))
 
-    #! renaming deltaRur with delta_root_tank_capacity
-    #// data["deltaRur"][j:,:,:] = np.where(
     data["delta_root_tank_capacity"][j:,:,:] = np.where(
         condition,   
         np.where(
-            #! renaming stRurMax to root_tank_capacity
-            #! renaming dayVrac to delta_root_tank_capacity
-            #// (data["hum"][j,:,:] - data["stRurMax"][j,:,:]) < data["dayVrac"][j,:,:],
             (data["hum"][j,:,:] - data["root_tank_capacity"][j,:,:]) < data["delta_root_tank_capacity"][j,:,:],
-            #// data["hum"][j,:,:] - data["stRurMax"][j,:,:],
             data["hum"][j,:,:] - data["root_tank_capacity"][j,:,:],
-            #! renaming dayVrac to delta_root_tank_capacity
-            #// data["dayVrac"][j,:,:],
             data["delta_root_tank_capacity"][j,:,:],
         ),
-        #// data["deltaRur"][j,:,:],
         data["delta_root_tank_capacity"][j,:,:],
     )
 
@@ -686,12 +665,18 @@ def update_delta_root_tank_capacity(j, data):
 
 def update_root_tank_capacity(j, data):
     """
-    updating root_tank_capacity/stRurMax/ruRac, step 2 :
+    This function updates the root tank capacity (root_tank_capacity, mm) by
+    adding the daily variation in root tank capacity.
     
-    At the day of phase change, for phases strictly above 1, root_tank_capacity
-    is updated to be summed with the change in root water storage capacity delta_root_tank_capacity.
-    In other words, root_tank_capacity is incremented by the change in root water
-    storage capacity linked to root growth.
+    For each pixel at a developmental stage different from zero, and that is not
+    at initialization phase ('changePhase = 1' and 'numPhase = 1'),
+    root_tank_capacity is updated to be summed with the change in root water
+    storage capacity delta_root_tank_capacity.
+    
+    In other words, root_tank_capacity is incremented by the change in root
+    water storage capacity related to root growth. Easy, right ?
+
+    https://docs.google.com/presentation/d/1QHhbNjF9ysCG_yZzWXb7ns0vOFlGfNhYw8AYrotm0fY/edit#slide=id.g27a6b3e8a72_0_238
 
     Args:
         j (_type_): _description_
@@ -701,25 +686,12 @@ def update_root_tank_capacity(j, data):
         _type_: _description_
     """
 
-    # group 17
-    # ! simplified conditions
-    # // data["stRurMax"][j:,:,:] = np.where(
-    # //     (data["numPhase"][j,:,:] > 0),
-    # //     np.where(
-    # //         np.invert((data["changePhase"][j,:,:] == 1) & (data["numPhase"][j,:,:] == 1)),
-    # //         data["stRurMax"][j,:,:] + data["deltaRur"][j,:,:],
-    # //         data["stRurMax"][j,:,:],
-    # //     ),
-    # //     data["stRurMax"][j,:,:],
-    # // )#[...,np.newaxis]
-    #! renaming stRurMax to root_tank_capacity
-    #! renaming deltaRur to delta_root_tank_capacity
-    #// data["stRurMax"][j:,:,:] = np.where(
+    condition = (data["numPhase"][j,:,:] > 0) & \
+        np.invert((data["numPhase"][j,:,:] == 1) & (data["changePhase"][j,:,:] == 1))
+
     data["root_tank_capacity"][j:,:,:] = np.where(
-        (data["numPhase"][j,:,:] > 1) & (data["changePhase"][j,:,:] == 1),
-        #// data["stRurMax"][j,:,:] + data["deltaRur"][j,:,:],
+        condition,
         data["root_tank_capacity"][j,:,:] + data["delta_root_tank_capacity"][j,:,:],
-        #// data["stRurMax"][j,:,:],
         data["root_tank_capacity"][j,:,:],
     )
 
@@ -730,21 +702,56 @@ def update_root_tank_capacity(j, data):
 
 def update_root_tank_stock(j, data):
     """
-    updating root_tank_stock/stRur/stockrac :
+    This functions update the quantity of water of the root tank ('root_tank_stock', mm).
+        
+    For each pixel at a developmental stage different from zero, and that is not
+    at initialization phase ('changePhase = 1' and 'numPhase = 1'), and for
+    which the 'root_tank_capacity' is greater than 'surface_tank_capacity' (meaning
+    that roots go beyond the surface water storage capacity), 'root_tank_stock'
+    is incremented by delta_root_tank_capacity.
     
-    At the day of phase change, for phases strictly above 1, and for which
-    the root_tank_capacity is above surface_tank_capacity (meaning that
-    roots go beyond the surface water storage capacity), root_tank_stock
-     is incremented by delta_root_tank_capacity.
-    
-    However, if root_tank_capacity is BELOW surface_tank_capacity (meaning
-    that roots do not plunge into the deep reservoir), root_tank_stock is
+    However, if 'root_tank_capacity' is lesser than 'surface_tank_capacity' (meaning
+    that roots do not plunge into the deep reservoir), 'root_tank_stock' is
     updated to be equal to surface_tank_stock minus 1/10th of the
-    surface_tank_capacity, multiplied by the ratio between
-    root_tank_capacity and surface_tank_capacity. That is to say "we take at
-    the prorata of depth and surface stock".
+    surface_tank_capacity, multiplied by the ratio between root_tank_capacity
+    and surface_tank_capacity. That is to say "we take at the prorata of depth
+    and surface stock".
     
     For any other day, root_tank_stock is unchanged.
+
+    ? Why is the tank stock incremented instead of root tank capacity ? If the
+    ? root tank capacity is incremented, that makes sense as we add to the root
+    ? tank capacity the capacity newly gained through delta_root_tank_capacity.
+    ? There is no sense in incrementing the root tank stock with the
+    ? delta_root_tank_capacity, as the delta root tank capacity, representing
+    ? growing of roots is independant of the quantity of water in the soil.
+    ? However, the delta root tank capacity is blocked by hum the humidity front.
+    ? Still, humidity front only grows and limits the maximum growth of roots, and
+    ? is not involved in root water stock.
+ 
+    ? Also, if the roots do not go in the deep reservoir, there is an increase in
+    ? root tank stock. Considering this is a mistake and that root_tank_capacity
+    ? should be increased, this would mean root tank capacity is increased by a
+    ? value that depends on the filling of the surface tank first
+    ? (surface_tank_stock minus 1/10th of the surface_tank_capacity, that would be
+    ? about the bound water), times the ratio between root_tank_capacity and
+    ? surface_tank_capacity. This would mean if when there is few roots the
+    ? increase in root tank capacity is small, and if roots are close to passing
+    ? into the deep reservoir, the increase in root tank capacity nears the
+    ? surface_tank_stock. Again, there is no sense in increasing the root tank
+    ? capacity with such value however this would be ok for root_tank_stock...
+ 
+    ? Overall there seems to be a mixup between the objectives of the two parts of
+    ? this function ?
+ 
+    ? at the moment this function is applied, root_tank_capacity is already
+    ? updated to take into consideration the root growth from the day, limited by
+    ? both the water stress and the depth of the humectation front. i still do not
+    ? understand why we would increase root tank stock, as we do not have
+    ? supplementary water. it would be like creating water from nowhere.
+ 
+    ? so until further notice i will let this function as it is, but i will keep
+    ? in mind that it is probably wrong.
 
     Args:
         j (_type_): _description_
@@ -754,31 +761,21 @@ def update_root_tank_stock(j, data):
         _type_: _description_
     """
 
-    # group 18
-    # ! simplified conditions
-    # // condition = (data["numPhase"][j,:,:] > 0) & np.invert((data["changePhase"][j,:,:] == 1) & (data["numPhase"][j,:,:] == 1)),
-    condition = (data["numPhase"][j,:,:] > 1) & (data["changePhase"][j,:,:] == 1),
+    condition = (data["numPhase"][j,:,:] > 0) & \
+        np.invert((data["changePhase"][j,:,:] == 1) & (data["numPhase"][j,:,:] == 1)),
     
-    #! renaming stRur to root_tank_stock
-    #// data["stRur"][j:,:,:] = np.where(
+
     data["root_tank_stock"][j:,:,:] = xr.where(
         condition,
         xr.where(
-            #! renaming stRurMax to root_tank_capacity
-            #! renaming ruSurf to surface_tank_capacity
-            #// (data["stRurMax"][j,:,:] > data["ruSurf"][j,:,:]),
             (data["root_tank_capacity"][j,:,:] > data["surface_tank_capacity"]),
-            #! renaming stRur to root_tank_stock
-            #! renaming deltaRur to delta_root_tank_capacity
-            #// data["stRur"][j,:,:] + data["deltaRur"][j,:,:],
             data["root_tank_stock"][j,:,:] + data["delta_root_tank_capacity"][j,:,:],
-            #! renaming stRur to root_tank_stock
-            #! renaming stRuSurf to surface_tank_stock
-            #// np.maximum((data["stRuSurf"][j,:,:] - data["ruSurf"][j,:,:] * 1/10) * (data["stRurMax"][j,:,:] / data["ruSurf"][j,:,:]), 0),
-            np.maximum((data["surface_tank_stock"][j,:,:] - data["surface_tank_capacity"] * 1/10) * (data["root_tank_capacity"][j,:,:] / data["surface_tank_capacity"]), 0),
+            np.maximum(
+                ((data["surface_tank_stock"][j,:,:] - data["surface_tank_capacity"] * 1/10) * \
+                (data["root_tank_capacity"][j,:,:] / data["surface_tank_capacity"])),
+                0),
         ).expand_dims("time", axis=0), 
-        #! renaming stRur to root_tank_stock
-        #// data["stRur"][j,:,:],
+        
         data["root_tank_stock"][j,:,:],
     )
 
@@ -788,8 +785,11 @@ def update_root_tank_stock(j, data):
 def EvolRurCstr2(j, data, paramITK):
 
     """
-    Translated from the procedure PluieIrrig, of the original Pascal codes
-    bileau.pas
+    This function is a legacy wrapper for the functions related to the
+    calculation of the root tank capacity and stock.
+
+    It has been translated from the procedure EvolRurCstr2, of the original
+    Pascal codes bileau.pas.
 
     Notes from CB, 10/06/2015 :
     Stress trop fort enracinement
@@ -803,29 +803,13 @@ def EvolRurCstr2(j, data, paramITK):
     la vitesse) La vitesse d'enracinement potentielle de la plante peut etre
     bloque par manque d'eau en profondeur (Hum). La profondeur d'humectation est
     convertie en quantite d'eau maximum equivalente
-
-    IN:
-    Vrac : mm (en mm/jour) : Vitesse racinaire journalière §§ Daily root depth
-    Hum : mm Quantité d'eau maximum jusqu'au front d'humectation §§ Maximum
-    water capacity to humectation front
-    StRuSurf : mm
-    RU : mm/m
-    RuSurf : mm/m
-
-    INOUT:
-    stRurMax : mm ==== ruRac
-    stRur : mm ==== stockRac
-
-    NB : on remet le nom de variables de CB plutôt que celles utilisées par MC dans le code Java
     """
 
-    # ! dayvrac et deltarur reset à chaque itération ; on traine donc le j sur les autres variables
-
     data = initialize_root_tank_capacity(j, data, paramITK)
-    data = estimate_delta_root_tank_capacity(j, data)
+    data = initialize_delta_root_tank_capacity(j, data)
     data = update_delta_root_tank_capacity(j, data)
     data = update_root_tank_capacity(j, data)
-    data = update_root_tank_stock(j, data)
+    data = update_root_tank_stock(j, data) #! we keep this function even though it is probably wrong
 
     return data
 
