@@ -89,8 +89,8 @@ def variable_dict():
         "root_tank_stock": ["current stock of water in the root system tank","mm"], #! renaming stRu to root_tank_stock
         "total_tank_capacity": ["total capacity of the root system tank","mm"], #! renaming stRuMax to total_tank_capacity
         "stRur": ["",""], # ["previous season's root system tank stock","mm"],
-        "root_tank_capacity_previous_season": ["previous season's root system tank capacity","mm"], #! renaming stRurMaxPrec to root_tank_capacity_previous_season
-        "stRurPrec": ["previous day's root system tank stock","mm"],
+        "previous_root_tank_capacity": ["previous season's root system tank capacity","mm"], #! renaming stRurMaxPrec to previous_root_tank_capacity
+        "previous_root_tank_stock": ["previous day's root system tank stock","mm"],
         "stRurSurf": ["surface root system tank stock","mm"],
         "surface_tank_stock": ["current stock of water in the surface root system tank","mm"], #! renaming stRuSurf to surface_tank_stock
         "stRuSurfPrec": ["previous day's surface root system tank stock","mm"],
@@ -262,7 +262,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     #   Hum := max(RuSurf, StRurMax);
     #   // Hum mis a profRuSurf
     #   Hum := max(StTot, Hum);
-    data["hum"] = (data["rain"].dims, np.full((duration, grid_width, grid_height),
+    data["humectation_front"] = (data["rain"].dims, np.full((duration, grid_width, grid_height),
         np.maximum(
             np.maximum(
                 #! renaming ruSurf with surface_tank_capacity
@@ -277,12 +277,12 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
             data["total_tank_stock"],
         )
     ))
-    data["hum"].attrs = {"units": "mm", "long_name": "Maximum water capacity to humectation front"}
+    data["humectation_front"].attrs = {"units": "mm", "long_name": "Maximum water capacity to humectation front"}
 
 
     # Previous value for Maximum water capacity to humectation front (mm)
     #  HumPrec := Hum;
-    data["humPrec"] = data["hum"]
+    data["previous_humectation_front"] = data["humectation_front"]
     
     
     # ?
@@ -293,9 +293,9 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     #   StRurMaxPrec := 0;
     #   //modif 10/06/2015 resilience stock d'eau
     #! renaming stTot with total_tank_stock
-    #! renaminog stRuPrec with total_tank_stock_previous_value
+    #! renaminog stRuPrec with previous_total_tank_stock
     #// data["stRuPrec"] =  data["stTot"]
-    data["total_tank_stock_previous_value"] =  data["total_tank_stock"]
+    data["previous_total_tank_stock"] =  data["total_tank_stock"]
 
     ####### fin variables eau depuis InitPlotMc
 
