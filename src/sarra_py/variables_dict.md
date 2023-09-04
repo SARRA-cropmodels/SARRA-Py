@@ -59,4 +59,20 @@ renaming ruIrr with irrigation_tank_capacity
             # ! modifying to replace stRuSurfPrec by stRuSurf at iundex j-1
             #! renaming ruSurf to surface_tank_capacity
             #! renaming stRuSurf to surface_tank_stock
+            #! renaming stTot with total_tank_stock
+                #! we propose a different version based on stTot
+    #! renaming stTot to total_tank_stock
+    #! renaming stRuVar to delta_total_tank_stock
+    #! renaming stRuPrec to previous_total_tank_stock
+    #! renaming stRuVar with delta_total_tank_stock
+    #! renaming stRurMaxPrec to previous_root_tank_capacity
+        #! we replace humPrec by hum with indice j-1
+                    #! renaming stTot to total_tank_stock
+            #! we replace stRurPrec with stRur at indice j-1
+            #! renaming stRur to root_tank_stock
+            #! renaming stTot to total_tank_stock
+            #! renaming stRuVar with delta_total_tank_stock
+            #! renaming stRuVar with delta_total_tank_stock
+            #! renaming stTot to total_tank_stock
+            #! renaming stTot to total_tank_stock  
             

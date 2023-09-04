@@ -67,7 +67,7 @@ def variable_dict():
         "cstr" : ["drought stress coefficient", "arbitrary unit"],
         "dayVrac" : ["modulated daily root growth","mm/day"],
         "delta_root_tank_capacity": ["change in root system water reserve","mm"],
-        "dr": ["drainage","mm"],
+        "drainage": ["drainage","mm"],
         "etm": ["evapotranspiration from the soil moisture","mm/d"],
         "etp": ["potential evapotranspiration from the soil moisture","mm/d"],
         "etr": ["reference evapotranspiration","mm/d"],

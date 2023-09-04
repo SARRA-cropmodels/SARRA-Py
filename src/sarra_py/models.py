@@ -153,10 +153,13 @@ def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration)
         # sums rainfall and irrigation history
         data = compute_total_available_water(j, data)
 
-        # can be conditioned to the presence of mulch
+        # filling the mulch
         data = fill_mulch(j, data, paramITK)
 
+        # computing runoff
         data = compute_runoff(j, data)
+
+        # computing evolution of tanks related to root growth
         data = EvolRurCstr2(j, data, paramITK) 
         
         # computation of filling of the tanks is done after other computations related to water,
