@@ -809,7 +809,7 @@ def EvolRurCstr2(j, data, paramITK):
     data = initialize_delta_root_tank_capacity(j, data)
     data = update_delta_root_tank_capacity(j, data)
     data = update_root_tank_capacity(j, data)
-    data = update_root_tank_stock(j, data) #! we keep this function even though it is probably wrong
+    data = update_root_tank_stock(j, data) #! we keep this function for now even though it is probably wrong, it will need further screening
 
     return data
 
@@ -817,21 +817,6 @@ def EvolRurCstr2(j, data, paramITK):
 
 
 ####################### list of functions for rempliRes #######################
-
-
-
-
-
-def condition_end_of_cycle(j,data):
-    """
-    Returns conditions needed to apply functions related to end of cycle.
-
-    Returns:
-        _type_: _description_
-    """
-    condition = (data["numPhase"][j,:,:] == 7) & (data["changePhase"][j,:,:] == 1)
-    return condition
-
 
 
 
@@ -1036,7 +1021,7 @@ def update_surface_tank_stock(j, data):
     """
     This function updates the value of water stock in the surface tank
     (surface_tank_stock, mm) with the water available for the day
-    (available_water, mm).
+    (available_water, mm), within the limits of 110% surface_tank_capacity.
     
     We update surface_tank_stock by adding the available_water, which as this
     point in the process list corresponds to the water available from 1) rain,
@@ -1044,7 +1029,8 @@ def update_surface_tank_stock(j, data):
     function), and 4) runoff (compute_runoff). However, we do not allow
     surface_tank_stock to exceed 110% of the surface_tank_capacity.
 
-    ? This means it is possible that the surface tank fill rate is above 100%
+    ? This means it is possible that the surface tank fill rate is above 100%,
+    ? which is a rather strange assumption.
 
     Args:
         j (_type_): _description_
@@ -1064,26 +1050,27 @@ def update_surface_tank_stock(j, data):
 
 def estimate_transpirable_water(j, data):
     """
-    This function estimates the daily volume of transpirable water.
-    
-    eauTranspi (mm, water transpirable) is the water available for
-    transpiration from the surface reservoir.
+    This function estimates the daily height of water available from the surface
+    reservoir for transpiration by the plant ('eauTranspi', mm).
 
-    If surface_tank_stock at the end of the previous day (index j-1) is
-    lower than 10% of the surface_tank_capacity, the water available for
-    transpirable water equals the water available for the day (eauDispo),
-    minus the difference between 1/10th of the surface_tank_capacity and
-    surface_tank_stock. This transpirable water has a min bound at 0 mm.
+    If the filling rate of the surface tank ('surface_tank_stock' /
+    'surface_tank_capacity') for the previous day is under 10%, we set the
+    quantity of transpirable water as the water available for the day
+    ('eauDispo') minus the water height necessary to keep the filling rate of
+    the surface tank at 10%. 
     
-    Said otherwise, a part of the water available for the day (eauDispo) is
-    considered as bound to the surface reservoir and cannot be transpired. 
-    
-    If surface_tank_stock at the end of the previous day (index j-1) is
-    upper than 10% of the surface_tank_capacity, transpirable water equals
-    eauDispo.
+    Said otherwise, a part of the water available for the day ('eauDispo') is used
+    to maintain the surface reservoir at a minimum level of 10% of its capacity,
+    as this water is considered as bound to the surface reservoir and cannot be
+    transpired. 
 
-    Remark : if the use of j-1 indices is too problematic, it seems feasible to
-    run this function just before update_surface_tank_stock.
+    Of course, if the filling rate of the previous day is above 10%, the transpirable
+    water is equal to the water available for the day.
+
+    Furthermore, transpirable water cannot be negative.
+
+    ? Remark : if the use of j-1 indices is troublesome, it should be feasible to
+    ? run this function just before update_surface_tank_stock.
 
     Args:
         j (_type_): _description_
@@ -1093,14 +1080,20 @@ def estimate_transpirable_water(j, data):
         _type_: _description_
     """
 
-    data["eauTranspi"][j,:,:] = np.where(
-        data["surface_tank_stock"][j-1,:,:] < 0.1 * data["surface_tank_capacity"],
-        np.maximum(
-            0,
-            data["available_water"][j,:,:] - (0.1 * data["surface_tank_capacity"] - data["surface_tank_stock"][j-1,:,:])
-            ),
-        data["available_water"][j,:,:],
-    )
+    # data["eauTranspi"][j,:,:] = np.where(
+    #     data["surface_tank_stock"][j-1,:,:] < 0.1 * data["surface_tank_capacity"],
+    #     np.maximum(
+    #         0,
+    #         data["available_water"][j,:,:] - (0.1 * data["surface_tank_capacity"] - data["surface_tank_stock"][j-1,:,:])
+    #         ),
+    #     data["available_water"][j,:,:],
+    # )
+
+    #! simplification : we are already working with water height between permanent wilting point and field capacity,
+    #! so there is no need to consider bound water as this is already taken into consideration in the calculation of RU
+    #! if we want to take this further correctly we have to rewrite everything, so better keep it simple for now
+
+    data["eauTranspi"][j,:,:] = data["available_water"][j,:,:]
 
     return data
 
@@ -1110,11 +1103,12 @@ def estimate_transpirable_water(j, data):
 
 def update_total_tank_stock(j, data):
     """
-    This functions updates the value of total_tank_stock with the value of
-    transpirable water.
-    
-    ? why incrementing stTot by eauTranspi ?
-    ? we then consider that transpirable water is the water that fills the total_tank_stock ?
+    This functions updates the total height of transpirable water
+    ('total_tank_stock', mm) with the amount of transpirable water for the day
+    ('eauTranspi', mm). 
+
+    ? Said differently, 'total_tank_stock' represents the total amount of water
+    ? available for the plant in the soil column ?
 
     Args:
         j (_type_): _description_
@@ -1124,9 +1118,6 @@ def update_total_tank_stock(j, data):
         _type_: _description_
     """
 
-    # group 29
-    #! renaming stTot with total_tank_stock
-    #// data["stTot"][j:,:,:] = (data["stTot"][j,:,:] + data["eauTranspi"][j,:,:]).copy()#[...,np.newaxis]
     data["total_tank_stock"][j:,:,:] = (data["total_tank_stock"][j,:,:] + data["eauTranspi"][j,:,:])
 
     return data
@@ -1137,17 +1128,18 @@ def update_total_tank_stock(j, data):
 
 def update_delta_total_tank_stock(j, data):
     """
-    This function estimates delta_total_tank_stock
+    This function estimates the positive variation of the total height of
+    transpirable water ('delta_total_tank_stock', mm).
 
-    delta_total_tank_stock is the positive variation of transpirable water
-    stock. It is computed as the difference between the total_tank_stock and
-    stRuPrec, bound in 0. Thus, it can only have a positive value. stRuPrec is
-    initialized to be equal to total_tank_stock at the beginning of the
-    simulation. total_tank_stock is initialized with stockIrr parameter. Thus,
-    simulations should start with a 0 value.
+    It is computed as the difference between the total_tank_stock and
+    previous_total_tank_stock, bound in 0. 
+    
+    'previous_total_tank_stock' is initialized to be equal to 'total_tank_stock'
+    at the beginning of the simulation. As 'total_tank_stock' is initialized
+    with the 'stockIrr' parameter, simulations should start with a 0 value.
 
-    stRuPrec is updated at each cycle with the update_struprec function.
-
+    'previous_total_tank_stock' is updated each day with the 'update_struprec'
+    function.
     
     Args:
         j (_type_): _description_
@@ -1155,12 +1147,7 @@ def update_delta_total_tank_stock(j, data):
     Returns:
         _type_: _description_
     """
-    # group 30
-    #! we propose a different version based on stTot
-    #! renaming stTot to total_tank_stock
-    #! renaming stRuVar to delta_total_tank_stock
-    #! renaming stRuPrec to previous_total_tank_stock
-    #// data["stRuVar"][j:,:,:] = np.maximum(0, data["stTot"][j,:,:] - data["stRuPrec"][j,:,:])[...,np.newaxis]
+
     data["delta_total_tank_stock"][j:,:,:] = np.maximum(0, data["total_tank_stock"][j,:,:] - data["previous_total_tank_stock"][j,:,:])
     return data
 
@@ -1168,73 +1155,47 @@ def update_delta_total_tank_stock(j, data):
 
 
 
-def conditions_rempliRes(j,data):
-    """_summary_
-    Returns:
-        _type_: _description_
+def update_total_tank_stock_for_second_crop_cycle(j, data):
     """
+    This function updates the total height of transpirable water
+    ('total_tank_stock', mm), specifically if a second crop cycle starts.
 
-    #! renaming stRuVar with delta_total_tank_stock
-    #//condition_1 = (data["stRuVar"][j,:,:] > data["humectation_front"][j,:,:])
-    condition_1 = (data["delta_total_tank_stock"][j,:,:] > data["humectation_front"][j,:,:])
+    This update is applied only if a second crop cycle starts, as
+    previous_root_tank_capacity and previous_total_tank_stock are initialized as
+    null. That means conditions 2 and 3 of this function will fail during a
+    first crop cycle, leading to no change in total_tank_stock.
+    
+    However, at numPhase = 7, which corresponds to the harvesting date and that
+    opens the possibility for a second crop cycle, previous_root_tank_capacity
+    and previous_total_tank_stock will be updated.
 
-    #! renaming stRurMaxPrec to previous_root_tank_capacity
-    #// condition_2 = (data["humectation_front"][j,:,:] <= data["stRurMaxPrec"][j,:,:])
-    condition_2 = (data["humectation_front"][j,:,:] <= data["previous_root_tank_capacity"][j,:,:])
+    From now on, if delta_total_tank_stock is greater than humectation front
+    (condition 1 passed), and previous_root_tank_capacity is greater or equal to
+    the humectation_front (condition 2 passed), and if the humectation_front is
+    below previous_humectation_front (condition 3 passed), then the total tank
+    stock is updated to be increased with the difference between
+    delta_total_tank_stock and humectation_front, times the previous root tank
+    stock.  
 
-    #! we replace humPrec by hum with indice j-1
-    #// condition_3 = (data["humectation_front"][j,:,:] < data["humPrec"][j,:,:])
-    condition_3 = (data["humectation_front"][j,:,:] < data["previous_humectation_front"][j,:,:])
+    Thus, if the root tank is empty, total_tank_stock will remain unchanged, and
+    if the root tank is full, total_tank_stock will be increased up to the
+    amount of water making the difference between quantity of water for
+    humectation front and the variation in daily transpirable water.
 
-    return condition_1, condition_2, condition_3
+    Also, if delta_total_tank_stock is greater than humectation front (condition
+    1 passed), but previous_root_tank_capacity is lower than the
+    humectation_front (condition 2 failed), while the humectation_front is below
+    previous_humectation_front (condition 3 passed), we update the total tank
+    stock to be equal to delta_total_tank_stock.
 
+    In other words, if during the second crop cycle the humectation front is too
+    low, we increase the total tank stock.
 
-
-
-
-def update_total_tank_stock_step_2(j, data):
-    """
-    This function performs the second update of total_tank_stock/stTot/stRu in the
-    reservoir filling wrapper function. It will increase the total_tank_stock
-    depending on the variation of transpirable water and height of humectation
-    front.
-
-    test image markdown
-    ![Drag Racing](Dragster.jpg)
-
-    In this function, if the variation of transpirable water
-    (delta_total_tank_stock) increases above the depth of humectation front
-    (hum), if the depth of humectation front (hum) is above the
-    previous_root_tank_capacity (condition 1 passed, and 2 failed, which
-    should be the case for most of the simulations that will be single-season),
-    and if the depth of humectation front (hum) has decreased since the previous
-    day, then total_tank_stock takes delta_total_tank_stock as value. If the
-    depth of humectation front did not change or increased since the previous
-    day (humPrec), then total_tank_stock is unchanged.
-
-    Notably, previous_root_tank_capacity is initialized at 0, and takes
-    another value only at end of cycle ; hum is initialized at a value different
-    from 0 and evolves daily between delta_total_tank_stock and
-    total_tank_capacity.
-
-    humPrec is initialized with the same value as hum. However, in the
-    update_humPrec_for_end_of_cycle function, at the day of transition between
-    phase 7 and phase 0, it takes hum as value, with a minimum bound of
-    surface_tank_capacity.
-
-    Starting from second simulation season (previous_root_tank_capacity
-    != 0), if the variation of transpirable water (delta_total_tank_stock)
-    increases above the depth of humectation front (hum), and if the depth of
-    humectation front stays below or equel to the total soil capacity
-    (conditions 1 and 2 passed), then we increase the value of total_tank_stock
-    by a the difference of water height between the variation of total tank
-    stock (delta_total_tank_stock) and the depth of humectation front (hum),
-    proportionally to the filling of the root tank capacity of previous season
-    (stRurPrec). Thus, if the root tank is empty, total_tank_stock will remain
-    unchanged, and if the root tank is full, total_tank_stock will be increased
-    up to the amount of water making the difference between quantity of water
-    for humectation front and the variation in daily transpirable water.
-
+    ? To my opinion, this function is way too complicated for a borderline use case
+    ? (multiple cropping cycles during one simulation).
+    ? We'd want to keep the code for legacy reasons but if really this simulation
+    ? feature is needed we'll have to simplify it.
+ 
     Args:
         j (_type_): _description_
         data (_type_): _description_
@@ -1243,33 +1204,22 @@ def update_total_tank_stock_step_2(j, data):
         _type_: _description_
     """
 
-    condition_1, condition_2, condition_3 = conditions_rempliRes(j,data)
+    condition_1 = (data["delta_total_tank_stock"][j,:,:] > data["humectation_front"][j,:,:])
+    condition_2 = (data["humectation_front"][j,:,:] <= data["previous_root_tank_capacity"][j,:,:])
+    condition_3 = (data["humectation_front"][j,:,:] < data["previous_humectation_front"][j,:,:])
 
-    #! renaming stTot to total_tank_stock
-    #// data["stTot"][j:,:,:] = np.where(
     data["total_tank_stock"][j:,:,:] = np.where(
         condition_1,
         np.where(
-            #! 
             condition_2, 
-            #! we replace stRurPrec with stRur at indice j-1
-            #! renaming stRur to root_tank_stock
-            #! renaming stTot to total_tank_stock
-            #! renaming stRuVar with delta_total_tank_stock
-            #// data["stTot"][j,:,:] + (data["stRuVar"][j,:,:] - data["humectation_front"][j,:,:]) * data["stRurPrec"][j,:,:],
-            data["total_tank_stock"][j,:,:] + (data["delta_total_tank_stock"][j,:,:] - data["humectation_front"][j,:,:]) * data["previous_root_tank_stock"][j,:,:],
+            data["total_tank_stock"][j,:,:] + (data["delta_total_tank_stock"][j,:,:] - data["humectation_front"][j,:,:]) * \
+                  data["previous_root_tank_stock"][j,:,:],
             np.where(
                 condition_3,
-                #! renaming stRuVar with delta_total_tank_stock
-                #//data["stRuVar"][j,:,:],
                 data["delta_total_tank_stock"][j,:,:],
-                #! renaming stTot to total_tank_stock
-                #// data["stTot"][j,:,:],
                 data["total_tank_stock"][j,:,:],
             ),
         ),
-        #! renaming stTot to total_tank_stock  
-        #// data["stTot"][j,:,:],
         data["total_tank_stock"][j,:,:],
     )
 
@@ -1280,48 +1230,44 @@ def update_total_tank_stock_step_2(j, data):
 
 
 
-def update_stRuPrec(j, data):
+def update_previous_total_tank_stock_for_second_crop_cycle(j, data):
     """
-    This function performs the update of
-    previous_total_tank_stock/stRuPrec in the reservoir filling wrapper
-    function. It will decrease the previous_total_tank_stock depending on
-    the variation of transpirable water and height of humectation front.
+    This function performs the update of the previous total height of
+    transpirable water (previous_total_tank_stock, mm).
 
-    test image markdown ![Drag Racing](Dragster.jpg)
+    It will decrease the previous_total_tank_stock depending on the variation of
+    transpirable water and height of humectation front.
+
+    This update is applied only if a second crop cycle starts, as
+    previous_root_tank_capacity and previous_total_tank_stock are initialized as
+    null. That means conditions 2 and 3 of this function will fail during a
+    first crop cycle, leading to no change in previous_total_tank_stock.
 
     In this function, if the variation of transpirable water
-    (delta_total_tank_stock) increases above the depth of humectation front
-    (hum), if the depth of humectation front (hum) is above the
-    previous_root_tank_capacity (condition 1 passed, and 2 failed, which
-    should be the case for most of the simulations that will be single-season),
-    and if the depth of humectation front (hum) has decreased since the previous
-    day (condition 3 passed), then previous_total_tank_stock equals 0. If
-    the depth of humectation front did not change or increased since the
-    previous day (humPrec), then previous_total_tank_stock is unchanged.
+    (delta_total_tank_stock) increases above humectation_front (condition 1
+    passed), and if humectation_front is above the previous_root_tank_capacity
+    (condition failed), and if the depth of humectation front has decreased
+    since the previous day (condition 3 passed), then previous_total_tank_stock
+    equals 0.
 
-    Notably, previous_root_tank_capacity is initialized at 0, and takes
-    another value only at end of cycle ; hum is initialized at a value different
-    from 0 and evolves daily between delta_total_tank_stock and
-    total_tank_capacity.
+    Starting from second simulation season (previous_root_tank_capacity != 0),
+    if the variation of transpirable water (delta_total_tank_stock) increases
+    above the depth of humectation front (hum), and if the depth of humectation
+    front stays below or equel to the total soil capacity (conditions 1 and 2
+    passed), then we decrease the value of previous_total_tank_stock by a the
+    difference of water height between the variation of total tank stock
+    (delta_total_tank_stock) and the depth of humectation front (hum),
+    proportionally to the filling of the root tank capacity of previous season
+    (previous_root_tank_stock). Thus, if the root tank is empty,
+    previous_total_tank_stock will remain unchanged, and if the root tank is
+    full, previous_total_tank_stock will be decreased up to the amount of water
+    making the difference between quantity of water for humectation front and
+    the variation in daily transpirable water.
 
-    humPrec is initialized with the same value as hum. However, in the
-    update_humPrec_for_end_of_cycle function, at the day of transition between
-    phase 7 and phase 0, it takes hum as value, with a minimum bound of
-    surface_tank_capacity.
-
-    Starting from second simulation season (previous_root_tank_capacity
-    != 0), if the variation of transpirable water (delta_total_tank_stock)
-    increases above the depth of humectation front (hum), and if the depth of
-    humectation front stays below or equel to the total soil capacity
-    (conditions 1 and 2 passed), then we decrease the value of
-    previous_total_tank_stock by a the difference of water height between
-    the variation of total tank stock (delta_total_tank_stock) and the depth of
-    humectation front (hum), proportionally to the filling of the root tank
-    capacity of previous season (previous_root_tank_stock). Thus, if the root tank is empty,
-    previous_total_tank_stock will remain unchanged, and if the root tank
-    is full, previous_total_tank_stock will be decreased up to the amount
-    of water making the difference between quantity of water for humectation
-    front and the variation in daily transpirable water.
+    ? To my opinion, this function is way too complicated for a borderline use case
+    ? (multiple cropping cycles during one simulation).
+    ? We'd want to keep the code for legacy reasons but if really this simulation
+    ? feature is needed we'll have to simplify it.
 
     Args:
         j (_type_): _description_
@@ -1331,30 +1277,22 @@ def update_stRuPrec(j, data):
         _type_: _description_
     """
 
-    condition_1, condition_2, condition_3 = conditions_rempliRes(j,data)
+    condition_1 = (data["delta_total_tank_stock"][j,:,:] > data["humectation_front"][j,:,:])
+    condition_2 = (data["humectation_front"][j,:,:] <= data["previous_root_tank_capacity"][j,:,:])
+    condition_3 = (data["humectation_front"][j,:,:] < data["previous_humectation_front"][j,:,:])
 
-    # group 32
-    #! renaming stRuPrec with previous_total_tank_stock
-    #// data["stRuPrec"][j:,:,:] = np.where(
     data["previous_total_tank_stock"][j:,:,:] = np.where(
         condition_1,
         np.where(
             condition_2,
-            #! replacing stRurPrec with ratio formula
-            #! renaming stRuVar with delta_total_tank_stock
-            #! renaming stRuPrec with previous_total_tank_stock
-            #//np.maximum(0, data["stRuPrec"][j,:,:] - (data["stRuVar"][j,:,:] - data["humectation_front"][j,:,:]) * data["stRurPrec"][j,:,:]),
-            np.maximum(0, data["previous_total_tank_stock"][j,:,:] - (data["delta_total_tank_stock"][j,:,:] - data["humectation_front"][j,:,:]) * data["previous_root_tank_stock"][j,:,:]),
+            np.maximum(0, data["previous_total_tank_stock"][j,:,:] - (data["delta_total_tank_stock"][j,:,:] - data["humectation_front"][j,:,:]) * \
+                       data["previous_root_tank_stock"][j,:,:]),
             np.where(
                 condition_3,
                 0,
-                #! renaming stRuPrec with previous_total_tank_stock
-                #// data["stRuPrec"][j,:,:],
                 data["previous_total_tank_stock"][j,:,:],
             ),
         ),
-        #! renaming stRuPrec with previous_total_tank_stock
-        #// data["stRuPrec"][j,:,:],
         data["previous_total_tank_stock"][j,:,:],
     )
 
@@ -1366,8 +1304,9 @@ def update_stRuPrec(j, data):
 
 def update_delta_total_tank_stock_step_2(j, data):
     """
-
-
+    ? Ok the logic is the same as for the two previous functions 
+    ? and i don't want to document it as it is way too complicated
+    ? and we won't be using it for now.
 
     Args:
         j (_type_): _description_
@@ -1376,32 +1315,21 @@ def update_delta_total_tank_stock_step_2(j, data):
     Returns:
         _type_: _description_
     """
+    condition_1 = (data["delta_total_tank_stock"][j,:,:] > data["humectation_front"][j,:,:])
+    condition_2 = (data["humectation_front"][j,:,:] <= data["previous_root_tank_capacity"][j,:,:])
+    condition_3 = (data["humectation_front"][j,:,:] < data["previous_humectation_front"][j,:,:])
 
-    condition_1, condition_2, condition_3 = conditions_rempliRes(j,data)
-
-    # groupe 33
-    #! renaming stRuVar with delta_total_tank_stock
-    #// data["stRuVar"][j:,:,:] = np.where(
     data["delta_total_tank_stock"][j:,:,:] = np.where(
         condition_1,
         np.where(
             condition_2,
-            #! renaming stRuVar with delta_total_tank_stock
-            #// data["stRuVar"][j,:,:] + (data["stRuVar"][j,:,:] - data["humectation_front"][j,:,:]) * data["previous_root_tank_stock"][j,:,:],
             data["delta_total_tank_stock"][j,:,:] + (data["delta_total_tank_stock"][j,:,:] - data["humectation_front"][j,:,:]) * data["previous_root_tank_stock"][j,:,:],
             np.where(
                 condition_3,
-                #! renaming stRuVar with delta_total_tank_stock
-                #! renaming stRuPrec with previous_total_tank_stock
-                #// data["stRuVar"][j,:,:] + data["stRuPrec"][j,:,:],
                 data["delta_total_tank_stock"][j,:,:] + data["previous_total_tank_stock"][j,:,:],
-                #! renaming stRuVar with delta_total_tank_stock
-                #// data["stRuVar"][j,:,:],
                 data["delta_total_tank_stock"][j,:,:],   
             ),
         ),
-        #! renaming stRuVar with delta_total_tank_stock
-        #// data["stRuVar"][j,:,:],
         data["delta_total_tank_stock"][j,:,:],
     )
 
@@ -1411,13 +1339,14 @@ def update_delta_total_tank_stock_step_2(j, data):
 
 
 
-def update_hum(j, data):
+def apply_humectation_front_boundaries(j, data):
     """
-    This function updates the depth to humectation front (hum) to be the maximum
-    value between the depth to humectation front (hum) and
-    delta_total_tank_stock (that is to say depth of humectation front can only
-    increase), bounded by total_tank_capacity (that is to say humectation front
-    can not go deep indefinitely).
+    This function updates the water height to humectation front
+    (humectation_front, mm) by bounding it between delta_total_tank_stock and
+    total_tank_capacity.
+    
+    That is to say depth of humectation front can only increase, and that
+    humectation front can not go down indefinitely.
 
     Args:
         j (_type_): _description_
@@ -1427,39 +1356,22 @@ def update_hum(j, data):
         _type_: _description_
     """
 
-    # groupe 34
-    #! renaming stRuVar with delta_total_tank_stock
-    #// data["humectation_front"][j:,:,:] = np.maximum(data["stRuVar"][j,:,:], data["humectation_front"][j,:,:])#[...,np.newaxis]
     data["humectation_front"][j:,:,:] = np.maximum(data["delta_total_tank_stock"][j,:,:], data["humectation_front"][j,:,:])
-
-    # groupe 35
-    #! renaming stRuMax to total_tank_capacity
-    #// data["humectation_front"][j:,:,:] = np.minimum(data["stRuMax"][j,:,:], data["humectation_front"][j,:,:])#[...,np.newaxis]
     data["humectation_front"][j:,:,:] = np.minimum(data["total_tank_capacity"][j,:,:], data["humectation_front"][j,:,:])
+
     return data
 
 
 
 
 
-def condition_total_tank_overflow(j,data):
-    """_summary_
-
-    Returns:
-        _type_: _description_
+def update_drainage(j, data):
     """
-    condition = (data["total_tank_stock"][j,:,:] > data["total_tank_capacity"][j,:,:])
-    return condition
-
-
-
-
-
-def update_dr(j, data):
-    """
-    This function estimates the daily drainage (dr). When total tank overflows, it
-    computes drainage from the differences between the total_tank_stock (that is
-    to say the total and total_tank_capacity.
+    This function estimates the daily drainage (dr).
+    
+    When total tank overflows (total_tank_stock > total_tank_capacity), the
+    drainage is computed from the difference between total_tank_stock and
+    total_tank_capacity. This means the drainage value will be positive
 
     Args:
         j (_type_): _description_
@@ -1467,17 +1379,11 @@ def update_dr(j, data):
     Returns:
         _type_: _description_
     """
-    #! renaming stTot to total_tank_stock
-    #! renaming stRuMax to total_tank_capacity
-    #// condition = (data["stTot"][j,:,:] > data["stRuMax"][j,:,:])
-    condition = condition_total_tank_overflow(j,data)
-    # groupe 36
-    # essais stTot
-    data["dr"][j,:,:] = np.where(
+
+    condition = (data["total_tank_stock"][j,:,:] > data["total_tank_capacity"][j,:,:])
+
+    data["drainage"][j,:,:] = np.where(
         condition,
-        #! renaming stTot to total_tank_stock
-        #! renaming stRuMax to total_tank_capacity
-        #// data["stRu"][j,:,:] - data["stRuMax"][j,:,:],
         data["total_tank_stock"][j,:,:] - data["total_tank_capacity"][j,:,:],
         0,
     )
@@ -1487,11 +1393,12 @@ def update_dr(j, data):
 
 
 
-def update_total_tank_stock_step_3(j, data):
+def update_total_tank_stock_after_drainage(j, data):
     """
-    This function updates the total tank stock where these is overflow occuring.
-    When capacity of total tank is exceeded, it corrects the stock value with
-    maximum capacity of total tank.
+    This function updates the total tank stock (total_tank_stock, mm) when these is overflowing.
+
+    When capacity of total_tank_stock is exceeded, total_tank_stock value is replaced with 
+    total_tank_capacity 
 
     Args:
         j (_type_): _description_
@@ -1500,31 +1407,20 @@ def update_total_tank_stock_step_3(j, data):
         _type_: _description_
     """
 
-    #! renaming stTot to total_tank_stock
-    #! renaming stRuMax to total_tank_capacity
-    #// condition = (data["stTot"][j,:,:] > data["stRuMax"][j,:,:])
-    condition = condition_total_tank_overflow(j,data)
-    # groupe 37
-    # essais stTot
-    #! renaming stTot to total_tank_stock
-    #! renaming stRuMax to total_tank_capacity
-    #// data["stRu"][j,:,:] = np.where(
-    #// data["stTot"][j:,:,:] = np.where(   
+    condition = (data["total_tank_stock"][j,:,:] > data["total_tank_capacity"][j,:,:])
+
     data["total_tank_stock"][j:,:,:] = np.where(  
         condition,
-        #// data["stRuMax"][j,:,:],
         data["total_tank_capacity"][j,:,:],
-        # data["stRu"][j,:,:],
-        #// data["stTot"][j,:,:],
         data["total_tank_stock"][j,:,:],
-    )#[...,np.newaxis]
+    )
     return data
 
 
 
 
 
-def update_hum_step_2(j, data):
+def update_humectation_front_after_drainage(j, data):
     """
     We update the depth to humectation front (hum) again, to reflect eventual changes in
     total_tank_stock values.
@@ -1539,14 +1435,29 @@ def update_hum_step_2(j, data):
         _type_: _description_
     """
 
-    # groupe 38
-    # // avant modif 10/06/2015
-    # data["humectation_front"][j:,:,:] = np.maximum(data["humectation_front"][j,:,:], data["stRu"][j,:,:])
-    # essais stTot
-    #! renaming stTot to total_tank_stock
-    #// data["humectation_front"][j:,:,:] = np.maximum(data["humectation_front"][j,:,:], data["stTot"][j,:,:])[...,np.newaxis]
-    data["humectation_front"][j:,:,:] = np.maximum(data["humectation_front"][j,:,:], data["total_tank_stock"][j,:,:])#[...,np.newaxis]
-    #! en conflit avec le calcul précédent de hum
+    data["humectation_front"][j:,:,:] = np.maximum(data["humectation_front"][j,:,:], data["total_tank_stock"][j,:,:])
+
+    return data
+
+
+
+
+def compute_drainage(j, data):
+    """
+    This wrapper function aims to regroup computations related to drainage :
+    - update_drainage
+    - update total_tank_stock
+    - update_humectation_front_after_drainage
+
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    """
+
+    data = update_drainage(j, data)
+    data = update_total_tank_stock_after_drainage(j, data)
+    data = update_humectation_front_after_drainage(j, data)
 
     return data
 
@@ -1556,11 +1467,19 @@ def update_hum_step_2(j, data):
 
 def update_root_tank_stock_step_2(j, data):
     """
+    This function updates the height of water in the tank of water accessible to
+    roots ("root_tank_stock", mm).
 
-    Finally, we update root tank stock (root_tank_stock) with the computed
-    values First we increment root_tank_stock with transpirable water
-    (eauTranspi), within the limits of root_tank_capacity. Then, we limit the
-    value of root_tank_stock within total_tank_stock
+    It increments root_tank_stock with transpirable water (eauTranspi), within
+    the bounds of root_tank_capacity and total_tank_stock.
+
+    This means the sum of transpirable water and root tank stock for the day
+    firstly cannot be higher than the root tank capacity, which is fine to represent 
+    the height of water accessible to roots. But also, that this sum limited by
+    the root tank capacity cannot be higher than the total tank stock, which seems unlikely.  
+
+    ? This raises the question about where does the potential water in excess go.
+
 
     Args:
         j (_type_): _description_
@@ -1568,18 +1487,9 @@ def update_root_tank_stock_step_2(j, data):
     Returns:
         _type_: _description_
     """
-    # groupe 39
-    # Rempli res racines
-    #! renaming stRur to root_tank_stock
-    #! renaming stRurMax to root_tank_capacity
-    #// data["stRur"][j:,:,:] = np.minimum(data["stRur"][j,:,:] + data["eauTranspi"][j,:,:], data["stRurMax"][j,:,:])[...,np.newaxis]
-    data["root_tank_stock"][j:,:,:] = np.minimum(data["root_tank_stock"][j,:,:] + data["eauTranspi"][j,:,:], data["root_tank_capacity"][j,:,:])#[...,np.newaxis]
-    # groupe 40
-    # essais stTot
-    #! renaming stRur to root_tank_stock
-    #! renaming stTot to total_tank_stock
-    #// data["stRur"][j,:,:] = np.minimum(data["stRur"][j,:,:], data["stRu"][j,:,:])
-    data["root_tank_stock"][j:,:,:] = np.minimum(data["root_tank_stock"][j,:,:], data["total_tank_stock"][j,:,:])#[...,np.newaxis]
+
+    data["root_tank_stock"][j:,:,:] = np.minimum(data["root_tank_stock"][j,:,:] + data["eauTranspi"][j,:,:], data["root_tank_capacity"][j,:,:])
+    data["root_tank_stock"][j:,:,:] = np.minimum(data["root_tank_stock"][j,:,:], data["total_tank_stock"][j,:,:])
     return data
 
 
@@ -1627,79 +1537,80 @@ def rempliRes(j, data):
     Sinon on a de l'eau r�siliente au maximum de la CC jusqu'� l'ancienne HumPrec,
     on rempli alors StRu de la diff�rence etre ces deux valeurs puis on fait la MAJ
     des Dr, StRur, Hum etc...
+
+    ! simplification : we want to simplify the code, and we don't want to keep the possibility of multiple crop cycles
+    ! we keep the old code for maintainance and future developments though
     """
 
-    # section 1 : updating the end_of_season memory variables
-
-    # in order to save resources, we test if there is at least one pixel at phase 7
-    # and one pixel at changePhase 1 in the current time step before applying the "end_of_season" functions
-
-    if (np.any(data["numPhase"][j,:,:] == 7)) & (np.any(data["changePhase"][j,:,:] == 1)):
-
-        data = update_previous_humectation_front_at_end_of_season(j, data)
-        data = update_humectation_front_at_end_of_season(j, data)
-        data = update_root_tank_capacity_at_end_of_season(j, data)
-        data = update_previous_root_tank_stock_at_end_of_season(j, data)
-        data = update_previous_total_tank_stock_at_end_of_season(j, data)
+    #! simplification
+    #// section 1 : updating the end_of_season memory variables
+    #// in order to save resources, we test if there is at least one pixel at phase 7
+    #// and one pixel at changePhase 1 in the current time step before applying the "end_of_season" functions
+    #// if (np.any(data["numPhase"][j,:,:] == 7)) & (np.any(data["changePhase"][j,:,:] == 1)):
+    #//     data = update_previous_humectation_front_at_end_of_season(j, data)
+    #//     data = update_humectation_front_at_end_of_season(j, data)
+    #//     data = update_root_tank_capacity_at_end_of_season(j, data)
+    #//     data = update_previous_root_tank_stock_at_end_of_season(j, data)
+    #//     data = update_previous_total_tank_stock_at_end_of_season(j, data)
     
-    #! we let this function here, conditioned to work for j0 only, but it should be moved into initialization
+    #! simplification
+    #// we let this function here, conditioned to work for j0 only, but it should be moved into initialization
     data = reset_total_tank_capacity(j, data)
+
+    # Updates the value of water stock in the surface tank (surface_tank_stock,
+    # mm) with the water available for the day (available_water, mm), within the
+    # limits of 110% surface_tank_capacity.
+    data = update_surface_tank_stock(j, data)
+
+    # Estimates the daily height of water available from the surface reservoir
+    # for transpiration by the plant ('eauTranspi', mm). A part of the water
+    # available for the day ('eauDispo') is used to maintain the surface
+    # reservoir at a minimum level of 10% of its capacity, as this water is
+    # considered as bound to the surface reservoir and cannot be transpired. 
+    data = estimate_transpirable_water(j, data)
+
+    # Updates the total height of transpirable water ('total_tank_stock', mm)
+    # with the amount of transpirable water for the day ('eauTranspi', mm)
+    data = update_total_tank_stock(j, data)
+
+    #! simplification
+    #// delta_total_tank_stock is used with second cycle computations
+    #// estimating positive delta between total_root_tank and stRuPrec
+    #// data = update_delta_total_tank_stock(j, data)
     
-
-    # section 2 : reservoir filling
-
-    # # filling the surface tank with available water
-    data = update_surface_tank_stock(j, data) # verif ok
-
-    # # estimates transpirable water
-    data = estimate_transpirable_water(j, data) # verif ok
-
-    # # increments total tank stock with transpirable water 
-    # # (meaning that total tank stock may represent a transpirable water tank)
-    data = update_total_tank_stock(j, data) # verif ok
-
-
-
-
-
-    # # estimating positive delta between total_root_tank and stRuPrec
-    data = update_delta_total_tank_stock(j, data) # verif ok
-
-
+    #! simplification
+    #// # first we update total_tank_stock that can 1) take delta_total_tank_stock or 2) be unchanged
+    #// data = update_total_tank_stock_for_second_crop_cycle(j, data)# verif ok
+    #// # # then previous_total_tank_stock can 1) take 0 or 2) be unchanged
+    #// data = update_previous_total_tank_stock_for_second_crop_cycle(j, data)
+    #// # # delta_total_tank_stock can 1) be incremented of previous_total_tank_stock or 2) be unchanged
+    #//data = update_delta_total_tank_stock_step_2(j, data)
     
-    # # first we update total_tank_stock that can 1) take delta_total_tank_stock or 2) be unchanged
-    data = update_total_tank_stock_step_2(j, data)# verif ok
-    # # then previous_total_tank_stock can 1) take 0 or 2) be unchanged
-    data = update_stRuPrec(j, data) #????
-    # # delta_total_tank_stock can 1) be incremented of previous_total_tank_stock or 2) be unchanged
-    data = update_delta_total_tank_stock_step_2(j, data)
-    
-    # # # here, in case 1, In this function, if the variation of transpirable water
-    # # (delta_total_tank_stock) increases above the depth of humectation front
-    # # (hum), if the depth of humectation front (hum) is above the
-    # # previous_root_tank_capacity (condition 1 passed, and 2 failed,
-    # # which should be the case for most of the simulations that will be
-    # # single-season), and if the depth of humectation front (hum) has decreased
-    # # since the previous day (condition 3 passed), then total_tank_stock takes the value of 
-    # # delta_total_tank_stock, previous_total_tank_stock equals 0, and 
-    # # delta_total_tank_stock is incremented by previous_total_tank_stock.
-    # # 
-    # # in case 2, nothing happens.
+    #// # # here, in case 1, In this function, if the variation of transpirable water
+    #// # (delta_total_tank_stock) increases above the depth of humectation front
+    #// # (hum), if the depth of humectation front (hum) is above the
+    #// # previous_root_tank_capacity (condition 1 passed, and 2 failed,
+    #// # which should be the case for most of the simulations that will be
+    #// # single-season), and if the depth of humectation front (hum) has decreased
+    #// # since the previous day (condition 3 passed), then total_tank_stock takes the value of 
+    #// # delta_total_tank_stock, previous_total_tank_stock equals 0, and 
+    #// # delta_total_tank_stock is incremented by previous_total_tank_stock.
+    #// # 
+    #// # in case 2, nothing happens.
 
 
-    # # update_hum manages increase in hum 
-    data = update_hum(j, data)
+    # Updates the water height to humectation front (humectation_front, mm) by
+    # bounding it between delta_total_tank_stock and total_tank_capacity, so
+    # that humectation front cannot go down indefinitely.
+    data = apply_humectation_front_boundaries(j, data)
 
-    # # in case of overflowing...
-    # # calculating drainage
-    data = update_dr(j, data)
-    # # limiting the total_tank_stock to the total_tank_capacity (when overflowing)
-    data = update_total_tank_stock_step_3(j, data)
-
-    # # update again hum value, but we could merge functions with update_hum
-    data = update_hum_step_2(j, data)
-
-    # # filling root_tank_stock with transpirable water, within the limits of total_tank_stock
+    # computes drainage
+    data = compute_drainage(j, data)
+   
+    # Updates the height of water in the tank of water accessible to roots
+    # ("root_tank_stock", mm), so that the transpirable water added to the root
+    # tank stock for the day cannot be higher than both the root tank capacity,
+    # and the total tank stock.
     data = update_root_tank_stock_step_2(j, data)        
 
     return data
