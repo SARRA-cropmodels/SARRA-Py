@@ -44,22 +44,17 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
         
         # computation of filling of the tanks is done after other computations related to water,
         # as we consider filling is taken into consideration at the end of the day
-        data = rempliRes(j, data) 
+        data = fill_tanks(j, data) 
 
         # transpiration
         # estimation of the fraction of evaporable soil water (fesw)
-        data = estimate_fesw(j, data) 
-        data = estimate_kce(j, data, paramITK)
-        data = estimate_soil_potential_evaporation(j, data)
-        data = estimate_soil_evaporation(j, data)
+        data = compute_soil_evaporation(j, data, paramITK)
+
+
         data = estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK)
-        data = estimate_ftsw(j, data)
-        data = estimate_kcp(j, data, paramVariete)
-        data = estimate_potential_plant_transpiration(j, data)
-        data = estimate_kcTot(j, data)
-        data = estimate_pFact(j, data, paramVariete)
-        data = estimate_cstr(j, data)
-        data = estimate_plant_transpiration(j, data)
+        
+        
+        data = compute_transpiration(j, data, paramVariete)
         
         # water consumption
         data = ConsoResSep(j, data) # ***bileau***; exmodules 1 & 2 # trad O
@@ -164,22 +159,17 @@ def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration)
         
         # computation of filling of the tanks is done after other computations related to water,
         # as we consider filling is taken into consideration at the end of the day
-        data = rempliRes(j, data) 
+        data = fill_tanks(j, data) 
 
         # transpiration
         # estimation of the fraction of evaporable soil water (fesw)
-        data = estimate_fesw(j, data) 
-        data = estimate_kce(j, data, paramITK)
-        data = estimate_soil_potential_evaporation(j, data)
-        data = estimate_soil_evaporation(j, data)
+        data = compute_soil_evaporation(j, data, paramITK)
+
+
         data = estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK)
-        data = estimate_ftsw(j, data)
-        data = estimate_kcp(j, data, paramVariete)
-        data = estimate_potential_plant_transpiration(j, data)
-        data = estimate_kcTot(j, data)
-        data = estimate_pFact(j, data, paramVariete)
-        data = estimate_cstr(j, data)
-        data = estimate_plant_transpiration(j, data)
+
+        
+        data = compute_transpiration(j, data, paramVariete)
         
         # water consumption
         data = ConsoResSep(j, data) # ***bileau***; exmodules 1 & 2 # trad O
