@@ -161,14 +161,13 @@ def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration)
         # as we consider filling is taken into consideration at the end of the day
         data = fill_tanks(j, data) 
 
-        # transpiration
-        # estimation of the fraction of evaporable soil water (fesw)
+        # evaporation
         data = compute_soil_evaporation(j, data, paramITK)
 
-
+        #estimate water evaporated from the mulch and update mulch water stock
         data = estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK)
 
-        
+        # transpiration
         data = compute_transpiration(j, data, paramVariete)
         
         # water consumption
