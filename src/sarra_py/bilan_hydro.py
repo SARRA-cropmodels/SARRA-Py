@@ -2332,9 +2332,7 @@ def update_root_tank_stock_with_transpiration(j, data):
     Returns:
         _type_: _description_
     """
-    # group 67
-    #! renaming stRur to root_tank_stock
-    #// data["stRur"][j:,:,:] = np.maximum(0, data["stRur"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis]
+
     data["root_tank_stock"][j:,:,:] = np.maximum(0, data["root_tank_stock"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis]
     return data
 
@@ -2346,8 +2344,7 @@ def update_total_tank_stock_with_transpiration(j, data):
     # data["stRu"][j:,:,:] = np.maximum(0, data["stRu"][j,:,:] - data["tr"][j,:,:])
     # essais stTot
     # group 68
-    #! renaming stTot to total_tank_stock
-    #// data["stTot"][j:,:,:] = np.maximum(0, data["stTot"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis] 
+
     data["total_tank_stock"][j:,:,:] = np.maximum(0, data["total_tank_stock"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis] ## ok
     return data
 
