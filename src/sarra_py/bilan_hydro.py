@@ -1744,11 +1744,11 @@ def estimate_soil_potential_evaporation(j, data):
 
 def estimate_soil_evaporation(j, data):
     """
-    This function computes estimation of soil evaporation (mm, evap). It uses
-    the potential soil evaporation (evapPot) and the fraction of evaporable soil
-    water (fesw), bounded by the surface tank stock.
+    This function computes estimation of soil evaporable water (`evap`, mm). It uses
+    the potential soil evaporation (`evapPot`, mm) and the fraction of evaporable soil
+    water (`fesw`), bounded by the `surface_tank_stock` (mm).
 
-    We remind fesw is defined as the ratio of water stock in the surface tank
+    We remind `fesw` is defined as the ratio of water stock in the surface tank
     over 110% of the surface tank capacity, meaning it will be equal to 1 when
     the surface tank is full, and 0 when the surface tank is empty.
 
@@ -1760,14 +1760,17 @@ def estimate_soil_evaporation(j, data):
     type of soil, whereas the squared fesw approach uses a generic function that
     is not soil specific.
 
-    More details are available in the PhD dissertation of Alhassane
-    https://hdl.handle.net/20.500.12177/1576 
+    in Alhassane thesis, evap is called EVj for "evaporation journanière", and
+    is calculated as Evj = EvapPot x FESW. More details are available in the PhD
+    dissertation of Alhassane https://hdl.handle.net/20.500.12177/1576 
+    
+    The `estimate_effective_evaporation_from_evaporable_water` function computed
+    later in the daily cycle uses the `evap` value to determine the effective
+    evaporation (`consoRur`, mm) on the quantity of water in the surface tank
+    (`surface_tank_stock`, mm). 
 
     It has been adapted from the EvapRuSurf procedure, from bileau.pas and
     exmodules 1 & 2.pas file from the original FORTRAN code.
-
-    in Alhassane thesis, evap is called EVj for "evaporation journanière", and is calculated
-    as Evj = EvapPot x FESW
 
     ? evaporation is bounded by the surface tank stock, which means it is meant
     ? to happen only in the depth described by the surface_tank 
@@ -2059,14 +2062,17 @@ def estimate_cstr(j, data):
 def estimate_plant_transpiration(j, data):
     """
 
-    This function computes the transpiration from the plant.
+    This function computes the adjusted plant transpiration (tr, mm) from the
+    plant, by adjusting the potential transpiration (trPot, mm) with cstr.
+
+    This function adjusts the potential transpiration (trPot, mm) that was
+    calculated through trPot = kcp * ET0, by adding the stress coefficient cstr
+    (that corresponds to Ks in the FAO56 paper) Thus we obtain an adjusted plant
+    transpiration tr, which corresponds to ETc_adj in the FAO56 (see equation
+    80).
 
     This function is based on the EvalTranspi procedure, from bileau.pas,
     bhytypeFAO.pas, exmodules 1 & 2.pas, from the original FORTRAN code.
-
-    ici, on ajuste la transpirateion potentielle trPot calculated through 
-    trPot = kcp x ET0 by adding the stress coefficient cstr (that corresponds to Ks in FAO56)
-    Thus we obtain an adjusted plant transpiration, and tr corresponds to ETc_adj in FAO56 (eq 80)
 
     Args:
         j (_type_): _description_
@@ -2075,18 +2081,19 @@ def estimate_plant_transpiration(j, data):
     Returns:
         _type_: _description_
     """
-    # group 58
-    data["tr"][j:,:,:] = (data["trPot"][j,:,:] * data["cstr"][j,:,:])
+
+    data["tr"][j:,:,:] = data["trPot"][j,:,:] * data["cstr"][j,:,:]
 
     return data
 
 
 def compute_transpiration(j, data, paramVariete):
+    # we can take out the estimate_kcTot function
 
     data = estimate_ftsw(j, data)
     data = estimate_kcp(j, data, paramVariete)
     data = estimate_potential_plant_transpiration(j, data)
-    # data = estimate_kcTot(j, data) # we can take this out of this function
+    #// data = estimate_kcTot(j, data) 
     data = estimate_pFact(j, data, paramVariete)
     data = estimate_cstr(j, data)
     data = estimate_plant_transpiration(j, data)
@@ -2098,21 +2105,19 @@ def compute_transpiration(j, data, paramVariete):
 
 
 
-def estimate_transpirable_surface_water(j, data):
+def set_evapotranspirable_surface_water(j, data):
     """
-    This function estimates the transpirable amount of water that is
-    transpirable from the surface tank.
+    This function stores the initial value of `surface_tank_stock` in a new
+    variable representing the quantity of evapotranspirable surface water (`trSurf`,
+    mm), as the value `surface_tank_stock` will later be updated.
     
     The original function (based on the ConsoResSep procedure, from bileau.pas,
     exmodules 1 & 2.pas files, from the original FORTRAN code) removed 1/10th of
-    surface tank capacity as water is condidered as bound.
+    surface tank capacity as water was condidered as bound to the soil.
 
-    #! However, as water volumes already take into consideration bound water as
-    #! we are already working on a volume of available water that is in between
-    #! permanent wilting point and field capacity we will remove
-    #! all mentions to bound water in these functions. 
-
-    #? could be delete the trSurf variable if we want to simplify this process ?
+    However, as we are working with the water volumes in between permanent
+    wilting point and field capacity - thus already considering water bound to
+    the soil, we will remove all of these arbitrary 10% corrections. 
 
     Args:
         j (_type_): _description_
@@ -2120,24 +2125,39 @@ def estimate_transpirable_surface_water(j, data):
     Returns:
         _type_: _description_
     """
+
     data["trSurf"][j:,:,:] = np.maximum(
         0,
         #// data["surface_tank_stock"][j,:,:] - data["surface_tank_capacity"] * 0.1,
         data["surface_tank_stock"][j,:,:],
     )
+
     return data
 
 
 
 
-def update_surface_tank_stock_with_evaporation(j, data):
+def subtract_evap_from_surface_tank_stock(j, data):
     """
-    This function updates the water stock of the surface tank by subtracting the evaporation from the soil.
+    This function updates the water stock of the surface tank
+    (`surface_tank_stock`, mm) by subtracting the daily amount of evaporation
+    (`evap`, mm) from it.
 
-    surface_tank_stock cannot go below 0.
+    `evap` is calculated in the `estimate_soil_evaporation` function earlier in
+    the daily loop from the potential soil evaporation (`evapPot`, mm) and the
+    fraction of evaporable soil water (`fesw`), and cannot exceed the value of
+    `surface_tank_stock`. This approach is somewhat comparable to the soil
+    evaporation reduction coefficient kr approach presented in FAO56 paper. See
+    documentation of the `estimate_soil_evaporation` function for further
+    details.
 
-    This approach does not take into consideration the difficulty of evaporation regarding the humidity state of the soil, as described in FAO56.
-
+    #? As `evap` cannot exceed the value of `surface_tank_stock` according to the
+    #? `estimate_soil_evaporation` function and is not modified until this function
+    #? is applied, it is funny to see that the
+    #? `subtract_evap_from_surface_tank_stock` function enforces
+    #? `surface_tank_stock` not to take a negative value. Hence, we could probably
+    #? simplify this function.
+    
     Args:
         j (_type_): _description_
         data (_type_): _description_
@@ -2145,32 +2165,33 @@ def update_surface_tank_stock_with_evaporation(j, data):
     Returns:
         _type_: _description_
     """
+
     data["surface_tank_stock"][j:,:,:] = np.maximum(0, data["surface_tank_stock"][j,:,:] - data["evap"][j,:,:])
+    
     return data
     
 
 
 
-def estimate_water_consumption_from_root_tank_stock(j, data):
+def estimate_effective_evaporation_from_evaporable_water(j, data):
     """
-    This function estimates consoRur, which represents is the water to be consumed from
-    the root tank stock.
 
-    If soil evaporation (evap) is higher than the quantity of water in the surface tank before evaporation (represented by trSurf),
-    meaning that evaporation will deplete the surface water tank, 
-    then consumption from root tank stock will take the value of trSurf.  
+    This function estimates the effective evaporation (`consoRur`, mm) from the
+    evaporable water (`evap`, mm) limited by the evapotranspirable surface water
+    (`trSurf`, mm).
+
+    If `evap` is higher than the quantity of water in the surface tank at the
+    beginning of the daily cycle/before evaporation (`trSurf`), meaning that
+    evaporation will deplete the surface water tank, then water consumption
+    shall take the value of `trSurf`. 
     
-      Else, it  equals evap.
+    Else, `consoRur` equals `evap`.
 
-    if evaporation is greater than water available in surface tank, 
-    then the water consumtpion equals the water available in surface tank.
-    else, it equals the evaporation.
-
-    it is a way to bound the water consumption by the water available in the
+    It is a way to bound the water consumption by the water available in the
     surface tank.
 
-    #? why is this not computed after update_surface_tank_stock_with_evaporation,
-    #? i.e. after that the surface tank stock has been updated with evaporation ?
+    #? the name of this function is not that great. thinking about something
+    #? about evaporation demand vs evaporated water
 
     Args:
         j (_type_): _description_
@@ -2188,10 +2209,14 @@ def estimate_water_consumption_from_root_tank_stock(j, data):
 
 
 
-def update_total_tank_stock_with_water_consumption(j, data):
+def subtract_effective_evaporation_from_total_tank_stock(j, data):
     """
-    This function updates the total tank stock by subtracting the lower water consumption
-    value from estimate_water_consumption_from_root_tank_stock
+    This function updates the total quantity of water (`total_tank_stock`, mm)
+    by subtracting the effective evaporation (`consoRur`, mm).
+
+    `total_tank_stock` value cannot be negative, so it is bound by 0.
+
+    #? though it seems impossible to have a negative value of `total_tank_stock`
 
     Args:
         j (_type_): _description_
@@ -2208,23 +2233,20 @@ def update_total_tank_stock_with_water_consumption(j, data):
 
 
 
-def update_water_consumption_according_to_rooting(j, data):
+def update_effective_evaporation_for_shallow_roots(j, data):
     """
-    This function updates the water consumption consoRur according to
-    rooting depth.
+    This function updates the value of effective evaporation (`consoRur`, mm) in
+    order to be used specifically to update the quantity of water in the root
+    tank (`root_tank_stock`, mm).
 
-    If the root tank capacity is lower than the surface tank capacity,
-    meaning than the roots did not dive into the deep tank yet, then the
-    water consumption is updated to equal the evaporation at the prorata of
-    the exploration of surface tank by the roots.
+    If the root tank capacity is lower than the surface tank capacity, meaning
+    than the roots do not dive into the deep tank yet, then the effective
+    evaporation is updated to equal the evaporable water (`evap`, mm) modulated
+    by the ratio between `root_tank_stock` and `surface_tank_capacity`, that is
+    to say at the prorata of the exploration of surface tank by the roots.
 
-    Else, consoRur keeps it value, which was previously computed by
-    estimate_water_consumption_from_root_tank_stock.
-
-    #? en réalité on calcule une valeur de consorur pour être spéciiquement utilisée pour updater le root tank stock ensuite
-    #? mais pourquoi utiliser le ratio de quantité d'eau accessible par les racines sur la quantité d'eau stockable en surface 
-    #? pour moduler l'évaporation ? 
-    #? il faudrait presque renommer consoRur ici car ne représente pas la même chose qu'initialement défini
+    Else, `consoRur` keeps it value, which was previously computed by the
+    `estimate_effective_evaporation_from_evaporable_water` function.
 
     Args:
         j (_type_): _description_
@@ -2232,8 +2254,6 @@ def update_water_consumption_according_to_rooting(j, data):
     Returns:
         _type_: _description_
     """
-    #  fraction d'eau evapore sur la part transpirable qd les racines sont moins
-    #  profondes que le reservoir de surface, mise a jour des stocks transpirables
 
     data["consoRur"][j:,:,:] = np.where(
         data["root_tank_capacity"][j:,:,:] < data["surface_tank_capacity"],
@@ -2246,9 +2266,16 @@ def update_water_consumption_according_to_rooting(j, data):
 
 
 
-def update_root_tank_stock_with_water_consumption(j, data):
+def subtract_effective_evaporation_from_root_tank_stock(j, data):
     """
-    This function updates root tank stock according to water consumption.
+    This function updates the quantity of water in the root tank
+    (`root_tank_stock`, mm) according to the effective evaporation, taking into
+    consideration potential shallow rooting ( as `consoRur` was calculated
+    through both `estimate_effective_evaporation_from_evaporable_water` and
+    `update_effective_evaporation_for_shallow_roots` functions).
+
+    `root_tank_stock` value cannot be negative, so it is bound by 0.
+
     Args:
         j (_type_): _description_
         data (_type_): _description_
@@ -2257,6 +2284,7 @@ def update_root_tank_stock_with_water_consumption(j, data):
     """
 
     data["root_tank_stock"][j:,:,:] = np.maximum(0, data["root_tank_stock"][j,:,:] - data["consoRur"][j,:,:])
+
     return data
 
 
@@ -2264,11 +2292,24 @@ def update_root_tank_stock_with_water_consumption(j, data):
 
 def update_plant_transpiration(j, data):
     """
-    reajustement de la qte transpirable considerant que l'evap a eu lieu avant
-    mise a jour des stocks transpirables  
-    if plant transpiration is higher than the root tank stock, then plant 
-    transpiration is updated to be equal to the difference between the root tank stock and the
-    plant transpiration. Else, its value is unmodified.
+    This function updates the value of plant transpiration (`tr`, mm) according
+    to the quantity of water in the root tank (`root_tank_stock`, mm).
+
+    If the transpiration (which as this point on the daily cycle equals `trPot *
+    cstr`) is higher than the root tank stock (which at this point has been
+    updated to reflect the effective evaporation), then plant transpiration is
+    updated to be equal to the difference between the root tank stock and the
+    plant transpiration.
+    
+    Else, its value is unmodified.
+
+    #? However, if this test is true, this always leads to transpiration value = 0.
+    #? We may want to rethink it to check if it does what it was supposed to.
+    
+    #? Instead it would make more sense to bound tr by the value of root tank stock, 
+    #? meaning the maximum quantity of water that can be transpired by the plant 
+    #? is limited by the quantity of water accessible to roots...
+
     Args:
         j (_type_): _description_
         data (_type_): _description_
@@ -2279,6 +2320,9 @@ def update_plant_transpiration(j, data):
     data["tr"][j:,:,:] = np.where(
         data["tr"][j,:,:] > data["root_tank_stock"][j,:,:],
         np.maximum(data["root_tank_stock"][j,:,:] - data["tr"][j,:,:], 0),
+        #! il peut être intéressant d'introduire dans la prochaine version
+        #! le correctif suivant :
+        # data["root_tank_stock"][j,:,:],
         data["tr"][j,:,:],
     )
     return data
@@ -2286,17 +2330,31 @@ def update_plant_transpiration(j, data):
 
 
 
-def update_surface_tank_stock_according_to_transpiration(j, data):
+def subtract_transpiration_from_surface_tank_stock_according_to_root_tank_stock(j, data):
+
     """
-    This function updates the surface tank stock to reflect plant
-    transpiration.
+    This function updates the surface tank stock to reflect plant transpiration,
+    in accordance with the repartition of water between surface and root tanks.
 
-    if the root tank stock is above 0, then surface tank stock is updated by
+    If `root_tank_stock` is above 0, then `surface_tank_stock` is updated by
     subtracting the plant transpiration modulated by the ratio between the
-    transpirable water and the root tank stock.
+    transpirable water `trSurf` (representing the amount of water in surface
+    tank at the beginning of the day) and the root tank stock.
+    
+    This ratio is bounded by 1, meaning that if there is a higher quantity of
+    transpirable water that water accessible to roots, then the ratio is set to
+    1, and `surface_tank_stock` will be updated by being subtracted by `tr`.
 
-    That is to say, the more transpirable water is close to the root tank stock,
-    the more of transpirated water by plant will be removed from surface tank stock.
+    On the contrary, if transpirable water `trSurf` is much lower than the root
+    tank stock, meaning that there is a lot of water accessible to roots but
+    this water is in the deep tank, then the ratio will be close to 0, and the
+    `surface_tank_stock` will be updated by being subtracted by a very low value
+    of `tr`.
+
+    #? The rules and underlying assumptions for these transfers seem somewhat
+    #? arbitrary, so we want to be cautious about them.
+    #? Also, it is not clear why we use trSurf instead of surface_tank_stock
+    #? in the calculations.
  
     Args:
         j (_type_): _description_
@@ -2307,12 +2365,12 @@ def update_surface_tank_stock_according_to_transpiration(j, data):
     """
 
     data["surface_tank_stock"][j:,:,:] = np.where(
-
         data["root_tank_stock"][j,:,:] > 0,
-
         np.maximum(
-            data["surface_tank_stock"][j,:,:] - \
-                (data["tr"][j,:,:] * np.minimum(data["trSurf"][j,:,:]/data["root_tank_stock"][j,:,:], 1)),
+            data["surface_tank_stock"][j,:,:] - (data["tr"][j,:,:] * np.minimum(
+                data["trSurf"][j,:,:] / data["root_tank_stock"][j,:,:],
+                1,
+            )),
             0,
         ),
         data["surface_tank_stock"][j,:,:],
@@ -2324,8 +2382,15 @@ def update_surface_tank_stock_according_to_transpiration(j, data):
 
 
 
-def update_root_tank_stock_with_transpiration(j, data):
-    """_summary_
+def subtract_transpiration_from_root_tank_stock(j, data):
+
+    """
+    This function updates the quantity of water in the root tank
+    (`root_tank_stock`, mm) by subtracting the plant transpiration (`tr`, mm)
+    from it.
+
+    `root_tank_stock` value cannot be negative, so it is bound by 0.
+    
     Args:
         j (_type_): _description_
         data (_type_): _description_
@@ -2333,32 +2398,56 @@ def update_root_tank_stock_with_transpiration(j, data):
         _type_: _description_
     """
 
-    data["root_tank_stock"][j:,:,:] = np.maximum(0, data["root_tank_stock"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis]
+    data["root_tank_stock"][j:,:,:] = np.maximum(0, data["root_tank_stock"][j,:,:] - data["tr"][j,:,:])
+
     return data
 
 
 
 
 
-def update_total_tank_stock_with_transpiration(j, data):
-    # data["stRu"][j:,:,:] = np.maximum(0, data["stRu"][j,:,:] - data["tr"][j,:,:])
-    # essais stTot
-    # group 68
+def subtract_transpiration_from_total_tank_stock(j, data):
 
-    data["total_tank_stock"][j:,:,:] = np.maximum(0, data["total_tank_stock"][j,:,:] - data["tr"][j,:,:])#[...,np.newaxis] ## ok
+    """
+    This function updates the total quantity of water (`total_tank_stock`, mm)
+    by subtracting the plant transpiration (`tr`, mm) from it.
+
+    `total_tank_stock` value cannot be negative, so it is bound by 0.
+
+    Args:
+        j (_type_): _description_
+        data (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+
+    data["total_tank_stock"][j:,:,:] = np.maximum(0, data["total_tank_stock"][j,:,:] - data["tr"][j,:,:])
+
     return data
 
 
 
 
 
-def update_etr_etm(j, data):
-    # group 69
-    data["etr"][j:,:,:] = (data["tr"][j,:,:] + data["evap"][j,:,:]).copy()#[...,np.newaxis]
+# def update_etr_etm(j, data):
+#     """
+#     This function computes etm and etr values.
     
-    # group 70
-    data["etm"][j:,:,:] = (data["trPot"][j,:,:] + data["evapPot"][j,:,:]).copy()#[...,np.newaxis]
-    return data
+#     #? However they are not used anywhere else in the code.
+#     #? We may want to deprecate it. 
+
+#     Args:
+#         j (_type_): _description_
+#         data (_type_): _description_
+#     Returns:
+#         _type_: _description_
+#     """
+
+#     data["etr"][j:,:,:] = (data["tr"][j,:,:] + data["evap"][j,:,:]).copy()
+    
+#     data["etm"][j:,:,:] = (data["trPot"][j,:,:] + data["evapPot"][j,:,:]).copy()
+
+#     return data
 
 
 
@@ -2366,62 +2455,54 @@ def update_etr_etm(j, data):
 
 def ConsoResSep(j, data):
     """
-    d'après bileau.pas
+    This function is a wrapper function, that calls all the functions that take
+    part into the calculation of the water consumption from the soil, hence the
+    different tanks represented by the model.
 
-    group 71
-
-    Separation de tr et evap. Consommation de l'eau sur les reservoirs
-    Hypothese : l'evaporation est le processus le plus rapide, retranche
-    en premier sur le reservoir de surface. Comme reservoir de surface
-    et reservoirs racinaires se chevauchent, il nous faut aussi calcule sur
-    le reservoir ayant des racines la part deja extraite pour l'evaporation.
-    Quand la profondeur des racines est inferieur au reservoir de surface
-    on ne consomme en evaporation que la fraction correspondant a cette
-    profondeur sur celle du reservoir de surface (consoRur).
-    Les estimations d'evaporation et de transpirations sont effectues
-    separemment, on peut ainsi avoir une consommation legerement superieure
-    a l'eau disponible. On diminuera donc la transpiration en consequence.
-
-    Modif : Pour les stock d'eau on tient compte de la partie rajoutee au
-    reservoir de surface qui ne peut etre que evapore (air dry)
-    // Parametres
-    IN:
-    stRurMax : mm
-    RuSurf : mm
-    evap : mm
-    trPot : mm
-    evaPot : mm
-    INOUT :
+    It is based on the ConsoResSep procedure, from bileau.pas original source
+    code. The general spirit of separation of evaporation from transpiration is
+    probably based on the FAO56 paper, but the formalism is different.
     
-    stRuSurf : mm
-    tr : mm
-    stRur : mm
-    stRu : mm
-    OUT:
-    etr : mm
-    etm : mm
+    A few notes on the original assumptions behind these processes : 
+
+    - The order in which the different computations are done is based on the
+    hypothesis that evaporation is the fastest process, and that it will deplete
+    the surface tank stock first.
+    - As surface tank and root tank overlap, we need to take into consideration
+    the effect of the water already depleted by evaporation on the root tank
+    stock.
+    - When root tank depth is lower than surface tank depth, we only evaporate 
+    the fraction of water corresponding to the root tank depth over the surface
+    tank depth.
+    
+    Previous notes also stated that as the computations are done separately for
+    evaporation and transpiration, we could end up with a water consumption
+    slightly higher than the available water. In this case, we would decrease
+    transpiration accordingly. However, this statement is dubious as this
+    behavior does not seem to be implemented in the code.
+
     """
 
-    data = estimate_transpirable_surface_water(j, data)
+    data = set_evapotranspirable_surface_water(j, data)
 
-    data = update_surface_tank_stock_with_evaporation(j, data)
+    data = subtract_evap_from_surface_tank_stock(j, data)
 
-    data = estimate_water_consumption_from_root_tank_stock(j, data)
+    data = estimate_effective_evaporation_from_evaporable_water(j, data)
 
-    data = update_total_tank_stock_with_water_consumption(j, data)
+    data = subtract_effective_evaporation_from_total_tank_stock(j, data)
 
-    data = update_water_consumption_according_to_rooting(j, data)
+    data = update_effective_evaporation_for_shallow_roots(j, data)
 
-    data = update_root_tank_stock_with_water_consumption(j, data)
+    data = subtract_effective_evaporation_from_root_tank_stock(j, data)
 
     data = update_plant_transpiration(j, data)
 
-    data = update_surface_tank_stock_according_to_transpiration(j, data)
+    data = subtract_transpiration_from_surface_tank_stock_according_to_root_tank_stock(j, data)
 
-    data = update_root_tank_stock_with_transpiration(j, data)
+    data = subtract_transpiration_from_root_tank_stock(j, data)
 
-    data = update_total_tank_stock_with_transpiration(j, data)
+    data = subtract_transpiration_from_total_tank_stock(j, data)
 
-    data = update_etr_etm(j, data)
+    #// data = update_etr_etm(j, data)
 
     return data

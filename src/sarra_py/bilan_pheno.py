@@ -660,8 +660,8 @@ def calculate_sum_of_thermal_time(j, data):
 
 def update_root_growth_speed(j, data, paramVariete):
     """
-    This function updates the root growth speed (vRac, mm/day) according to the
-    current phase (numPhase).
+    This function updates the root growth speed (`vRac`, mm/day) according to
+    the current phase (`numPhase`).
 
     This function has been adapted from the EvalVitesseRacSarraV3 procedure of
     the phenologie.pas and exmodules 1 & 2.pas files of the Sarra-H model,
@@ -686,6 +686,7 @@ def update_root_growth_speed(j, data, paramVariete):
         6: paramVariete['VRacMatu2'],
     }
 
+    # phases 1 to 6 
     for phase in range(1,6):
         data["vRac"][j:,:,:] = np.where(
             data["numPhase"][j,:,:] == phase,
@@ -693,75 +694,12 @@ def update_root_growth_speed(j, data, paramVariete):
             data["vRac"][j,:,:],
         )
 
-    # phase 0 ou 7
+    # phases 0 or 7
     data["vRac"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 0) | (data["numPhase"][j,:,:] == 7),
         0,
         data["vRac"][j,:,:],
     )
-
-
-    # # version that first for presence of given numPhase before applying the update
-    # # also, no broadcasting is done as the test is performed on every time slice
-    # #? maybe it would be a good idea to do that kind of thing once for all, ie with EvalPhenoSarrahV3
-
-    # if np.any(data["numPhase"][j,:,:]==0) :
-    #     data["vRac"][j,:,:] = xr.where(
-    #         data["numPhase"][j,:,:] == 0,
-    #         0,
-    #         data["vRac"][j,:,:],
-    #     )
-
-    # if np.any(data["numPhase"][j,:,:]==1) :
-    #     data["vRac"][j,:,:] = xr.where(
-    #         data["numPhase"][j,:,:] == 1,
-    #         paramVariete['VRacLevee'],
-    #         data["vRac"][j,:,:],
-    #     )
-    
-    # if np.any(data["numPhase"][j,:,:]==2) :
-    #     data["vRac"][j,:,:] = xr.where(
-    #         data["numPhase"][j,:,:] == 2,
-    #         paramVariete['VRacBVP'],
-    #         data["vRac"][j,:,:],
-    #     )
-
-    # if np.any(data["numPhase"][j,:,:]==3) :
-    #     data["vRac"][j,:,:] = xr.where(
-    #         data["numPhase"][j,:,:] == 3,
-    #         paramVariete['VRacPSP'],
-    #         data["vRac"][j,:,:],
-    #     )
-
-    # if np.any(data["numPhase"][j,:,:]==4) :
-    #     data["vRac"][j,:,:] = xr.where(
-    #         data["numPhase"][j,:,:] == 4,
-    #         paramVariete['VRacRPR'],
-    #         data["vRac"][j,:,:],
-    #     )
-
-    # if np.any(data["numPhase"][j,:,:]==5) :
-    #     data["vRac"][j,:,:] = xr.where(
-    #         data["numPhase"][j,:,:] == 5,
-    #         paramVariete['VRacMatu1'],
-    #         data["vRac"][j,:,:],
-    #     )
-
-    # if np.any(data["numPhase"][j,:,:]==6) :
-    #     data["vRac"][j,:,:] = xr.where(
-    #         data["numPhase"][j,:,:] == 6,
-    #         paramVariete['VRacMatu2'],
-    #         data["vRac"][j,:,:],
-    #     )
-
-    # if np.any(data["numPhase"][j,:,:]==7) :
-    #     data["vRac"][j,:,:] = xr.where(
-    #         data["numPhase"][j,:,:] == 7,
-    #         0,
-    #         data["vRac"][j,:,:],
-    #     )
-
-
 
     return data
 
