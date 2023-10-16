@@ -188,7 +188,6 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
             axis=1,
         )
 
-        AgERA5_files_df_collection[variable] = AgERA5_files_df_collection[variable][(AgERA5_files_df_collection[variable]["date"]>=date_start) & (AgERA5_files_df_collection[variable]["date"]<date_start+datetime.timedelta(days=duration))].reset_index(drop=True)
 
     # building a dictionary of correspondance between AgERA5 variables and SARRA variables
     AgERA5_SARRA_correspondance = {
