@@ -203,6 +203,7 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
 
     # loading the data
     for variable in tqdm(AgERA5_variables) :
+        print(variable)
         if AgERA5_SARRA_correspondance[variable] != None :
 
             try:
