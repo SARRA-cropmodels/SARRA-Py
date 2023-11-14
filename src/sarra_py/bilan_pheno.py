@@ -2,6 +2,7 @@ import numpy as np
 import copy
 import xarray as xr
 
+
 def reset(j, data):
 
   data = data.copy(deep=True)
@@ -16,8 +17,6 @@ def reset(j, data):
   data["numPhase"][j:,:,:] = np.where(data["numPhase"][j,:,:] == 7, 0, data["numPhase"][j,:,:])#[np.newaxis,...]
 
   return data
-
-
 
 
 def testing_for_initialization(j, data, paramITK, paramVariete):
@@ -521,6 +520,10 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
        grain laiteux au jour de récolte)
     
     7. the day of the harvest
+
+    We first test if the considered day has any pixel with the considered
+    phases, and only if it is the case we either test for initialization or
+    update the phenological phases.
     
     Notes :
 
@@ -535,7 +538,10 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
     model, Pascal version.
     """
 
-    
+    # in order to save computational resources, we test if there is
+    # the time step contains any pixel with the considered phases
+    # before testing for initialization or updating the phenological phases
+
     data = testing_for_initialization(j, data, paramITK, paramVariete)
     data = update_pheno_phase_1_to_2(j, data, paramVariete)
     data = update_pheno_phase_2_to_3(j, data, paramVariete)
@@ -585,14 +591,59 @@ def calculate_daily_thermal_time(j, data, paramVariete):
 
 
 
+def calculate_once_daily_thermal_time(data, paramVariete):
+    """calculating daily thermal time
+    Translated from the EvalDegresJourSarrahV3 procedure of the phenologie.pas and exmodules.pas files of theSarra-H model, Pascal version.
+    Pb de méthode !?
+    v1:= ((Max(TMin,TBase)+Min(TOpt1,TMax))/2 -TBase )/( TOpt1 - TBase);
+    v2:= (TL - max(TMax,TOpt2)) / (TL - TOpt2);
+    v:= (v1 * (min(TMax,TOpt1) - TMin)+(min(TOpt2,max(TOpt1,TMax)) - TOpt1) + v2 * (max(TOpt2,TMax)-TOpt2))/( TMax-TMin);
+    DegresDuJour:= v * (TOpt1-TBase);
 
-def calculate_sum_of_thermal_time(j, data, paramVariete):
+    
+    #   If Tmoy <= Topt2 then
+    #      DegresDuJour:= max(min(TOpt1,TMoy),TBase)-Tbase
+    #   else
+    #      DegresDuJour := (TOpt1-TBase) * (1 - ( (min(TL, TMoy) - TOpt2 )/(TL -TOpt2)));
+    #    If (Numphase >=1) then
+    #         SomDegresJour := SomDegresJour + DegresDuJour
+    #    else SomDegresJour := 0;
+
+    Returns:
+        _type_: _description_
     """
-        Translated from the EvalDegresJourSarrahV3 procedure of the phenologie.pas and exmodules.pas files of the Sarra-H model, Pascal version.
-    calculating sum of thermal time
-sdj has to be broadcasted or calculated as the first process to be able to use it with pheno correctly
 
-    Note : in SARRA-H, when numPhase > 7, sdj is set to 0 and sdj stops cumulating
+    data["ddj"].data = xr.where(
+        data["tpMoy"] <= paramVariete["TOpt2"],
+        np.maximum(np.minimum(paramVariete["TOpt1"], data["tpMoy"]), paramVariete["TBase"]) - paramVariete["TBase"],
+        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], data["tpMoy"]) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
+    ) 
+
+    return data
+
+
+
+
+
+
+def calculate_sum_of_thermal_time(j, data):
+    """
+    This function calculates the sum of thermal time ("somme de degrés jour",
+    sdj) for the current day. Accumulation of sum of thermal time is performed
+    starting from the sowing date, and only on pixels where numPhase is above 0.
+    If these conditions are not met, sdj is set to 0.
+
+    sdj value has to be broadcasted along time dimension (or computed first in
+    the process list) so that phenology-related functions can work properly.
+    Here, it is broadcasted.
+
+    This function has been translated from the EvalDegresJourSarrahV3 procedure
+    of the phenologie.pas and exmodules.pas files of the Sarra-H model, Pascal
+    version.
+
+    Note : in SARRA-H, when numPhase > 7, sdj is set to 0 and sdj stops
+    accumulating. This behavior has not been translated here.
+
     Returns:
         _type_: _description_
     """
@@ -609,8 +660,8 @@ sdj has to be broadcasted or calculated as the first process to be able to use i
 
 def update_root_growth_speed(j, data, paramVariete):
     """
-    This function updates the root growth speed (vRac, mm/day) according to the
-    current phase (numPhase).
+    This function updates the root growth speed (`vRac`, mm/day) according to
+    the current phase (`numPhase`).
 
     This function has been adapted from the EvalVitesseRacSarraV3 procedure of
     the phenologie.pas and exmodules 1 & 2.pas files of the Sarra-H model,
@@ -625,6 +676,7 @@ def update_root_growth_speed(j, data, paramVariete):
         _type_: _description_
     """
 
+
     phase_correspondances = {
         1: paramVariete['VRacLevee'],
         2: paramVariete['VRacBVP'],
@@ -634,6 +686,7 @@ def update_root_growth_speed(j, data, paramVariete):
         6: paramVariete['VRacMatu2'],
     }
 
+    # phases 1 to 6 
     for phase in range(1,6):
         data["vRac"][j:,:,:] = np.where(
             data["numPhase"][j,:,:] == phase,
@@ -641,7 +694,7 @@ def update_root_growth_speed(j, data, paramVariete):
             data["vRac"][j,:,:],
         )
 
-    # phase 0 ou 7
+    # phases 0 or 7
     data["vRac"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 0) | (data["numPhase"][j,:,:] == 7),
         0,
