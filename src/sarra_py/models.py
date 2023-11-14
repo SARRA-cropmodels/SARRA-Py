@@ -23,43 +23,38 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
     
     for j in tqdm(range(duration)):
 
-        # calculating daily thermal time, independently of sowing date
-        data = calculate_daily_thermal_time(j, data, paramVariete)
-
         # updating phenological stages
         data = EvalPhenoSarrahV3(j, data, paramITK, paramVariete)
 
         # sum of thermal sime is being computed from the day the crop is sown, including the day of sowing
-        data = calculate_sum_of_thermal_time(j, data, paramVariete)
+        data = calculate_sum_of_thermal_time(j, data)
 
-        # water balance
-        # evalIrrigPhase sp&cifique de l'irrigation automatique, on peut presque le conditionner au irrigAuto==True
-        data = EvalIrrigPhase(j, data, paramITK)
+        ### water balance
+        data = compute_irrigation_state(j, data, paramITK)
+
         # sums rainfall and irrigation history
-        data = calculate_total_water_availability(j, data)
+        data = compute_total_available_water(j, data)
+
         # can be conditioned to the presence of mulch
-        data = RempliMc(j, data, paramITK)
-        data = EvalRunOff(j, data, paramTypeSol)
+        data = fill_mulch(j, data, paramITK)
+        
+
+        data = compute_runoff(j, data)
         data = EvolRurCstr2(j, data, paramITK) 
         
         # computation of filling of the tanks is done after other computations related to water,
         # as we consider filling is taken into consideration at the end of the day
-        data = rempliRes(j, data) 
+        data = fill_tanks(j, data) 
 
         # transpiration
         # estimation of the fraction of evaporable soil water (fesw)
-        data = estimate_fesw(j, data) 
-        data = estimate_kce(j, data, paramITK)
-        data = estimate_soil_potential_evaporation(j, data)
-        data = estimate_soil_evaporation(j, data)
+        data = compute_soil_evaporation(j, data, paramITK)
+
+
         data = estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK)
-        data = estimate_ftsw(j, data)
-        data = estimate_kcp(j, data, paramVariete)
-        data = estimate_potential_plant_transpiration(j, data)
-        data = estimate_kcTot(j, data)
-        data = estimate_pFact(j, data, paramVariete)
-        data = estimate_cstr(j, data)
-        data = estimate_plant_transpiration(j, data)
+        
+        
+        data = compute_transpiration(j, data, paramVariete)
         
         # water consumption
         data = ConsoResSep(j, data) # ***bileau***; exmodules 1 & 2 # trad O
@@ -114,5 +109,77 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
         # data = MAJBiomMcSV3(data) # ***bilancarbonsarra***, exmodules 2
 
         data = estimate_critical_nitrogen_concentration(j, data)
+
+
+    return data
+
+
+
+def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration):
+    """
+    This is the functions list adapted from the procedures of the SARRA-H v42 model.
+
+    Args:
+        paramVariete (_type_): _description_
+        paramITK (_type_): _description_
+        paramTypeSol (_type_): _description_
+        data (_type_): _description_
+        duration (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    
+    for j in tqdm(range(duration)):
+
+        # calculating daily thermal time, independently of sowing date
+        data = calculate_daily_thermal_time(j, data, paramVariete)
+
+        # updating phenological stages
+        data = EvalPhenoSarrahV3(j, data, paramITK, paramVariete)
+
+        # sum of thermal sime is being computed from the day the crop is sown, including the day of sowing
+        data = calculate_sum_of_thermal_time(j, data)
+
+        ### water balance
+        # computing irrigation state
+        data = compute_irrigation_state(j, data, paramITK)
+
+        # sums rainfall and irrigation history
+        data = compute_total_available_water(j, data)
+
+        # filling the mulch
+        data = fill_mulch(j, data, paramITK)
+
+        # computing runoff
+        data = compute_runoff(j, data)
+
+        # computing evolution of tanks related to root growth
+        data = EvolRurCstr2(j, data, paramITK) 
+        
+        # computation of filling of the tanks is done after other computations related to water,
+        # as we consider filling is taken into consideration at the end of the day
+        data = fill_tanks(j, data) 
+
+        # evaporation
+        data = compute_soil_evaporation(j, data, paramITK)
+
+        #estimate water evaporated from the mulch and update mulch water stock
+        data = estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK)
+
+        # transpiration
+        data = compute_transpiration(j, data, paramVariete)
+        
+        # water consumption
+        data = ConsoResSep(j, data) # ***bileau***; exmodules 1 & 2 # trad O
+        
+        # # phenologie
+        data = update_root_growth_speed(j, data, paramVariete) 
+
+        # # bilan carbone
+        data = estimate_ltr(j, data, paramVariete)
+        data = estimate_KAssim(j, data, paramVariete)
+        data = estimate_conv(j,data,paramVariete)
+
 
     return data

@@ -1,7 +1,8 @@
 # params ok depuis SorGuiAm_MLIV41
 AGauss: 1.0
 KRdtBiom: 0.0 # ok
-KRdtPotA: 0.4 # ok
+KRdtPotA: 0.8 # ok
+# KRdtPotA: 0.4 # ok
 KRdtPotB: 100.0 # ok
 LGauss: 1.0
 NIYo: 1.0

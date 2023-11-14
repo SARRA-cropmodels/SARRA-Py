@@ -60,17 +60,17 @@ def variable_dict():
 
         # water balance
         "consoRur": ["consumption of water stored in the root system", "mm"],
-        "water_gathered_by_mulch" : ["water captured by the mulch in one day","mm"],
-        "eauDispo" : ["available water, sum of rainfall and total irrigation for the day","mm"],
+        "water_captured_by_mulch" : ["water captured by the mulch in one day","mm"],
+        "available_water" : ["available water, sum of rainfall and total irrigation for the day","mm"],
         "eauTranspi": ["water available for transpiration from the surface reservoir","mm"],
         "correctedIrrigation" : ["corrected irrigation amount","mm/d"],
         "cstr" : ["drought stress coefficient", "arbitrary unit"],
         "dayVrac" : ["modulated daily root growth","mm/day"],
         "delta_root_tank_capacity": ["change in root system water reserve","mm"],
-        "dr": ["drainage","mm"],
-        "etm": ["evapotranspiration from the soil moisture","mm/d"],
+        "drainage": ["drainage","mm"],
+        #// "etm": ["evapotranspiration from the soil moisture","mm/d"],
         "etp": ["potential evapotranspiration from the soil moisture","mm/d"],
-        "etr": ["reference evapotranspiration","mm/d"],
+        #// "etr": ["reference evapotranspiration","mm/d"],
         "evap": ["evaporation from the soil moisture","mm/d"],
         "evapPot": ["potential evaporation from the soil moisture","mm/d"],
         "FEMcW": ["water fraction in soil volume explored by the root system","none"],
@@ -78,7 +78,7 @@ def variable_dict():
         "irrigTotDay" : ["total irrigation for the day","mm"],
         "vRac" : ["reference daily root growth","mm/day"],
         "ftsw": ["fraction of transpirable surface water","decimal percentage"], 
-        "lr" : ["daily water runoff","mm/d"],
+        "runoff" : ["daily water runoff","mm/d"],
         "pFact": ["FAO reference for critical FTSW value for transpiration response","none"],
 
 
@@ -89,8 +89,8 @@ def variable_dict():
         "root_tank_stock": ["current stock of water in the root system tank","mm"], #! renaming stRu to root_tank_stock
         "total_tank_capacity": ["total capacity of the root system tank","mm"], #! renaming stRuMax to total_tank_capacity
         "stRur": ["",""], # ["previous season's root system tank stock","mm"],
-        "root_tank_capacity_previous_season": ["previous season's root system tank capacity","mm"], #! renaming stRurMaxPrec to root_tank_capacity_previous_season
-        "stRurPrec": ["previous day's root system tank stock","mm"],
+        "previous_root_tank_capacity": ["previous season's root system tank capacity","mm"], #! renaming stRurMaxPrec to previous_root_tank_capacity
+        "previous_root_tank_stock": ["previous day's root system tank stock","mm"],
         "stRurSurf": ["surface root system tank stock","mm"],
         "surface_tank_stock": ["current stock of water in the surface root system tank","mm"], #! renaming stRuSurf to surface_tank_stock
         "stRuSurfPrec": ["previous day's surface root system tank stock","mm"],
@@ -179,6 +179,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     #   BiomMc := BiomIniMc;
     data["biomMc"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
     data["biomMc"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of crop residues (mulch)"}
+    data["biomMc"] = data["biomMc"].astype("float32")
 
 
     # ?
@@ -189,6 +190,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     # ?
     #   Ltr := 1;
     data["ltr"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), 1.0))
+    data["ltr"] = data["ltr"].astype("float32")
 
 
     # Initial biomass of stem residues as litter (kg/ha)
@@ -196,6 +198,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     #   LitTiges := BiomIniMc;
     data["LitTige"] = (data["rain"].dims, np.full((duration, grid_width, grid_height), paramITK["biomIniMc"]))
     data["LitTige"].attrs = {"units": "kg/ha", "long_name": "Initial biomass of stem residues as litter"}
+    data["LitTige"] = data["LitTige"].astype("float32")
 
     ####### fin variables qui viennent de initplotMc
 
@@ -247,9 +250,9 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     # Soil maximal depth (mm)
     # Profondeur maximale de sol (mm)
     #   ProfRU := EpaisseurSurf + EpaisseurProf;
-    data["profRu"] = data["epaisseurProf"] + data["epaisseurSurf"]
-    data["profRu"].attrs = {"units": "mm", "long_name": "Soil maximal depth"}
-
+    #! data["profRu"] = data["epaisseurProf"] + data["epaisseurSurf"]
+    #! data["profRu"].attrs = {"units": "mm", "long_name": "Soil maximal depth"}
+    # déplacé dans l'initialisation du sol
 
     # Maximum water capacity to humectation front (mm)
     # Quantité d'eau maximum jusqu'au front d'humectation (mm)
@@ -259,7 +262,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     #   Hum := max(RuSurf, StRurMax);
     #   // Hum mis a profRuSurf
     #   Hum := max(StTot, Hum);
-    data["hum"] = (data["rain"].dims, np.full((duration, grid_width, grid_height),
+    data["humectation_front"] = (data["rain"].dims, np.full((duration, grid_width, grid_height),
         np.maximum(
             np.maximum(
                 #! renaming ruSurf with surface_tank_capacity
@@ -274,12 +277,12 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
             data["total_tank_stock"],
         )
     ))
-    data["hum"].attrs = {"units": "mm", "long_name": "Maximum water capacity to humectation front"}
+    data["humectation_front"].attrs = {"units": "mm", "long_name": "Maximum water capacity to humectation front"}
 
 
     # Previous value for Maximum water capacity to humectation front (mm)
     #  HumPrec := Hum;
-    data["humPrec"] = data["hum"]
+    data["previous_humectation_front"] = data["humectation_front"]
     
     
     # ?
@@ -290,9 +293,9 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     #   StRurMaxPrec := 0;
     #   //modif 10/06/2015 resilience stock d'eau
     #! renaming stTot with total_tank_stock
-    #! renaminog stRuPrec with total_tank_stock_previous_value
+    #! renaminog stRuPrec with previous_total_tank_stock
     #// data["stRuPrec"] =  data["stTot"]
-    data["total_tank_stock_previous_value"] =  data["total_tank_stock"]
+    data["previous_total_tank_stock"] =  data["total_tank_stock"]
 
     ####### fin variables eau depuis InitPlotMc
 
@@ -314,6 +317,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     for variable in variables :
         data[variable] = (data["rain"].dims, np.zeros(shape=(duration, grid_width, grid_height)))
         data[variable].attrs = {"units":variables[variable][1], "long_name":variables[variable][0]}
+        data[variable] = data[variable].astype("float32")
 
     return data
 
@@ -1476,7 +1480,7 @@ def calculate_leaf_area_index(j, data):
         xarray.Dataset: The updated xarray dataset with the calculated LAI.
     """
 
-    data["lai"][j:,:,:] = xr.where(
+    data["lai"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] <= 1),
         0,
         np.where(
