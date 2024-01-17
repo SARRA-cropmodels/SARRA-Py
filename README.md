@@ -1,10 +1,10 @@
 # SARRA-Py
 
-SARRA-Py is a crop simulation model implemented in Python from the SARRA family of models ([SARRA-H](https://sarra-h-dev.teledetection.fr/?page_id=15#SARRA-H), [SARRA-O](https://sarra-h-dev.teledetection.fr/?page_id=15#SARRA-O)).
+SARRA-Py is a crop simulation model implemented in Python from the SARRA family of models ([SARRA-H](https://github.com/SARRA-cropmodels/SARRA-H), [SARRA-O](https://github.com/SARRA-cropmodels/SARRA-O)).
 
 SARRA-Py has the same philosophy than the rest of the SARRA family of models : a daily time step, simple dynamic hydrological balance model, used to estimate the impact of climate scenarios on annual crops, assuming that crop performance is a function of the accumulated hydrological constraints during the crop's growth cycle. 
 
-SARRA-Py formalisms are based on those of its predecessors. Its main difference with [SARRA-H](https://sarra-h-dev.teledetection.fr/?page_id=15#SARRA-H) is that SARRA-Py is spatialized, performing its calculations on a georeferenced grid. In that, it is much comparable with [SARRA-O](https://sarra-h-dev.teledetection.fr/?page_id=15#SARRA-O), however its Python implementation and its use of xarray architecture facilitates articulation with data formats and tools used in remote sensing and weather data analysis.
+SARRA-Py formalisms are based on those of its predecessors. Its main difference with SARRA-H is that SARRA-Py is spatialized, performing its calculations on a georeferenced grid. In that, it is much comparable with SARRA-O, however its Python implementation and its use of xarray architecture facilitates articulation with data formats and tools used in remote sensing and weather data analysis.
 
 SARRA-Py integrates tools to facilitate regional scale analyses. We aim its code and formalisms to be open and evolutive, recognizing that any new scientific application may require some adaptation of the tool. SARRA-Py package is provided with notebook examples to illustrate multiple use cases.
 
