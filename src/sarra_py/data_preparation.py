@@ -447,6 +447,18 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
     Returns:
         _type_: _description_
     """
+    # load soil depth data, using the same code as in the load_iSDA_soil_data_alternate function
+    soil_depth_file_path = "../data/assets/gyga_af_erzd__m_1km.tif"
+    dataarray = rioxarray.open_rasterio(soil_depth_file_path)
+    dataarray = dataarray.astype('float32') # converting to float32 to allow for NaNs
+    dataarray = dataarray.rio.reproject_match(data, nodata=np.nan) # reprojecting to match the base data
+    dataarray = dataarray.squeeze("band").drop_vars(["band"]) # removing the band dimension and variable
+    dataarray = dataarray * 10 # converting from cm to mm
+    data["profRu"] = dataarray # we add the soil depth data to the base data
+    data["profRu"].attrs = {"units": "mm", "long_name": "Soil root zone depth (mm) adapted from Africa SoilGrids RZD"}
+    del dataarray # we delete the temporary dataarray
+
+
     # load raster data
     soil_type_file_path = "../data/assets/iSDA_at_TAMSAT_resolution_zeroclass_1E6.tif"
     dataarray = rioxarray.open_rasterio(soil_type_file_path)
