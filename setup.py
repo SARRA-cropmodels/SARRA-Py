@@ -11,9 +11,9 @@ def parse_requirements(file):
 
 setup(
 	name='SARRA-Py',
-	python_requires='>=3.8,<3.10',
+	python_requires='>=3.8',
 	description='SARRA-Py',
-	version = '0.0.1',
+	version = '0.1.2',
 	author='Jérémy LAVARENNE (@codename5281)',
 	packages=find_packages(where='src'),
 	install_requires=parse_requirements('requirements.txt'),

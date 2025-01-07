@@ -14,7 +14,3 @@ Home = "README.md"
 "Model formalisms" = "docs/model_formalisms.md"
 [[tool.portray.mkdocs.nav]]
 "Spatialization strategy" = "docs/spatialization_strategy.md"
-
-[[tool.portray.mkdocs.nav]]
-    [[tool.portray.mkdocs.nav.Tutorial]]
-    "00 - Running a simulation" = "docs/tutorial/00_-_Running_a_simulation.md"
