@@ -70,11 +70,6 @@
                 <li class="toctree-l1"><a class="reference internal" href="docs/spatialization_strategy/">Spatialization strategy</a>
                 </li>
               </ul>
-              <p class="caption"><span class="caption-text">Tutorial</span></p>
-              <ul>
-                  <li class="toctree-l1"><a class="reference internal" href="docs/tutorial/00_-_Running_a_simulation/">00 - Running a simulation</a>
-                  </li>
-              </ul>
               <p class="caption"><span class="caption-text">Reference</span></p>
               <ul>
                   <li class="toctree-l1"><a class="reference internal" href="#">Sarra Py</a>
@@ -84,8 +79,6 @@
                 <li class="toctree-l2"><a class="reference internal" href="reference/sarra_py/bilan_hydro/">Bilan Hydro</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="reference/sarra_py/bilan_pheno/">Bilan Pheno</a>
-                </li>
-                <li class="toctree-l2"><a class="reference internal" href="reference/sarra_py/comparison_tools_old/">Comparison Tools Old</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal" href="reference/sarra_py/data_preparation/">Data Preparation</a>
                 </li>
@@ -121,9 +114,9 @@
             <div class="section" itemprop="articleBody">
               
                 <h1 id="sarra-py">SARRA-Py</h1>
-<p>SARRA-Py is a crop simulation model implemented in Python from the SARRA family of models (<a href="https://sarra-h-dev.teledetection.fr/?page_id=15#SARRA-H">SARRA-H</a>, <a href="https://sarra-h-dev.teledetection.fr/?page_id=15#SARRA-O">SARRA-O</a>).</p>
+<p>SARRA-Py is a crop simulation model implemented in Python from the SARRA family of models (<a href="https://github.com/SARRA-cropmodels/SARRA-H">SARRA-H</a>, <a href="https://github.com/SARRA-cropmodels/SARRA-O">SARRA-O</a>).</p>
 <p>SARRA-Py has the same philosophy than the rest of the SARRA family of models : a daily time step, simple dynamic hydrological balance model, used to estimate the impact of climate scenarios on annual crops, assuming that crop performance is a function of the accumulated hydrological constraints during the crop's growth cycle. </p>
-<p>SARRA-Py formalisms are based on those of its predecessors. Its main difference with <a href="https://sarra-h-dev.teledetection.fr/?page_id=15#SARRA-H">SARRA-H</a> is that SARRA-Py is spatialized, performing its calculations on a georeferenced grid. In that, it is much comparable with <a href="https://sarra-h-dev.teledetection.fr/?page_id=15#SARRA-O">SARRA-O</a>, however its Python implementation and its use of xarray architecture facilitates articulation with data formats and tools used in remote sensing and weather data analysis.</p>
+<p>SARRA-Py formalisms are based on those of its predecessors. Its main difference with SARRA-H is that SARRA-Py is spatialized, performing its calculations on a georeferenced grid. In that, it is much comparable with SARRA-O, however its Python implementation and its use of xarray architecture facilitates articulation with data formats and tools used in remote sensing and weather data analysis.</p>
 <p>SARRA-Py integrates tools to facilitate regional scale analyses. We aim its code and formalisms to be open and evolutive, recognizing that any new scientific application may require some adaptation of the tool. SARRA-Py package is provided with notebook examples to illustrate multiple use cases.</p>
 <h2 id="table-of-contents">Table of Contents</h2>
 <ul>
@@ -136,22 +129,25 @@
 </ul>
 <h3 id="installation">Installation</h3>
 <p>These instructions will get you a copy of the project up and running on your machine.</p>
+<p>This package will work with Python &gt;3.8.x.</p>
 <p>Clone this repository and navigate to the directory:</p>
 <div class="codehilite"><pre><span></span><code>git clone https://github.com/SARRA-cropmodels/SARRA-Py/
 cd SARRA-Py
 </code></pre></div>
 
 <p>(optional) set up and activate a virtual environment for a clean installation of dependencies:</p>
-<div class="codehilite"><pre><span></span><code>pyenv virtualenv 3.x.x venv_sarra_py
-pyenv activate venv_sarra_py
+<div class="codehilite"><pre><span></span><code>conda<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>sarra_py<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9
+conda<span class="w"> </span>activate<span class="w"> </span>sarra_py
+conda<span class="w"> </span>install<span class="w"> </span>pip
+pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
 </code></pre></div>
 
-<p>Install package and its dependencies with pip:</p>
+<p>Install <strong>sarra_py</strong> package and its dependencies with pip:</p>
 <div class="codehilite"><pre><span></span><code>pip install .
 </code></pre></div>
 
 <h2 id="usage">Usage</h2>
-<p>This package is provided with a set of Jupyter notebooks to illustrate its use. You can find them in the <code>notebooks</code> folder. Do not forget to switch to a IPython kernel calling for your virtual environment if created.</p>
+<p>This package is provided with a set of Jupyter notebooks to illustrate its use. You can find them in the <code>notebooks</code> folder (to use it you can install jupyter <code>pip install jupyterlab</code> and run it <code>jupyter-lab</code>. Do not forget to switch to a IPython kernel calling for your virtual environment if created.</p>
 <h2 id="documentation">Documentation</h2>
 <p>The documentation is available at <a href="https://sarra-cropmodels.github.io/SARRA-Py/">https://sarra-cropmodels.github.io/SARRA-Py/</a>.</p>
 <h2 id="contributing">Contributing</h2>
@@ -207,5 +203,5 @@ pyenv activate venv_sarra_py
 
 <!--
 MkDocs version : 1.3.1
-Build Date UTC : 2023-02-21 09:15:23.740175+00:00
+Build Date UTC : 2025-01-07 15:35:34.697446+00:00
 -->
