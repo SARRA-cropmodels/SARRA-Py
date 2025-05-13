@@ -15,6 +15,7 @@ SARRA-Py integrates tools to facilitate regional scale analyses. We aim its code
 - [Contributing](#contributing)
 - [Support](#support)
 - [License](#license)
+- [Publications](#publications)
 
 ### Installation
 
@@ -59,3 +60,9 @@ If you have any questions, feel free to [post an issue in our GitHub repo](https
 ## License
 
 This project is licensed under the GNU GPLv3 license - see the [LICENSE](https://github.com/SARRA-cropmodels/SARRA-Py/blob/main/LICENSE) file for details.
+
+## Publications
+
+If you use SARRA-Py in your research, please cite the following publication:
+
+- [SARRA-Py: A Python-based crop simulation model for regional-scale analysis](https://doi.org/10.1016/j.softx.2025.102145). *SoftwareX*, 2025. DOI: [10.1016/j.softx.2025.102145](https://doi.org/10.1016/j.softx.2025.102145)
