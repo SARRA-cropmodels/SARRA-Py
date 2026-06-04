@@ -137,24 +137,13 @@ def variable_dict():
 
 
 def initialize_simulation(data, grid_width, grid_height, duration, paramVariete, paramITK, date_start):
-    """
-    This function initializes variables related to crop growth in the data
-    xarray dataset. As the rain is the first variable to be initialized in the
-    data xarray dataset, its dimensions are used to initialize the other
-    variables.
+    """Initialize crop, water, carbon and output variables on the rainfall grid.
 
-    ![no caption](../../docs/images/sla.png)
+    Creates daily state variables with `data["rain"].dims`, sets default units
+    and metadata where available, and mutates the input dataset in place.
 
-    This code has been adapted from the original InitiationCulture procedure, from the `MilBilanCarbone.pas` code of the
-    SARRA model. 
-
-    Args:
-        data (_type_): _description_ grid_width (_type_): _description_
-        grid_height (_type_): _description_ duration (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed initialization, source-related to SARRA-H
+    `InitiationCulture` and `InitPlotMc` procedure comments.
     """
 
     ### variables to be initialized with values from parameters 
@@ -362,6 +351,8 @@ def estimate_ltr(j, data, paramVariete):
 
     `lai` is leaf area index and `kdf` is the canopy extinction coefficient.
     Values near 1 indicate little canopy interception.
+
+    Source status: source-related to Beer-Lambert canopy interception.
     """
     # group 80   
     data["ltr"][j:,:,:] = np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])
@@ -377,6 +368,8 @@ def estimate_KAssim(j, data, paramVariete):
     Phases 2-4 use fixed values; phases 5-6 linearly interpolate between
     maturity coefficients using accumulated degree-days. Equal phase thresholds
     can produce division warnings.
+
+    Source status: code-observed.
     """
 
     phase_equivalences = {
@@ -408,6 +401,8 @@ def estimate_conv(j,data,paramVariete):
 
     The downstream `update_assimPot` equation applies an additional factor 10;
     the exact unit convention remains documented in `model_formalisms.md`.
+
+    Source status: code-observed.
     """
     data["conv"][j:,:,:] = (data["KAssim"][j,:,:] * paramVariete["txConversion"])
 
@@ -554,6 +549,9 @@ def update_assimPot(j, data, paramVariete, paramITK):
     `par` is expected in MJ m-2 day-1. If `NI` is defined, the current code
     recomputes and mutates `paramVariete["txConversion"]`; that NI formalism
     remains an open validation point.
+
+    Source status: source-related to big-leaf/RUE modelling; conversion factors
+    and NI response are code-observed.
     """
     if ~np.isnan(paramITK["NI"]): 
         #? the following (stupidly long) line was found commented, need to check why and if this is correct
@@ -579,6 +577,8 @@ def update_assim(j, data):
 
     ``assim = assimPot * tr / trPot`` where ``trPot > 0``; otherwise ``assim``
     is set to 0.
+
+    Source status: code-observed stress scaling.
     """
 
     data["assim"][j,:,:] = np.where(
@@ -598,6 +598,9 @@ def calculate_maintainance_respiration(j, data, paramVariete):
     Uses a Q10-like coefficient `2 ** ((tpMoy - tempMaint) / 10)` and applies
     it to total biomass plus leaf biomass. The extra leaf term remains a
     validation question if total biomass already includes leaves.
+
+    Source status: source-related to Q10 respiration; biomass pool choice is
+    code-observed.
     """
     coefficient_temp = 2**((data["tpMoy"][j,:,:] - paramVariete["tempMaint"]) / 10)
     resp_totale = paramVariete["kRespMaint"] * data["biomasseTotale"][j,:,:] * coefficient_temp
@@ -620,6 +623,9 @@ def update_total_biomass(j, data, paramVariete, paramITK):
     At emergence it initializes biomass from density and seed reserves.
     Otherwise `biomasseTotale += assim - respMaint` and
     `deltaBiomasseTotale = assim - respMaint`.
+
+    Source status: code-observed, source-related to SARRA-H biomass procedure
+    comments.
     """
 
     data["biomasseTotale"][j:,:,:] = np.where(
@@ -640,6 +646,8 @@ def update_total_biomass_stade_ip(j, data):
     """Store total biomass at panicle-initiation stage.
 
     Saves `biomasseTotale` into `biomTotStadeIp` when phase 4 starts.
+
+    Source status: code-observed.
     """
     data["biomTotStadeIp"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 4) & (data["changePhase"][j,:,:] == 1),
@@ -657,6 +665,8 @@ def update_total_biomass_at_flowering_stage(j, data):
     """Store total biomass at flowering stage.
 
     Saves `biomasseTotale` into `biomTotStadeFloraison` when phase 5 starts.
+
+    Source status: code-observed.
     """
     data["biomTotStadeFloraison"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 5) & (data["changePhase"][j,:,:] == 1),
@@ -680,6 +690,8 @@ def update_potential_yield(j, data, paramVariete):
 
     Applies at phase-5 entry; for `phaseDevVeg < 6`, the result is capped at
     `2 * biomasseTige`. Coefficients remain calibration-sensitive.
+
+    Source status: code-observed, not externally validated here.
     """
 
     delta_biomass_flowering_ip = data["biomTotStadeFloraison"][j,:,:] - data["biomTotStadeIp"][j,:,:]
@@ -711,6 +723,8 @@ def update_potential_yield_delta(j, data, paramVariete):
 
     Applies during phase 5. `trPot == 0` gives 0, though NumPy may still emit
     masked division warnings.
+
+    Source status: code-observed, not externally validated here.
     """
     data["dRdtPot"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 5),
@@ -739,6 +753,8 @@ def update_aboveground_biomass(j, data, paramVariete):
 
     This applies during phases 2-4. Other phases add `deltaBiomasseTotale`.
     The daily delta is `biomasseAerienne[j] - biomasseAerienne[j - 1]`.
+
+    Source status: code-observed empirical partitioning.
     """
     #// data["deltaBiomasseAerienne"][j:,:,:] = np.copy(data["biomasseAerienne"][j,:,:])
 
@@ -768,6 +784,8 @@ def estimate_reallocation(j, data, paramVariete):
 
     Applies only during phase 5. The leaf reserve threshold `30` is an
     active-code constant still to be sourced.
+
+    Source status: code-observed.
     """
 
     condition = (data["numPhase"][j,:,:] == 5)
@@ -797,6 +815,8 @@ def update_root_biomass(j, data):
     """Update root biomass as the residual of total and aboveground biomass.
 
     ``biomasseRacinaire = biomasseTotale - biomasseAerienne``
+
+    Source status: code-observed.
     """
     data["biomasseRacinaire"][j,:,:] = data["biomasseTotale"][j,:,:] - data["biomasseAerienne"][j,:,:]
 
@@ -814,6 +834,8 @@ def update_leaf_biomass(j, data, paramVariete):
 
     Applies where the crop is active and aboveground biomass decreases. The
     `1e-8` floor is a numerical guard, not a validated biological threshold.
+
+    Source status: code-observed.
     """
 
     data["biomasseFeuille"][j:,:,:] = np.where(
@@ -837,6 +859,8 @@ def update_stem_biomass(j, data, paramVariete):
 
     Applies where the crop is active and aboveground biomass decreases. The
     `1e-8` floor is a numerical guard, not a validated biological threshold.
+
+    Source status: code-observed.
     """
     # group 122
     data["biomasseTige"][j:,:,:] = np.where(
@@ -860,6 +884,8 @@ def condition_positive_delta_biomass(j, data, paramVariete):
     Mask: `numPhase > 1`, `deltaBiomasseAerienne >= 0`, and
     `(numPhase <= 4 or numPhase <= phaseDevVeg)`. The broad `or` condition is
     intentionally documented as current behaviour.
+
+    Source status: code-observed.
     """
 
 
@@ -880,6 +906,8 @@ def update_bM_and_cM(j, data, paramVariete):
 
     Used by positive-growth leaf/stem partitioning. `bM == 0` can produce
     division warnings.
+
+    Source status: code-observed empirical allometry.
     """
 
     data["bM"][j,:,:] = np.where(
@@ -906,6 +934,8 @@ def update_leaf_biomass_positive_delta_aboveground_biomass(j, data, paramVariete
 
     Applies only on the positive-growth partition mask. Coefficients remain
     empirical current-code constants.
+
+    Source status: code-observed.
     """
     data["biomasseFeuille"][j:,:,:] = np.where(
         condition_positive_delta_biomass(j, data, paramVariete),
@@ -922,6 +952,8 @@ def update_stem_biomass_positive_delta_aboveground_biomass(j, data, paramVariete
     """Update stem biomass as the residual of aboveground organs.
 
     ``biomasseTige = biomasseAerienne - biomasseFeuille - rdt``
+
+    Source status: code-observed.
     """
     data["biomasseTige"][j:,:,:] = np.where(
         condition_positive_delta_biomass(j, data, paramVariete),
@@ -938,6 +970,8 @@ def condition_positive_delta_aboveground_biomass_all_phases(j, data):
     """Return the mask for reallocation adjustments during positive growth.
 
     Mask: `numPhase > 1` and `deltaBiomasseAerienne > 0`.
+
+    Source status: code-observed.
     """
     #// condition = (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] >= 0)
     condition = (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] > 0)
@@ -950,6 +984,8 @@ def update_leaf_biomass_all_phases(j, data, paramVariete):
     """Subtract the leaf share of reallocation during positive growth.
 
     ``biomasseFeuille = biomasseFeuille - reallocation * pcReallocFeuille``
+
+    Source status: code-observed.
     """
 
     data["biomasseFeuille"][j:,:,:] = np.where(
@@ -966,6 +1002,8 @@ def update_stem_biomass_all_phases(j, data, paramVariete):
     """Subtract the stem share of reallocation during positive growth.
 
     ``biomasseTige = biomasseTige - reallocation * (1 - pcReallocFeuille)``
+
+    Source status: code-observed.
     """
     data["biomasseTige"][j:,:,:] = np.where(
         condition_positive_delta_aboveground_biomass_all_phases(j, data),
@@ -980,6 +1018,8 @@ def update_aboveground_biomass_step_2(j, data):
     """Recompose aboveground biomass from leaf, stem and grain biomass.
 
     ``biomasseAerienne = biomasseTige + biomasseFeuille + rdt``
+
+    Source status: code-observed.
     """
     data["biomasseAerienne"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] > 1),
@@ -994,6 +1034,8 @@ def EvalFeuilleTigeSarrahV4(j, data, paramVariete):
     Coordinates negative-growth reallocation, positive-growth allometry, leaf
     biomass delta, and recomposition of aboveground biomass. Several empirical
     coefficients remain documented centrally rather than in this wrapper.
+
+    Source status: code-observed wrapper around empirical partitioning helpers.
     """
 
     # data["deltaBiomasseFeuilles"][j:,:,:] = np.where(
@@ -1036,6 +1078,8 @@ def update_vegetative_biomass(j, data):
     """Update vegetative biomass from leaf and stem biomass.
 
     ``biomasseVegetative = biomasseTige + biomasseFeuille``
+
+    Source status: code-observed.
     """
     data["biomasseVegetative"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:])
     return data
@@ -1055,6 +1099,8 @@ def calculate_canopy_specific_leaf_area(j, data, paramVariete):
 
     Values are clipped to `[slaMin, slaMax]`. Zero leaf biomass can still
     trigger masked division warnings.
+
+    Source status: code-observed empirical SLA update.
     """
 
     condition = (data["biomasseFeuille"][j,:,:] > 0) & \
@@ -1108,6 +1154,8 @@ def calculate_leaf_area_index(j, data):
     """Update leaf area index from leaf biomass and SLA.
 
     Current rule: `lai = biomasseFeuille * sla` for phases 2-6, otherwise 0.
+
+    Source status: code-observed, source-related to standard LAI definition.
     """
 
     data["lai"][j:,:,:] = np.where(
@@ -1133,6 +1181,8 @@ def update_yield_during_filling_phase(j, data):
     + reallocation)``
 
     Applies only during phase 5; outside phase 5, yield is unchanged.
+
+    Source status: code-observed, not externally validated here.
     """
 
     data["rdt"][j:,:,:] = np.where(
@@ -1314,6 +1364,9 @@ def estimate_critical_nitrogen_concentration(j, data):
     `biomasseTotale / 1000` converts kg/ha to t/ha. This is related to
     critical nitrogen dilution curves, but the biomass basis and coefficients
     still need crop-model validation.
+
+    Source status: source-related to Justes-type dilution curves, not validated
+    as an exact Justes implementation.
     """
     # estimate critical nitrogen concentration from plant dry matter using the Justes et al (1994) relationship
     data["Ncrit"][j,:,:] = 5.35 * (data["biomasseTotale"][j,:,:]/1000) ** (-0.44)

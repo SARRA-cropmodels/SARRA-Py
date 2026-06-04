@@ -91,6 +91,9 @@ def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
 
     Assumes the local date-coded raster naming used by the notebooks. Rainfall
     is stored in millimetres and the dataset is mutated in place.
+
+    Source status: code-observed local loader; TAMSAT dataset provenance should
+    be documented separately.
     """
 
     TAMSAT_files_df = build_rainfall_files_df(TAMSAT_path, date_start, duration)
@@ -120,6 +123,8 @@ def load_TAMSAT_data_fast(data, rainfall_data_path, date_start, duration):
 
     Uses the same local date-coded convention as `load_TAMSAT_data`, removes
     the raster band dimension, and stores `band_data` as daily rainfall.
+
+    Source status: code-observed local loader.
     """
 
     rainfall_data_path_df = build_rainfall_files_df(rainfall_data_path, date_start, duration)
@@ -139,6 +144,9 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
 
     Maps local folders to `tpMoy`, `ET0` and `rg`, reprojects to the base grid,
     and divides `rg` by 1000 to produce MJ m-2 day-1.
+
+    Source status: code-observed local conversion; AgERA5 source units should
+    be verified against preprocessing.
     """
     # TODO : make the file listing error-proof regarding the structure of the folder and the file extensions
 
@@ -213,6 +221,9 @@ def load_AgERA5_data_fast_dask(data, AgERA5_data_path, date_start, duration):
 
     Fast variant using `open_mfdataset`; maps local folders to `tpMoy`, `ET0`
     and `rg`, reprojects to the base grid, and divides `rg` by 1000.
+
+    Source status: code-observed local conversion; AgERA5 source units should
+    be verified against preprocessing.
     """
     # TODO : make the file listing error-proof regarding the structure of the folder and the file extensions
 
@@ -593,6 +604,9 @@ def calc_day_length(day, lat):
 
     Uses Astral sunrise/sunset daylight and fixes longitude to 0.0; the result
     is returned in hours.
+
+    Source status: source-related to Astral daylight calculation; longitude
+    convention is a SARRA-Py implementation choice.
     """
     # print(day, lat)
     coords = LocationInfo(latitude=float(lat), longitude=0.0)
@@ -648,6 +662,8 @@ def calc_day_length_raster_fast(data, date_start, duration):
 
     Computes daylight from date and `y` latitude, then broadcasts it to the
     shape of `rain`. The dataset is mutated in place.
+
+    Source status: code-observed grid broadcast around Astral day length.
     """
 
     latitudes = tuple(float(value) for value in np.asarray(data["y"].values))

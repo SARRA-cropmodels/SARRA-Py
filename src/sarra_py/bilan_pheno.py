@@ -342,6 +342,9 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
     photoperiod-sensitive phase, reproductive phase, two maturation steps and
     harvest. Thermal transitions use accumulated degree-days; phase 3 ends via
     `phasePhotoper`.
+
+    Source status: code-observed SARRA-Py sequence, source-related to SARRA-H
+    procedure names and phase structure.
     """
 
     # in order to save computational resources, we test if there is
@@ -373,6 +376,8 @@ def calculate_daily_thermal_time(j, data, paramVariete):
     Otherwise it decreases linearly from `TOpt2` to `TLim`. Temperatures are in
     degrees C and `ddj` is in degree-days. Historical Tmin/Tmax comments remain
     a validation question, not active code.
+
+    Source status: code-observed.
     """
 
     tp_moy = _to_numpy(data["tpMoy"][j,:,:])
@@ -399,6 +404,8 @@ def calculate_once_daily_thermal_time(data, paramVariete):
 
     Otherwise it decreases linearly from `TOpt2` to `TLim`. Temperatures are in
     degrees C and `ddj` is in degree-days.
+
+    Source status: code-observed.
     """
 
     tp_moy = _to_numpy(data["tpMoy"])
@@ -425,6 +432,8 @@ def calculate_sum_of_thermal_time(j, data):
 
     `sdj` is updated from `sdj[j - 1] + ddj[j]` where the crop has been sown
     and `numPhase >= 1`; otherwise it is reset to 0.
+
+    Source status: code-observed.
     """
     data["sdj"][j:,:,:] = xr.where(
         (j >= data["sowing_date"][j,:,:]) & (data["numPhase"][j,:,:] >= 1),
@@ -442,6 +451,9 @@ def update_root_growth_speed(j, data, paramVariete):
 
     Uses phase-specific `VRac*` parameters in mm/day. The active loop updates
     phases 1-5; the phase-6 mapping exists but is not iterated.
+
+    Source status: code-observed, source-related to SARRA-H root-growth
+    procedure comments.
     """
 
 
@@ -485,6 +497,8 @@ def update_photoperiodism(j, data, paramVariete):
     `phasePhotoper` becomes 0 when `sumPP < PPsens`. This is related to
     "Impatience"-style photoperiodism, but exact calibration remains a
     validation question.
+
+    Source status: source-related; not an exact Impatience implementation claim.
     """
 
     thermal_time_since_previous_phase = np.maximum(0.01, data["sdj"][j,:,:] - data["seuilTempPhasePrec"][j,:,:])
@@ -521,6 +535,9 @@ def MortaliteSarraV3(j, data, paramITK, paramVariete):
     Counts early days with non-positive aerial biomass increment. Mortality
     triggers when `nbjStress == seuilCstrMortality`, which is an active-code
     detail still listed for scientific validation.
+
+    Source status: code-observed, source-related to legacy SARRA-H procedure
+    comments.
     """
 
     condition = (data["numPhase"][j,:,:] >= 2) & \
