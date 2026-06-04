@@ -3,6 +3,12 @@ import copy
 import xarray as xr
 
 
+def _to_numpy(values):
+    if hasattr(values, "values"):
+        return np.asarray(values.values)
+    return np.asarray(values)
+
+
 def reset(j, data):
 
   data = data.copy(deep=True)
@@ -579,10 +585,12 @@ def calculate_daily_thermal_time(j, data, paramVariete):
         _type_: _description_
     """
 
-    data["ddj"][j,:,:] = xr.where(
-        data["tpMoy"][j,:,:] <= paramVariete["TOpt2"],
-        np.maximum(np.minimum(paramVariete["TOpt1"], data["tpMoy"][j,:,:]), paramVariete["TBase"]) - paramVariete["TBase"],
-        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], data["tpMoy"][j,:,:]) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
+    tp_moy = _to_numpy(data["tpMoy"][j,:,:])
+
+    data["ddj"][j,:,:] = np.where(
+        tp_moy <= paramVariete["TOpt2"],
+        np.maximum(np.minimum(paramVariete["TOpt1"], tp_moy), paramVariete["TBase"]) - paramVariete["TBase"],
+        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], tp_moy) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
     ) 
 
     return data
@@ -613,11 +621,17 @@ def calculate_once_daily_thermal_time(data, paramVariete):
         _type_: _description_
     """
 
-    data["ddj"].data = xr.where(
-        data["tpMoy"] <= paramVariete["TOpt2"],
-        np.maximum(np.minimum(paramVariete["TOpt1"], data["tpMoy"]), paramVariete["TBase"]) - paramVariete["TBase"],
-        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], data["tpMoy"]) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
+    tp_moy = _to_numpy(data["tpMoy"])
+    ddj = np.where(
+        tp_moy <= paramVariete["TOpt2"],
+        np.maximum(np.minimum(paramVariete["TOpt1"], tp_moy), paramVariete["TBase"]) - paramVariete["TBase"],
+        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], tp_moy) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
     ) 
+
+    if hasattr(data["ddj"], "values"):
+        data["ddj"].data = ddj
+    else:
+        data["ddj"][:] = ddj
 
     return data
 
@@ -878,8 +892,6 @@ def MortaliteSarraV3(j, data, paramITK, paramVariete):
     )
 
     return data
-
-
 
 
 

@@ -3,25 +3,58 @@ from .bilan_carbo import *
 from .bilan_hydro import *
 from .data_preparation import *
 
+import numpy as np
+import xarray as xr
 from tqdm import tqdm as tqdm
 
 
-def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
-    """
-    This is the functions list adapted from the procedures of the SARRA-H v42 model.
+def _normalize_engine(engine):
+    if engine in ("numpy", "np", "fast"):
+        return "numpy"
+    if engine in ("xarray", "legacy"):
+        return "xarray"
+    raise ValueError("engine must be 'numpy' or 'xarray'")
 
-    Args:
-        paramVariete (_type_): _description_
-        paramITK (_type_): _description_
-        paramTypeSol (_type_): _description_
-        data (_type_): _description_
-        duration (_type_): _description_
 
-    Returns:
-        _type_: _description_
-    """
-    
-    for j in tqdm(range(duration)):
+def _dataset_to_numpy_state(data):
+    state = {}
+
+    for name, variable in data.data_vars.items():
+        values = np.asarray(variable.values)
+        if not values.flags.writeable:
+            values = values.copy()
+        state[name] = values
+
+    return state
+
+
+def _restore_numpy_state(data, state):
+    for name, values in state.items():
+        if name in data:
+            data[name].data = values
+        else:
+            data[name] = (_infer_dims_from_shape(data, values.shape), values)
+
+    return data
+
+
+def _infer_dims_from_shape(data, shape):
+    if "rain" in data:
+        rain = data["rain"]
+        if shape == rain.shape:
+            return rain.dims
+        if len(shape) == len(rain.shape) - 1 and shape == rain.shape[1:]:
+            return rain.dims[1:]
+
+    for variable in data.data_vars.values():
+        if shape == variable.shape:
+            return variable.dims
+
+    raise ValueError(f"Cannot infer xarray dimensions for array shape {shape}")
+
+
+def _run_loop(iterator, data, paramVariete, paramITK, paramTypeSol):
+    for j in iterator:
 
         # updating phenological stages
         data = EvalPhenoSarrahV3(j, data, paramITK, paramVariete)
@@ -110,27 +143,11 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration):
 
         data = estimate_critical_nitrogen_concentration(j, data)
 
-
     return data
 
 
-
-def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration):
-    """
-    This is the functions list adapted from the procedures of the SARRA-H v42 model.
-
-    Args:
-        paramVariete (_type_): _description_
-        paramITK (_type_): _description_
-        paramTypeSol (_type_): _description_
-        data (_type_): _description_
-        duration (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    
-    for j in tqdm(range(duration)):
+def _run_waterbalance_loop(iterator, data, paramVariete, paramITK, paramTypeSol):
+    for j in iterator:
 
         # calculating daily thermal time, independently of sowing date
         data = calculate_daily_thermal_time(j, data, paramVariete)
@@ -181,5 +198,76 @@ def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration)
         data = estimate_KAssim(j, data, paramVariete)
         data = estimate_conv(j,data,paramVariete)
 
-
     return data
+
+
+def _make_iterator(duration, progress):
+    days = range(duration)
+    if progress:
+        return tqdm(days)
+    return days
+
+
+def _run_with_engine(loop, paramVariete, paramITK, paramTypeSol, data, duration, engine, progress):
+    engine = _normalize_engine(engine)
+    iterator = _make_iterator(duration, progress)
+
+    if engine == "xarray" or not isinstance(data, xr.Dataset):
+        return loop(iterator, data, paramVariete, paramITK, paramTypeSol)
+
+    state = _dataset_to_numpy_state(data)
+    state = loop(iterator, state, paramVariete, paramITK, paramTypeSol)
+    return _restore_numpy_state(data, state)
+
+
+def run_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarray", progress=True):
+    """
+    This is the functions list adapted from the procedures of the SARRA-H v42 model.
+
+    Args:
+        paramVariete (_type_): _description_
+        paramITK (_type_): _description_
+        paramTypeSol (_type_): _description_
+        data (_type_): _description_
+        duration (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    return _run_with_engine(
+        _run_loop,
+        paramVariete,
+        paramITK,
+        paramTypeSol,
+        data,
+        duration,
+        engine,
+        progress,
+    )
+
+
+
+def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarray", progress=True):
+    """
+    This is the functions list adapted from the procedures of the SARRA-H v42 model.
+
+    Args:
+        paramVariete (_type_): _description_
+        paramITK (_type_): _description_
+        paramTypeSol (_type_): _description_
+        data (_type_): _description_
+        duration (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    return _run_with_engine(
+        _run_waterbalance_loop,
+        paramVariete,
+        paramITK,
+        paramTypeSol,
+        data,
+        duration,
+        engine,
+        progress,
+    )

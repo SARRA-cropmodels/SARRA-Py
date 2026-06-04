@@ -12,6 +12,7 @@ import xarray as xr
 import astral
 from astral.sun import sun
 from astral import LocationInfo
+from functools import lru_cache
 
 
 
@@ -639,23 +640,53 @@ def calc_day_length(day, lat):
 
 
 
+def _normalize_day_length_date(date_start):
+    if isinstance(date_start, datetime.datetime):
+        return date_start.date().isoformat()
+    if isinstance(date_start, datetime.date):
+        return date_start.isoformat()
+    if hasattr(date_start, "item"):
+        return _normalize_day_length_date(date_start.item())
+    return str(date_start)
+
+
+@lru_cache(maxsize=64)
+def _cached_day_length_matrix(date_start_key, duration, latitudes):
+    date_start = datetime.date.fromisoformat(date_start_key)
+    vectorized_func = np.vectorize(calc_day_length)
+
+    days = np.array(
+        [date_start + datetime.timedelta(days=i) for i in range(duration)],
+        dtype=object,
+    )[..., np.newaxis]
+    latitudes_array = np.asarray(latitudes, dtype=float)[np.newaxis, ...]
+
+    return np.asarray(vectorized_func(days, latitudes_array), dtype=float)
+
+
+def _broadcast_day_length_to_rain(day_length_by_latitude, rain):
+    if "time" not in rain.dims or "y" not in rain.dims:
+        raise ValueError("rain must have 'time' and 'y' dimensions to compute day length")
+
+    shape = [1] * rain.ndim
+    shape[rain.dims.index("time")] = rain.shape[rain.dims.index("time")]
+    shape[rain.dims.index("y")] = rain.shape[rain.dims.index("y")]
+
+    values = day_length_by_latitude.reshape(shape)
+    return np.broadcast_to(values, rain.shape).copy()
+
+
 
 
 def calc_day_length_raster_fast(data, date_start, duration):
 
-    vectorized_func = np.vectorize(calc_day_length)
-
-    days = np.array([date_start + datetime.timedelta(days=i) for i in range(duration)])[...,np.newaxis]
-    latitudes = np.array(data["y"])[np.newaxis,...]
-
-    result = vectorized_func(days, latitudes)
-
-    # we will first define an empty array of the same shape as the rain array
-    data["dureeDuJour"] = (data["rain"].dims, np.zeros(data["rain"].shape))
-    data["dureeDuJour"].values = np.repeat(result[...,np.newaxis], data["dureeDuJour"].shape[2], axis=2)
+    latitudes = tuple(float(value) for value in np.asarray(data["y"].values))
+    date_start_key = _normalize_day_length_date(date_start)
+    result = _cached_day_length_matrix(date_start_key, int(duration), latitudes)
+    values = _broadcast_day_length_to_rain(result, data["rain"])
+    data["dureeDuJour"] = (data["rain"].dims, values)
 
     return data
-
 
 
 
