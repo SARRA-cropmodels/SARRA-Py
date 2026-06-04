@@ -356,23 +356,51 @@ def estimate_kcp(j, data, paramVariete):
 
 
 def estimate_ltr(j, data, paramVariete):
-    """
-    Estimate the fraction of radiation transmitted to the soil `ltr` based on the leaf area index `lai`.
+    """Estimate the fraction of radiation transmitted through the canopy.
 
-    `ltr` is used as a proxy for plant covering of the soil in the water balance calculation, where 1 represents no plant cover and 0 represents full plant cover. `ltr` is computed as an exponential decay function of `lai` with a decay coefficient `kdf`.
+    Role in SARRA-Py
+    ----------------
+    Updates ``ltr``, used as a canopy cover proxy by carbon and water-balance
+    calculations. Values near 1 indicate little canopy interception; values
+    near 0 indicate high canopy interception.
 
-    This function is adapted from the EvalLtr procedure from the biomasse.pas and exmodules 1 & 2.pas files of the original PASCAL code.
+    Equation
+    --------
+    Current implementation:
 
-    Args:
-        j (int): The starting index for updating `ltr` in the `data` dataset.
-        data (xarray.Dataset): A dataset containing the data used in the computation of `ltr`. The dataset should contain the following variables:
-            - 'lai': A 3-dimensional data variable with shape (num_timesteps, num_rows, num_columns), representing the leaf area index.
-            - 'ltr': A 3-dimensional data variable with shape (num_timesteps, num_rows, num_columns), representing the fraction of radiation transmitted to the soil.
-        paramVariete (dict): A dictionary containing the parameters for estimating `ltr`. The dictionary should contain the following key:
-            - 'kdf': A float, representing the decay coefficient for `ltr`.
+    ``ltr = exp(-kdf * lai)``
 
-    Returns:
-        xarray.Dataset: The updated `data` dataset with the new `ltr` values.
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables, usually shaped like
+        ``("time", "x", "y")`` for xarray inputs.
+    paramVariete : dict
+        Reads ``kdf``, the canopy extinction coefficient.
+
+    Reads
+    -----
+    data["lai"]
+        Leaf area index in m2/m2.
+
+    Writes
+    ------
+    data["ltr"]
+        Fraction of radiation transmitted to the soil, dimensionless,
+        broadcast from ``j`` onward.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    References
+    ----------
+    Adapted from the ``EvalLtr`` procedure of the SARRA-H Pascal code
+    (``biomasse.pas`` and ``exmodules 1 & 2.pas``), as noted in the original
+    source comments.
     """
     # group 80   
     data["ltr"][j:,:,:] = np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])
@@ -383,24 +411,56 @@ def estimate_ltr(j, data, paramVariete):
 
 
 def estimate_KAssim(j, data, paramVariete):
-    """
-    This function calculates the conversion factor `KAssim`, which is used to convert assimilates into biomass. 
-    The value of `KAssim` depends on the phase of the crop. 
+    """Estimate the phase-dependent assimilation coefficient.
 
-    The conversion factor is calculated based on a lookup table that maps crop phases to values. The crop phase is
-    determined by the `numPhase` field in the `data` argument, and the corresponding `KAssim` value is set in the 
-    `KAssim` field of the `data` argument.
+    Role in SARRA-Py
+    ----------------
+    Updates ``KAssim``, an intermediate coefficient used by ``estimate_conv``
+    and then by potential assimilation.
 
-    Args:
-        j (int): An integer index specifying the time step.
-        data (xarray.Dataset): A dataset containing the variables used in the calculation of `KAssim`. The dataset 
-            should include the fields `numPhase`, `sdj`, `seuilTemp PhasePrec`, and `seuilTemp PhaseSuivante`. The
-            `KAssim` field of the dataset will be updated by this function.
-        paramVariete (dict): A dictionary of parameters. It should include the fields `txAssimBVP`, `txAssimMatu1`,
-            and `txAssimMatu2`.
+    Current Implementation
+    ----------------------
+    The coefficient depends on ``numPhase``:
 
-    Returns:
-        xarray.Dataset: The updated `data` dataset, with the `KAssim` field set to the calculated values.
+    - phase 2: ``1``
+    - phases 3 and 4: ``txAssimBVP``
+    - phase 5: linear interpolation from ``txAssimBVP`` to ``txAssimMatu1``
+      using ``sdj``, ``seuilTempPhasePrec`` and ``seuilTempPhaseSuivante``
+    - phase 6: linear interpolation from ``txAssimMatu1`` to ``txAssimMatu2``
+      using the same thermal-time variables
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+    paramVariete : dict
+        Reads ``txAssimBVP``, ``txAssimMatu1`` and ``txAssimMatu2``.
+
+    Reads
+    -----
+    data["numPhase"], data["sdj"], data["seuilTempPhasePrec"],
+    data["seuilTempPhaseSuivante"], data["KAssim"]
+        Thermal-time variables are expected in degree-days.
+
+    Writes
+    ------
+    data["KAssim"]
+        Broadcasts the current phase-dependent value from ``j`` onward for
+        phases 2 to 6.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    The interpolation denominators are
+    ``seuilTempPhaseSuivante - seuilTempPhasePrec``. If those thresholds are
+    equal, NumPy may emit divide-by-zero or invalid-value warnings. This
+    docstring records the current implementation without changing it.
     """
 
     phase_equivalences = {
@@ -426,22 +486,47 @@ def estimate_KAssim(j, data, paramVariete):
 
 
 def estimate_conv(j,data,paramVariete):
-    """
-    This function calculates the conversion of assimilates into biomass.
+    """Update the biomass conversion coefficient used for assimilation.
 
-    The conversion factor is determined by multiplying the KAssim value, which 
-    is dependent on the phase of the crop, with the conversion rate (txConversion) 
-    specified in the `paramVariete` argument.
+    Role in SARRA-Py
+    ----------------
+    Combines the phase-dependent ``KAssim`` coefficient with the variety
+    conversion rate before potential assimilation is computed.
 
-    Args:
-        j (int): The starting index of the calculation
-        data (dict): A dictionary containing information on the crop growth, including 
-                     the phase of the crop and the KAssim value.
-        paramVariete (dict): A dictionary containing parameters relevant to the crop 
-                             growth, including the conversion rate.
+    Equation
+    --------
+    Current implementation:
 
-    Returns:
-        dict: The input `data` dictionary with the calculated "conv" value added.
+    ``conv = KAssim * txConversion``
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+    paramVariete : dict
+        Reads ``txConversion``.
+
+    Reads
+    -----
+    data["KAssim"]
+
+    Writes
+    ------
+    data["conv"]
+        Broadcasts ``KAssim * txConversion`` from ``j`` onward.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    The precise unit convention for ``txConversion``, ``KAssim`` and ``conv`` is
+    listed as requiring validation in the scientific audit. Downstream
+    ``update_assimPot`` applies an additional factor ``10``.
     """
     data["conv"][j:,:,:] = (data["KAssim"][j,:,:] * paramVariete["txConversion"])
 
@@ -581,59 +666,67 @@ def EvalAssimSarrahV4(j, data):
     
 
 def update_assimPot(j, data, paramVariete, paramITK):
-    """
+    """Compute potential assimilation from PAR, canopy interception and conversion.
 
-    Update the assimPot value based on the intensification level (NI).
+    Role in SARRA-Py
+    ----------------
+    Updates ``assimPot``, the daily potential assimilate production before water
+    stress is applied by ``update_assim``.
 
-    If the intensification level `NI` is defined in `paramITK`, the conversion rate `txConversion` is computed using a formula based on `NIYo`, `NIp`, `LGauss`, and `AGauss`. If `NI` is not defined, `assimPot` is updated using `conv`, which is updated in the `estimate_conv` function using the variables `KAssim` and `txConversion`.
+    Equation
+    --------
+    Current implementation:
 
-    When NI parameter is used (from to 4), conversion rate txConversion 
-    is computed using the following formula :
-    NIYo + NIp * (1-exp(-NIp * NI)) - (exp(-0.5*((NI - LGauss)/AGauss)* (NI- LGauss)/AGauss))/(AGauss*2.506628274631)
+    ``assimPot = par * (1 - exp(-kdf * lai)) * conversion * 10``
 
-    This function is adapted from the `EvalAssimSarraV42` procedure in the `bilancarbonsarra.pas` file of the original Pascal code.
-    
-    Note from
-    CB : correction of the conversion rate depending on the intensification
-    level
-    
-    notes from CB reharding the EvalAssimSarraV42 procedure :
-    
-    Modif du 04/03/2021 : Prise en compte en plus de la densit� de semis de
-    l'effet niveau d'intensification NI NI = 1 quand on est � l'optimum du
-    niveau d'intensification. Dans le cas de situation contr�l� c'est la
-    fertilit� qui est la clef principale en prenant en r�f�rence la qt� d'azote
-    (�quivalent phosphore...) optimum Il peut aller � 0 ou �tre sup�rieur � 1 si
-    situation sur optimum, ie un peu plus de rdt mais � cout trop �lev�... On
-    �value un nouveau tx de conversion en fn du Ni au travers d'une double
-    �quation : asympote x gaussienne invers�e Et d'un NI d�fini en fn du
-    sc�nario de simulation ou des donn�es observ�es. NIYo = D�calage en Y de
-    l'asymptote NIp  = pente de l'asymptote LGauss = Largeur de la Guaussienne
-    AGauss = Amplitude de la Guaussienne
+    where ``conversion`` is either ``data["conv"]`` or, when ``paramITK["NI"]``
+    is not NaN, a recalculated ``paramVariete["txConversion"]`` based on the
+    active NI equation:
 
-    Conversion qui est la valeur du taux de conversion en situation optimum n'a
-    plus besoin d'�tre utilis� sinon dans la calibration des param�tres de cette
-    �quation en absence de donn�es sur ces param�tres on ne met aucune valeur �
-    NI CF fichier ex IndIntensite_txConv_eq.xls}
-    
-    Args:
-    - j (int): An index that represents the current iteration.
-    - data (dict): A dictionary containing data arrays with the following keys:
-        - "assimPot" (np.ndarray): An array representing the potential assimilation rate.
-        - "par" (np.ndarray): An array representing photosynthetically active radiation.
-        - "lai" (np.ndarray): An array representing the leaf area index.
-        - "conv" (np.ndarray): An array representing the conversion rate.
-    - paramVariete (dict): A dictionary containing parameters for the computation of the conversion rate, including:
-        - "txConversion" (float): The conversion rate.
-        - "NIYo" (float): The shift in the Y-axis of the asymptote.
-        - "NIp" (float): The slope of the asymptote.
-        - "LGauss" (float): The width of the Gaussian curve.
-        - "AGauss" (float): The amplitude of the Gaussian curve.
-        - "kdf" (float): The constant used in the computation of `assimPot`.
-    - paramITK (dict): A dictionary containing the intensification level `NI` (float).
+    ``NIYo + NIp * (1 - exp(-NIp * NI)) - exp(-0.5 * ((NI - LGauss) /
+    AGauss) ** 2) / (AGauss * 2.506628274631)``
 
-    Returns:
-    - data (dict): The input `data` dictionary with the updated "assimPot" array.
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+    paramVariete : dict
+        Reads ``kdf`` and either ``txConversion`` or NI coefficients ``NIYo``,
+        ``NIp``, ``LGauss`` and ``AGauss``.
+    paramITK : dict
+        Reads ``NI``.
+
+    Reads
+    -----
+    data["par"], data["lai"], data["conv"]
+        ``par`` is expected in MJ/m2/day and ``lai`` in m2/m2. ``conv`` is used
+        only when ``NI`` is NaN.
+
+    Writes
+    ------
+    data["assimPot"]
+        Potential assimilation, expected in kg/ha/day by the dataset metadata.
+
+    Side Effects
+    ------------
+    If ``paramITK["NI"]`` is not NaN, mutates
+    ``paramVariete["txConversion"]`` before computing ``assimPot``.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    The audit identifies this as a big-leaf / Beer-Lambert style calculation.
+    The constants ``0.5`` for PAR generation are applied earlier when ``par`` is
+    initialized from radiation, and ``10`` is applied here. The precise unit
+    convention for ``conv``, ``txConversion`` and the ``10`` multiplier remains
+    to be scientifically validated. The NI equation is documented as current
+    behavior only; its source and calibration remain open questions.
     """
     if ~np.isnan(paramITK["NI"]): 
         #? the following (stupidly long) line was found commented, need to check why and if this is correct
@@ -655,22 +748,46 @@ def update_assimPot(j, data, paramVariete, paramITK):
 
 
 def update_assim(j, data):
-    """
-    This function updates assim. If trPot (potential transpiration from the
-    plant, mm) is greater than 0, then assim equals assimPot, multiplied by the
-    ratio of effective transpiration over potential transpiration.
+    """Apply transpiration stress to potential assimilation.
 
-    If potential transpiration is null, then assim is null as well.
+    Role in SARRA-Py
+    ----------------
+    Converts ``assimPot`` to actual ``assim`` using the ratio of actual to
+    potential transpiration.
 
-    Is it adapted from the EvalAssimSarraV42 procedure, of the
-    bilancarbonsarra.pas file from the original Pascal code
+    Equation
+    --------
+    Current implementation:
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
+    ``assim = assimPot * tr / trPot`` where ``trPot > 0``; otherwise ``assim``
+    is set to 0.
 
-    Returns:
-        _type_: _description_
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+
+    Reads
+    -----
+    data["assimPot"], data["tr"], data["trPot"]
+        ``assimPot`` is expected in kg/ha/day, ``tr`` and ``trPot`` in mm/day.
+
+    Writes
+    ------
+    data["assim"]
+        Actual daily assimilation in kg/ha/day.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    ``np.where`` may evaluate both branches, so invalid divisions can still
+    produce warnings even where the final output is masked to 0.
     """
 
     data["assim"][j,:,:] = np.where(
@@ -685,29 +802,60 @@ def update_assim(j, data):
 
 
 def calculate_maintainance_respiration(j, data, paramVariete):
-    """
-    This function calculates the maintenance respiration `respMaint` (in kg/ha/j in equivalent dry matter) of the plant.
-    
-    The maintenance respiration is calculated by summing the maintenance respiration associated with total biomass and 
-    leaves biomass. If the plant's growth phase is above 4 and there is no leaf biomass, `respMaint` is set to 0.
-    
-    The calculation is based on the equation:
-      coefficient_temp = 2^((average_temp - tempMaint) / 10)
-      respiration = kRespMaint * biomass * coefficient_temp
-    
-    where `average_temp` is the average temperature for the day, `tempMaint` is the maintenance temperature from
-    `variety_params`, `kRespMaint` is the maintenance respiration coefficient from `variety_params`, and `biomass`
-    is the total or leaf biomass.
+    """Compute maintenance respiration for the current day.
 
-    Args:
-        j (int): The time step of the calculation.
-        data (xarray.Dataset): The input data containing the variables `tpMoy`, `biomasseTotale`, `biomasseFeuille`, and 
-            `numPhase`. The output `respMaint` will also be stored in this dataset.
-        variety_params (dict): The parameters related to the plant variety, containing the keys `tempMaint` and 
-            `kRespMaint`.
-    
-    Returns:
-        xarray.Dataset: The input `data` with the updated `respMaint` variable.
+    Role in SARRA-Py
+    ----------------
+    Updates ``respMaint``, the daily assimilate cost subtracted from
+    assimilation in ``update_total_biomass``.
+
+    Equation
+    --------
+    Current implementation uses a Q10-like temperature coefficient with
+    ``Q10 = 2``:
+
+    ``coefficient_temp = 2 ** ((tpMoy - tempMaint) / 10)``
+
+    ``resp_totale = kRespMaint * biomasseTotale * coefficient_temp``
+
+    ``resp_feuille = kRespMaint * biomasseFeuille * coefficient_temp``
+
+    ``respMaint = resp_totale + resp_feuille``, except when
+    ``numPhase > 4`` and ``biomasseFeuille == 0``, where it is set to 0.
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+    paramVariete : dict
+        Reads ``tempMaint`` in degrees C and ``kRespMaint``.
+
+    Reads
+    -----
+    data["tpMoy"], data["biomasseTotale"], data["biomasseFeuille"],
+    data["numPhase"]
+        ``tpMoy`` is expected in degrees C. Biomass variables are expected in
+        kg/ha.
+
+    Writes
+    ------
+    data["respMaint"]
+        Maintenance respiration in kg/ha/day, broadcast from ``j`` onward.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    The audit flags a scientific ambiguity: ``biomasseFeuille`` is added on top
+    of ``biomasseTotale``. If total biomass already includes leaves, this may
+    be an intended weighting of leaf maintenance cost or a form of double
+    counting. This docstring records the current implementation without
+    changing it.
     """
     coefficient_temp = 2**((data["tpMoy"][j,:,:] - paramVariete["tempMaint"]) / 10)
     resp_totale = paramVariete["kRespMaint"] * data["biomasseTotale"][j,:,:] * coefficient_temp
@@ -725,34 +873,65 @@ def calculate_maintainance_respiration(j, data, paramVariete):
 
 
 def update_total_biomass(j, data, paramVariete, paramITK):
-    """
-    Update the Total Biomass of the Plant.
+    """Update total crop biomass and its daily increment.
 
-    The total biomass is updated based on the plant's current phase and other parameters.
-    If the plant is in phase 2 and there's a change in phase, the total biomass is initialized using
-    crop density, grain yield per plant, and the dry weight of the grain.
-    If the plant is not in phase 2 or there's no change in phase, the total biomass is incremented with
-    the difference between the plant's assimilation and maintenance respiration.
+    Role in SARRA-Py
+    ----------------
+    Maintains ``biomasseTotale``, the central biomass pool used by later
+    aboveground/root partitioning, potential yield and nitrogen calculations.
 
-    When passing from phase 1 to phase 2, total biomass is initialized.
-    Initialization value is computed from crop density (plants/ha), txResGrain
-    (grain yield per plant), and poidsSecGrain. Otherwise, total biomass is
-    incremented with the difference between plant assimilation assim and
-    maintainance respiration respMaint.
+    Equation
+    --------
+    At the phase 1 to 2 transition, where ``numPhase == 2`` and
+    ``changePhase == 1``, current implementation initializes:
 
-    This function is adapted from the EvolBiomTotSarrahV4 procedure, of the
-    bilancarbonsarra.pas file from the original Pascal code.
+    ``biomasseTotale = densite * max(1, densOpti / densite) * txResGrain
+    * poidsSecGrain / 1000``
 
-    Args:
-        j (int): The current time step.
-        data (xarray.Dataset): The data for the plant, including variables like 
-            "biomasseTotale", "assim", "respMaint", "numPhase", and "changePhase".
-        paramVariete (dict): A dictionary of parameters specific to the plant variety.
-        paramITK (dict): A dictionary of inter-tropical convergence zone parameters.
+    Otherwise:
 
-    Returns:
-        xarray.Dataset: The updated data for the plant, including the updated "biomasseTotale"
-            and "deltaBiomasseTotale" variables.
+    ``biomasseTotale = biomasseTotale + assim - respMaint``
+
+    ``deltaBiomasseTotale = assim - respMaint``
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+    paramVariete : dict
+        Reads ``densOpti``, ``txResGrain`` and ``poidsSecGrain``.
+    paramITK : dict
+        Reads ``densite`` in plants/ha.
+
+    Reads
+    -----
+    data["numPhase"], data["changePhase"], data["biomasseTotale"],
+    data["assim"], data["respMaint"]
+        Biomass and assimilation variables are expected in kg/ha or kg/ha/day.
+
+    Writes
+    ------
+    data["biomasseTotale"], data["deltaBiomasseTotale"]
+        Both variables are broadcast from ``j`` onward.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    The audit flags that ``densOpti`` is used here without the NaN guard present
+    in some other density-related functions, and that biomass can become
+    negative if respiration exceeds assimilation for long periods. This
+    docstring records the current behavior without changing it.
+
+    References
+    ----------
+    Adapted from the ``EvolBiomTotSarrahV4`` procedure of the SARRA-H Pascal
+    code (``bilancarbonsarra.pas``), as noted in the original source comments.
     """
 
     data["biomasseTotale"][j:,:,:] = np.where(
@@ -830,27 +1009,61 @@ def update_total_biomass_at_flowering_stage(j, data):
 
 
 def update_potential_yield(j, data, paramVariete):
-    """
-    Update the potential yield of the plant.
+    """Initialize potential grain yield at the start of phase 5.
 
-    The potential yield is initialized as an affine function of the delta
-    between the end of the vegetative phase and the end of the flowering stage,
-    plus a linear function of the total biomass at the end of the flowering stage.
-    The potential yield is capped to twice the biomass of the stem to avoid unrealistic
-    values.
+    Role in SARRA-Py
+    ----------------
+    Updates ``rdtPot``, the potential grain yield later used to compute daily
+    potential yield demand during grain filling.
 
-    The update occurs if the plant is in phase 5 and its phase has changed
+    Equation
+    --------
+    Current implementation applies on pixels where ``numPhase == 5`` and
+    ``changePhase == 1``:
 
-    This function is adapted from the EvalRdtPotRespSarV42 procedure, of the
-    bilancarbonsarra.pas file from the original Pascal code.
+    ``delta = biomTotStadeFloraison - biomTotStadeIp``
 
-    Args:
-        j (int): An index representing the current time step.
-        data (xarray.Dataset): A dataset containing plant data.
-        paramVariete (dict): A dictionary containing parameters for the plant variety.
+    ``rdtPot = KRdtPotA * delta + KRdtPotB
+    + KRdtBiom * biomTotStadeFloraison``
 
-    Returns:
-        xarray.Dataset: The input `data` with the potential yield updated.
+    If ``phaseDevVeg < 6`` and this value exceeds ``2 * biomasseTige``,
+    ``rdtPot`` is capped to ``2 * biomasseTige``.
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+    paramVariete : dict
+        Reads ``KRdtPotA``, ``KRdtPotB``, ``KRdtBiom`` and ``phaseDevVeg``.
+
+    Reads
+    -----
+    data["numPhase"], data["changePhase"], data["biomTotStadeFloraison"],
+    data["biomTotStadeIp"], data["biomasseTige"], data["rdtPot"]
+        Biomass and yield variables are expected in kg/ha.
+
+    Writes
+    ------
+    data["rdtPot"]
+        Potential yield in kg/ha, broadcast from ``j`` onward.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    The audit flags the coefficients ``KRdt*`` and the ``2 * biomasseTige`` cap
+    as not externally sourced in the current documentation. This docstring
+    records the active behavior without changing it.
+
+    References
+    ----------
+    Adapted from the ``EvalRdtPotRespSarV42`` procedure of the SARRA-H Pascal
+    code (``bilancarbonsarra.pas``), as noted in the original source comments.
     """
 
     delta_biomass_flowering_ip = data["biomTotStadeFloraison"][j,:,:] - data["biomTotStadeIp"][j,:,:]
@@ -875,24 +1088,61 @@ def update_potential_yield(j, data, paramVariete):
 
 
 def update_potential_yield_delta(j, data, paramVariete):
-    """
-    This function updates the delta potential yield (dRdtPot) of the plant, which is the rate at which the
-    plant's yield is changing over time. The delta potential yield is calculated as the product of the potential
-    yield, the ratio of actual degree days to maturity, and the ratio of actual transpiration to potential transpiration. 
-    The calculation is only done if the plant is in phase 5 and the potential transpiration is above 0. 
-    If the potential transpiration is not above 0, the delta potential yield is set to 0.
-    For all other phases, the delta potential yield is unchanged. 
+    """Update daily potential yield demand during grain filling.
 
-    This function is adapted from the EvalRdtPotRespSarV42 procedure, of the
-    bilancarbonsarra.pas file from the original Pascal code.
+    Role in SARRA-Py
+    ----------------
+    Computes ``dRdtPot``, the daily potential grain yield increment used by
+    ``estimate_reallocation`` and ``update_yield_during_filling_phase``.
 
-    Args:
-    - j (int): an integer index, representing the current step of the simulation
-    - data (xarray dataset): the simulation data, including the current state of the plant
-    - paramVariete (dict): the variety-specific parameters used in the simulation
+    Equation
+    --------
+    For phase 5 only, current implementation sets:
 
-    Returns:
-    - data (xarray dataset): the updated simulation data, including the updated delta potential yield
+    ``dRdtPot = max(rdtPot * (ddj / SDJMatu1) * (tr / trPot),
+    respMaint * 0.15)`` where ``trPot > 0``.
+
+    If ``trPot <= 0``, ``dRdtPot`` is set to 0. Outside phase 5, the previous
+    value is kept.
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+    paramVariete : dict
+        Reads ``SDJMatu1`` in degree-days.
+
+    Reads
+    -----
+    data["numPhase"], data["trPot"], data["rdtPot"], data["ddj"],
+    data["tr"], data["respMaint"], data["dRdtPot"]
+        ``tr`` and ``trPot`` are expected in mm/day. ``rdtPot``, ``dRdtPot`` and
+        ``respMaint`` are expected in kg/ha or kg/ha/day.
+
+    Writes
+    ------
+    data["dRdtPot"]
+        Daily potential yield increment in kg/ha/day, broadcast from ``j``
+        onward.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    ``np.where`` may evaluate the division by ``trPot`` even where the final
+    branch is masked, so warnings can occur when ``trPot`` is zero. The
+    ``respMaint * 0.15`` lower bound is part of the current implementation and
+    remains to be scientifically sourced.
+
+    References
+    ----------
+    Adapted from the ``EvalRdtPotRespSarV42`` procedure of the SARRA-H Pascal
+    code (``bilancarbonsarra.pas``), as noted in the original source comments.
     """
     data["dRdtPot"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 5),
@@ -914,22 +1164,62 @@ def update_potential_yield_delta(j, data, paramVariete):
 
 
 def update_aboveground_biomass(j, data, paramVariete):
-    """
-    Update the aboveground biomass of the plant.
+    """Partition total biomass into aboveground biomass for the current day.
 
-    The aboveground biomass is either updated based on a linear function of the total biomass, if the plant is in phase 2, 3, or 4, or incremented with the total biomass delta if the plant is in any other phase.
+    Role in SARRA-Py
+    ----------------
+    Updates ``biomasseAerienne`` and its daily change before organ allocation
+    and yield filling are evaluated.
 
-    This function is based on the EvolBiomAeroSarrahV3 procedure, of the
-    ***bilancarbonsarra***, exmodules 1 & 2.pas file from the original Pascal
-    code.
+    Equation
+    --------
+    For phases 2 to 4, current implementation uses:
 
-    Args:
-        j (int): The current iteration step in the simulation.
-        data (xarray.Dataset): The simulation data, including the current phase of the plant and various biomass values.
-        paramVariete (dict): The parameters of the plant variety.
+    ``biomasseAerienne = min(0.9, aeroTotPente * biomasseTotale
+    + aeroTotBase) * biomasseTotale``
 
-    Returns:
-        xarray.Dataset: The updated simulation data, including the updated aboveground biomass and delta aboveground biomass.
+    For other phases, it adds ``deltaBiomasseTotale`` to the previous
+    ``biomasseAerienne`` value at the current day. Then:
+
+    ``deltaBiomasseAerienne = biomasseAerienne[j] - biomasseAerienne[j - 1]``
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+    paramVariete : dict
+        Reads ``aeroTotPente`` and ``aeroTotBase``.
+
+    Reads
+    -----
+    data["numPhase"], data["biomasseTotale"], data["biomasseAerienne"],
+    data["deltaBiomasseTotale"]
+        Biomass variables are expected in kg/ha.
+
+    Writes
+    ------
+    data["biomasseAerienne"], data["deltaBiomasseAerienne"]
+        Aboveground biomass and daily aboveground biomass increment in kg/ha.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    The cap ``0.9`` and the affine coefficients are part of the current
+    implementation; their scientific source is not documented in the audits.
+    The active code reads ``biomasseAerienne[j - 1]`` when computing the daily
+    delta.
+
+    References
+    ----------
+    Based on the ``EvolBiomAeroSarrahV3`` procedure of the SARRA-H Pascal code
+    (``bilancarbonsarra.pas`` and ``exmodules 1 & 2.pas``), as noted in the
+    original source comments.
     """
     #// data["deltaBiomasseAerienne"][j:,:,:] = np.copy(data["biomasseAerienne"][j,:,:])
 
@@ -1004,22 +1294,45 @@ def estimate_reallocation(j, data, paramVariete):
 
 
 def update_root_biomass(j, data):
-    """
-    Update the root biomass (biomasseRacinaire) for a given time step.
+    """Update root biomass as the residual of total and aboveground biomass.
 
-    The root biomass is computed as the difference between the total biomass 
-    and the aboveground biomass.
+    Role in SARRA-Py
+    ----------------
+    Maintains ``biomasseRacinaire`` after total and aboveground biomass have
+    been updated.
 
-    This function is based on the EvalBiomasseRacinaire procedure, of the
-    milbilancarbone, exmodules 1 & 2, ***milbilancarbone***.pas file from the
-    original Pascal code
+    Equation
+    --------
+    Current implementation:
 
-    Args:
-        j (int): Time step index.
-        data (xarray.Dataset): Input dataset containing relevant variables.
+    ``biomasseRacinaire = biomasseTotale - biomasseAerienne``
 
-    Returns:
-        xarray.Dataset: Updated dataset with the root biomass variable.
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+
+    Reads
+    -----
+    data["biomasseTotale"], data["biomasseAerienne"]
+        Biomass variables are expected in kg/ha.
+
+    Writes
+    ------
+    data["biomasseRacinaire"]
+        Root biomass in kg/ha on the current day.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    References
+    ----------
+    Based on the ``EvalBiomasseRacinaire`` procedure of the SARRA-H Pascal
+    code, as noted in the original source comments.
     """
     data["biomasseRacinaire"][j,:,:] = data["biomasseTotale"][j,:,:] - data["biomasseAerienne"][j,:,:]
 
@@ -1306,17 +1619,45 @@ def EvalFeuilleTigeSarrahV4(j, data, paramVariete):
 
 
 def update_vegetative_biomass(j, data):
-    """_summary_
+    """Update vegetative biomass from leaf and stem biomass.
 
-    This function is adapted from the EvalBiomasseVegetati procedure from the copie milbilancarbon, exmodules 1 & 2, ***milbilancarbone*** file
-    of the original Pascal code.
+    Role in SARRA-Py
+    ----------------
+    Maintains ``biomasseVegetative`` as the non-grain aboveground organ biomass
+    used by downstream diagnostics and outputs.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
+    Equation
+    --------
+    Current implementation:
 
-    Returns:
-        _type_: _description_
+    ``biomasseVegetative = biomasseTige + biomasseFeuille``
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+
+    Reads
+    -----
+    data["biomasseTige"], data["biomasseFeuille"]
+        Stem and leaf biomass in kg/ha.
+
+    Writes
+    ------
+    data["biomasseVegetative"]
+        Vegetative biomass in kg/ha, broadcast from ``j`` onward.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    References
+    ----------
+    Adapted from the ``EvalBiomasseVegetati`` procedure of the SARRA-H Pascal
+    code, as noted in the original source comments.
     """
     data["biomasseVegetative"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:])
     return data
@@ -1497,31 +1838,58 @@ def calculate_leaf_area_index(j, data):
 
 
 def update_yield_during_filling_phase(j, data):
-    """
-    This function updates the yield value during the filling phase.
+    """Update grain yield during the filling phase.
 
-    During the filling phase (numPhase == 5), the yield is updated by
-    incrementing it with the sum of `deltaBiomasseAerienne` and `reallocation`,
-    bounded by 0 and `dRdtPot` (daily potential yield). The construction of yield
-    is done during phase 5 only, from the variation of aerial biomass and
-    reallocation, with a maximum of `dRdtPot`.
+    Role in SARRA-Py
+    ----------------
+    Increments ``rdt`` during phase 5 using available aboveground biomass gain
+    and reallocated biomass, capped by daily potential yield demand.
 
-    This function is adapted from the EvolDayRdtSarraV3 procedure from the
-    ***bilancarbonesarra***, exmodules 1 & 2.pas file of the original Pascal
-    code.
-    
-    Notes :
-    On tend vers le potentiel en fn du rapport des degresJours/sumDegresJours
-    pour la phase de remplissage. Frein sup fn du flux de sève estimé par le
-    rapport Tr/TrPot.
-    dRdtPot = RdtPotDuJour
+    Equation
+    --------
+    Current implementation applies only where ``numPhase == 5``:
 
-    Args:
-        j (int): The time step at which the calculation starts.
-        data (xarray.Dataset): The data that contains all variables.
+    ``rdt = rdt + min(dRdtPot, max(0, deltaBiomasseAerienne)
+    + reallocation)``
 
-    Returns:
-        xarray.Dataset: The input data with updated yield values.
+    Outside phase 5, ``rdt`` is unchanged.
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+
+    Reads
+    -----
+    data["numPhase"], data["rdt"], data["dRdtPot"],
+    data["deltaBiomasseAerienne"], data["reallocation"]
+        Yield and biomass variables are expected in kg/ha or kg/ha/day.
+
+    Writes
+    ------
+    data["rdt"]
+        Grain yield in kg/ha, broadcast from ``j`` onward.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    This docstring documents the active filling rule only. It does not change
+    the current bounds, phase condition, or the upstream calculation of
+    ``dRdtPot`` and ``reallocation``. The scientific audit flags several
+    coefficients and thresholds in the yield pathway as requiring source
+    validation.
+
+    References
+    ----------
+    Adapted from the ``EvolDayRdtSarraV3`` procedure of the SARRA-H Pascal code
+    (``bilancarbonesarra.pas`` and ``exmodules 1 & 2.pas``), as noted in the
+    original source comments.
     """
 
     data["rdt"][j:,:,:] = np.where(
@@ -1696,6 +2064,58 @@ def MAJBiomMcSV3(data):
 
 
 def estimate_critical_nitrogen_concentration(j, data):
+    """Estimate critical nitrogen concentration from total biomass.
+
+    Role in SARRA-Py
+    ----------------
+    Updates ``Ncrit``, a diagnostic critical nitrogen concentration derived
+    from crop biomass.
+
+    Equation
+    --------
+    Current implementation:
+
+    ``Ncrit = 5.35 * (biomasseTotale / 1000) ** (-0.44)``
+
+    ``biomasseTotale / 1000`` converts kg/ha to t/ha.
+
+    Parameters
+    ----------
+    j : int
+        Current daily time index.
+    data : xarray.Dataset or dict[str, numpy.ndarray]
+        Simulation state with daily raster variables.
+
+    Reads
+    -----
+    data["biomasseTotale"]
+        Total biomass in kg/ha.
+
+    Writes
+    ------
+    data["Ncrit"]
+        Critical nitrogen concentration on the current day. The audit and
+        docstring plan describe this as percent dry matter.
+
+    Returns
+    -------
+    xarray.Dataset or dict[str, numpy.ndarray]
+        The same model state, mutated in place.
+
+    Notes
+    -----
+    The audit links the coefficient order of magnitude to Justes et al. (1994),
+    but also flags that the original curve was developed for winter wheat shoot
+    biomass over a limited biomass range. SARRA-Py currently applies it to
+    ``biomasseTotale`` and does not guard zero biomass, which can produce
+    infinite values. This docstring records the current behavior without
+    changing it.
+
+    References
+    ----------
+    Justes et al. (1994), as already cited in the audit and docstring
+    improvement plan.
+    """
     # estimate critical nitrogen concentration from plant dry matter using the Justes et al (1994) relationship
     data["Ncrit"][j,:,:] = 5.35 * (data["biomasseTotale"][j,:,:]/1000) ** (-0.44)
     return data
