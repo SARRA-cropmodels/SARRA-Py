@@ -1,59 +1,264 @@
-# Model formalisms
+# SARRA-Py Model Formalisms
 
-As for the rest of the SARRA family of models, SARRA-Py is a crop simulation model that uses three main processes in a daily loop: 
+This document is the maintained scientific overview for SARRA-Py. It describes
+the active equations observed in the code without changing them. Raw audit notes
+are archived under `docs/dev/audits/`.
 
-1. Water balance : estimation of evapotranspiration, water stress index, via three reservoirs
+SARRA-Py is a daily, spatial crop model run from notebook workflows on xarray
+inputs. The public API returns xarray outputs; `engine="xarray"` remains the
+default, while `engine="numpy"` is an internal acceleration option.
 
-2. Carbon balance : based on the concept of "big leaf", conversion of solar energy into assimilates under water stress constraints, and repartition into biomass
+## State And Time Step
 
-3. Phenology : evolution of phenological stages (emergence, vegetative stage, flowering, maturation) and associated processes (germination, juvenile mortality, distribution modes of biomasses, etc.).
+Dynamic variables are simulated on a daily time axis and a spatial grid. Most
+scientific functions mutate the model state in place and often propagate the
+current value from day `j` to the end of the simulation with `j:`.
 
-## Water balance
+Main process order in `run_model`:
 
-The SARRA-Py water balance process considers soil as a collection of reservoirs of varying sizes: surface, deep, and a dynamic root reservoir. Each reservoir is an entity that is homogeneous in terms of simulated processes or variables that describe its properties such as infiltration/surface runoff, drainage, storage capacity, and water consumption.
+1. Phenology and thermal-time accumulation.
+2. Irrigation, rainfall input, mulch interception, runoff and reservoir filling.
+3. Soil evaporation, transpiration and water consumption.
+4. Carbon assimilation, biomass partitioning, LAI and yield.
+5. Photoperiodism, mortality and nitrogen indicator.
 
-The flux is simulated by filling the reservoir to its maximum capacity, traditionally the field capacity, except for groundwater phenomena where it is filled to saturation. Beyond that, the water overflows to the next reservoir, downward vertical flux. The water that overflows from the last reservoir is considered drainage. The capillary rise process is not simulated.
+## Phenology
 
-Three representations of the reservoirs are used to estimate available water for evaporation, transpiration, and water storage processes :
+The crop cycle is represented by phases `0` to `7`: no crop, initialization /
+germination, vegetative development, photoperiod-sensitive phase, reproductive
+phase, filling/maturation steps and harvest.
 
-* a fixed-size surface reservoir, that manages the soil evaporation process,
-* a deep reservoir, on which moisture front is simulated ; this allows: 1) to limit the rooting depth to the moisture front, 2) to store water not yet accessible by roots, 3) to block rooting in the case of hard soils,
-* and a root reservoir that evolves based on the rooting speed of roots during their development phases and simulates water availability for plant transpiration.
+Transitions mainly compare accumulated thermal time `sdj` with variety
+thresholds such as `SDJLevee`, `SDJBVP`, `SDJRPR`, `SDJMatu1` and `SDJMatu2`.
+The code writes phase changes from the current day onward, so the daily order is
+part of the numerical behaviour.
 
-The overall water balance equation is:
+Daily thermal time currently uses mean temperature `tpMoy`:
 
-`stock(d+1) = stock(d) + (rain + irrigation) - runoff - drainage - (tr + evap)`
+```text
+if tpMoy <= TOpt2:
+    ddj = max(min(TOpt1, tpMoy), TBase) - TBase
+else:
+    ddj = (TOpt1 - TBase)
+          * (1 - ((min(TLim, tpMoy) - TOpt2) / (TLim - TOpt2)))
+```
 
-where stock is the water stored in the reservoirs, runoff is a function of water input and soil texture, drainage is overflow from the deep reservoir, tr is transpiration, and evap is evaporation.
+Temperatures are in degrees Celsius and `ddj` is in degree-days per day. Older
+comments mention a Tmin/Tmax formulation; this remains an open validation point.
 
-The size of the root reservoir prospected by roots evolves based on the daily rooting speed defined for each phenological phase and can be blocked by the moisture front or reduced in case of strong hydric stress.
+Day length is computed with Astral sunrise/sunset daylight duration from date
+and latitude, then broadcast to the rainfall grid. Photoperiodism is related to
+the sorghum "Impatience" family of models, but the exact SARRA-Py equation and
+thresholds should be validated before being cited as an implementation of a
+specific publication.
 
-## Carbon balance
+## Water Balance
 
-The carbon balance in SARRA-Py is based on a big-leaf approach. The photosynthetically active radiation (PAR) to be transformed into assimilates based on photosynthetic activity is estimated from 1) calculating the intercepted fraction of PAR (deduced via the Beer law from the plot-level leaf area index (LAI) and leaf geometry (factor kdf)), and 2) applying a conversion rate.
+The hydrological state is represented by surface, total/deep and root-accessible
+reservoirs. Water inputs are daily rainfall plus irrigation:
 
-The conversion rate is considered constant throughout the cycle, and is higher than commonly given since it aims at representing all produced assimilates, whereas conversion rates traditionally used in other models only take into account the increase in aerial biomass, without root biomass or maintenance respiration. This photosynthetic activity is constrained constrained by the availability of water and nutrients, representing processes such as stomatal regulation.
+```text
+available_water = rain + irrigTotDay
+```
 
-Assimilates are then allocated between biomasses following rules that vary depending on the phases :
+The conceptual daily balance is:
 
-* A portion of the assimilates is consumed without producing biomass for the maintenance of living tissues, known as maintenance respiration.
+```text
+stock(d+1) = stock(d) + inputs - runoff - drainage - evaporation - transpiration
+```
 
-* From emergence to flowering, biomass is split into root biomass and aerial biomass, which is further divided into leaf and stem biomass using allometric relationships.
+Actual code uses several overlapping reservoirs, so this equation is a guide,
+not a one-to-one variable identity.
 
-* After flowering, the available assimilates allow for seed filling.
+### Soil Evaporation
 
-The overall equation of the carbon balance is defined as:
+Surface evaporable water:
 
-`total biomass (d+1) = biomass (d) + assimilates - maintenance respiration`
+```text
+fesw = surface_tank_stock / surface_tank_capacity
+```
 
-`total biomass = root biomass + leaf biomass + stem biomass + grain biomass`
+Soil evaporation coefficient:
 
-The value of LAI, being the ratio of the limb surface to the ground surface, can then be updated from the leaf biomass based on the specific leaf area (SLA). SLA is considered to be decreasing with the age of the leaf, due to its thickening. Other factors contribute to leaf thickening, including exposure levels to radiation and competition for assimilates Additionally, its dynamics vary depending on plant type (monocotyledons and dicotyledons). The leaf surface area is nonetheless a genetic characteristic that can be defined by minimum and maximum values. In this model, minimum and maximum values, as well as linear decrease rate of SLA are taken into consideration.
+```text
+kce = ltr * mulch * exp(-coefMc * surfMc * biomMc / 1000)
+```
 
-Finally, the grain yield potential is defined as a fixed fraction of the aerial biomass (genetic potential). It can be diminished by various processes during the reproductive phase, water stress (which result in reduced biomass during the critical phase). The grain yield is mainly dependent on the grain filling phase, where water is the main constraint and the grain demand is the highest and considered a priority. The grain yield is calculated based on the temperature of the day and the defined temperature sum for this phase, multiplied by the grain yield potential. For species with continuous flowering, the grain yield is calculated daily and can be affected by the flowering process.
+Potential and actual soil evaporation:
 
-The influence of seeding density is also taken into account, where a linear relationship is applied for low densities and an asymptotic relationship for high densities. The carbon balance calculations for biomass, yield and LAI are simulated daily with an optimal density and converted from the actual density to the optimal density using the asymptotic relationship.
+```text
+evapPot = ET0 * kce
+evap = min(evapPot * fesw**2, surface_tank_stock)
+```
 
-## Phenology 
+These equations are related to FAO-56 soil evaporation concepts, but the squared
+`fesw` response and mulch term are SARRA-Py current implementation details.
 
-Phenology is the study of the growth and development of plants and it is a crucial component of SARRA-Py. The crop growth cycle is traditionally divided into four phases: juvenile vegetative phase (BVP), photoperiod-sensitive phase (PSP), reproductive phase (RPR), and maturation phase (Matu). SARRA-Py divides these phases into seven stages to optimize calculation and control methods. These stages are determined by the sum of degree days and the length of the day, and are defined by different thresholds (temperature, PP function). The PSP phase depends on the photoperiod sensitivity of the variety, which varies with the latitude and sowing date. The RPR and maturation phases are the most sensitive to constraints and have a significant impact on yield in cereal crops. The degree days are calculated based on the temperature range between the base temperature, lethal temperature, and optimum temperatures for plant development.
+### Transpiration And Water Stress
+
+Root reservoir filling:
+
+```text
+ftsw = root_tank_stock / root_tank_capacity
+```
+
+The p-factor follows the FAO-56 adjustment form, expressed with SARRA-Py demand:
+
+```text
+pFact = PFactor + 0.04 * (5 - kcp * ET0)
+pFact = clip(pFact, 0.1, 0.8)
+```
+
+Water stress and transpiration:
+
+```text
+cstr = clip(ftsw / (1 - pFact), 0, 1)
+trPot = kcp * ET0
+tr = trPot * cstr
+```
+
+This is close to the FAO-56 `p`/`Ks` family, but SARRA-Py uses reservoir filling
+rather than root-zone depletion variables.
+
+### Root Reservoir And Humectation Front
+
+Root reservoir capacity grows from phase-dependent root growth speed `vRac`,
+soil available-water capacity `ru`, water stress and the humectation front:
+
+```text
+delta_root_tank_capacity = vRac / 1000 * ru
+if root_tank_capacity > surface_tank_capacity:
+    delta_root_tank_capacity *= min(cstr + 0.3, 1.0)
+delta_root_tank_capacity =
+    min(delta_root_tank_capacity, humectation_front - root_tank_capacity)
+```
+
+The subsequent update of `root_tank_stock` mixes capacity and stock terms and is
+listed in `docs/scientific_validation_questions.md`.
+
+### Runoff, Drainage And Mulch
+
+Runoff is threshold based:
+
+```text
+if rain > runoff_threshold:
+    runoff = (available_water - runoff_threshold) * runoff_rate
+else:
+    runoff = 0
+```
+
+The trigger uses rainfall while the amount uses `available_water`; this is an
+open validation point for irrigated or mulched scenarios.
+
+Mulch interception uses an exponential cover term and local unit conversions:
+
+```text
+water_captured_by_mulch =
+    min(
+        available_water * (1 - exp(-surfMc / 1000 * biomMc)),
+        humSatMc * biomMc / 10000 - mulch_water_stock
+    )
+```
+
+The mulch formalism remains less well sourced than the FAO-like stress terms.
+
+## Carbon Balance
+
+Carbon assimilation uses a big-leaf representation. The non-intercepted light
+fraction is:
+
+```text
+ltr = exp(-kdf * lai)
+```
+
+Potential assimilation:
+
+```text
+PAR = 0.5 * rg
+assimPot = PAR * (1 - exp(-kdf * lai)) * conv * 10
+```
+
+`rg` is expected in MJ m-2 day-1. The `0.5` PAR fraction and `10` conversion
+factor are common modelling choices but should remain tied to SARRA-Py
+calibration.
+
+Water stress scales assimilation:
+
+```text
+assim = assimPot * tr / trPot
+```
+
+when `trPot > 0`; otherwise assimilation is set to zero by the active code.
+
+Maintenance respiration uses a Q10-like temperature response:
+
+```text
+respMaint = kRespMaint * biomasseTotale * 2**((tpMoy - tempMaint) / 10)
+```
+
+Daily total biomass then follows:
+
+```text
+biomasseTotale(d+1) = biomasseTotale(d) + assim - respMaint
+```
+
+with additional bounds and phase conditions in the code.
+
+## Biomass Partition, LAI And Yield
+
+Aboveground, root, leaf and stem biomasses are updated through phase-dependent
+empirical rules. Around and after flowering, reallocation and grain filling
+rules move biomass toward yield variables.
+
+Specific leaf area (SLA) is interpolated from variety parameters and current
+vegetative state. LAI is derived from leaf biomass and SLA:
+
+```text
+lai = surfaceFeuille / 10000
+```
+
+where `surfaceFeuille` is produced from leaf biomass and SLA. Zero-biomass cases
+can trigger numerical warnings and are listed in the validation questions.
+
+Potential yield and daily filling demand are central agronomic outputs but were
+not matched to a public exact equation during the audit. Treat their current
+docstrings as descriptions of active code, not independent scientific
+validation.
+
+## Nitrogen Indicator
+
+The current critical nitrogen concentration implementation uses:
+
+```text
+Ncrit = 5.35 * (biomasseTotale / 1000)**(-0.44)
+```
+
+Earlier audit notes compare this to critical nitrogen dilution curves such as
+Justes et al. (1994), but the active equation and biomass basis are not an exact
+match and need validation before stronger claims are made.
+
+## Data Preparation Formalisms
+
+TAMSAT helpers load daily rainfall rasters into `data["rain"]`, expected in mm.
+
+AgERA5 helpers map local forcing folders to:
+
+- `tpMoy`: mean daily temperature.
+- `ET0`: reference evapotranspiration.
+- `rg`: solar radiation, divided by 1000 in the current loaders to convert the
+  local files to MJ m-2 day-1.
+
+iSDA and Africa soil-grid helpers reproject local soil rasters and project CSV
+tables to the rainfall grid. Dataset provenance and local table units should be
+confirmed before adding stronger scientific claims.
+
+## References
+
+- Allen, R. G., Pereira, L. S., Raes, D. & Smith, M. (1998). FAO Irrigation and
+  Drainage Paper 56, *Crop evapotranspiration*.
+- Dingkuhn, M. et al. (2008). Sorghum photoperiodism and the "Impatience" model
+  family; used here only as a related-family reference.
+- Justes, E. et al. (1994). Critical nitrogen dilution curve; related to the
+  current N indicator but not an exact match.
+- Maidment, R. I. et al. (2017). TAMSAT rainfall estimates.
+- Astral documentation for daylight duration calculations.

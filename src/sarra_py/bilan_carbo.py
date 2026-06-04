@@ -142,7 +142,7 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     xarray dataset. As the rain is the first variable to be initialized in the
     data xarray dataset, its dimensions are used to initialize the other
     variables.
-    
+
     ![no caption](../../docs/images/sla.png)
 
     This code has been adapted from the original InitiationCulture procedure, from the `MilBilanCarbone.pas` code of the
@@ -358,49 +358,10 @@ def estimate_kcp(j, data, paramVariete):
 def estimate_ltr(j, data, paramVariete):
     """Estimate the fraction of radiation transmitted through the canopy.
 
-    Role in SARRA-Py
-    ----------------
-    Updates ``ltr``, used as a canopy cover proxy by carbon and water-balance
-    calculations. Values near 1 indicate little canopy interception; values
-    near 0 indicate high canopy interception.
-
-    Equation
-    --------
-    Current implementation:
-
     ``ltr = exp(-kdf * lai)``
 
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables, usually shaped like
-        ``("time", "x", "y")`` for xarray inputs.
-    paramVariete : dict
-        Reads ``kdf``, the canopy extinction coefficient.
-
-    Reads
-    -----
-    data["lai"]
-        Leaf area index in m2/m2.
-
-    Writes
-    ------
-    data["ltr"]
-        Fraction of radiation transmitted to the soil, dimensionless,
-        broadcast from ``j`` onward.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    References
-    ----------
-    Adapted from the ``EvalLtr`` procedure of the SARRA-H Pascal code
-    (``biomasse.pas`` and ``exmodules 1 & 2.pas``), as noted in the original
-    source comments.
+    `lai` is leaf area index and `kdf` is the canopy extinction coefficient.
+    Values near 1 indicate little canopy interception.
     """
     # group 80   
     data["ltr"][j:,:,:] = np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])
@@ -413,54 +374,9 @@ def estimate_ltr(j, data, paramVariete):
 def estimate_KAssim(j, data, paramVariete):
     """Estimate the phase-dependent assimilation coefficient.
 
-    Role in SARRA-Py
-    ----------------
-    Updates ``KAssim``, an intermediate coefficient used by ``estimate_conv``
-    and then by potential assimilation.
-
-    Current Implementation
-    ----------------------
-    The coefficient depends on ``numPhase``:
-
-    - phase 2: ``1``
-    - phases 3 and 4: ``txAssimBVP``
-    - phase 5: linear interpolation from ``txAssimBVP`` to ``txAssimMatu1``
-      using ``sdj``, ``seuilTempPhasePrec`` and ``seuilTempPhaseSuivante``
-    - phase 6: linear interpolation from ``txAssimMatu1`` to ``txAssimMatu2``
-      using the same thermal-time variables
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-    paramVariete : dict
-        Reads ``txAssimBVP``, ``txAssimMatu1`` and ``txAssimMatu2``.
-
-    Reads
-    -----
-    data["numPhase"], data["sdj"], data["seuilTempPhasePrec"],
-    data["seuilTempPhaseSuivante"], data["KAssim"]
-        Thermal-time variables are expected in degree-days.
-
-    Writes
-    ------
-    data["KAssim"]
-        Broadcasts the current phase-dependent value from ``j`` onward for
-        phases 2 to 6.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    The interpolation denominators are
-    ``seuilTempPhaseSuivante - seuilTempPhasePrec``. If those thresholds are
-    equal, NumPy may emit divide-by-zero or invalid-value warnings. This
-    docstring records the current implementation without changing it.
+    Phases 2-4 use fixed values; phases 5-6 linearly interpolate between
+    maturity coefficients using accumulated degree-days. Equal phase thresholds
+    can produce division warnings.
     """
 
     phase_equivalences = {
@@ -488,45 +404,10 @@ def estimate_KAssim(j, data, paramVariete):
 def estimate_conv(j,data,paramVariete):
     """Update the biomass conversion coefficient used for assimilation.
 
-    Role in SARRA-Py
-    ----------------
-    Combines the phase-dependent ``KAssim`` coefficient with the variety
-    conversion rate before potential assimilation is computed.
-
-    Equation
-    --------
-    Current implementation:
-
     ``conv = KAssim * txConversion``
 
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-    paramVariete : dict
-        Reads ``txConversion``.
-
-    Reads
-    -----
-    data["KAssim"]
-
-    Writes
-    ------
-    data["conv"]
-        Broadcasts ``KAssim * txConversion`` from ``j`` onward.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    The precise unit convention for ``txConversion``, ``KAssim`` and ``conv`` is
-    listed as requiring validation in the scientific audit. Downstream
-    ``update_assimPot`` applies an additional factor ``10``.
+    The downstream `update_assimPot` equation applies an additional factor 10;
+    the exact unit convention remains documented in `model_formalisms.md`.
     """
     data["conv"][j:,:,:] = (data["KAssim"][j,:,:] * paramVariete["txConversion"])
 
@@ -668,65 +549,11 @@ def EvalAssimSarrahV4(j, data):
 def update_assimPot(j, data, paramVariete, paramITK):
     """Compute potential assimilation from PAR, canopy interception and conversion.
 
-    Role in SARRA-Py
-    ----------------
-    Updates ``assimPot``, the daily potential assimilate production before water
-    stress is applied by ``update_assim``.
-
-    Equation
-    --------
-    Current implementation:
-
     ``assimPot = par * (1 - exp(-kdf * lai)) * conversion * 10``
 
-    where ``conversion`` is either ``data["conv"]`` or, when ``paramITK["NI"]``
-    is not NaN, a recalculated ``paramVariete["txConversion"]`` based on the
-    active NI equation:
-
-    ``NIYo + NIp * (1 - exp(-NIp * NI)) - exp(-0.5 * ((NI - LGauss) /
-    AGauss) ** 2) / (AGauss * 2.506628274631)``
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-    paramVariete : dict
-        Reads ``kdf`` and either ``txConversion`` or NI coefficients ``NIYo``,
-        ``NIp``, ``LGauss`` and ``AGauss``.
-    paramITK : dict
-        Reads ``NI``.
-
-    Reads
-    -----
-    data["par"], data["lai"], data["conv"]
-        ``par`` is expected in MJ/m2/day and ``lai`` in m2/m2. ``conv`` is used
-        only when ``NI`` is NaN.
-
-    Writes
-    ------
-    data["assimPot"]
-        Potential assimilation, expected in kg/ha/day by the dataset metadata.
-
-    Side Effects
-    ------------
-    If ``paramITK["NI"]`` is not NaN, mutates
-    ``paramVariete["txConversion"]`` before computing ``assimPot``.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    The audit identifies this as a big-leaf / Beer-Lambert style calculation.
-    The constants ``0.5`` for PAR generation are applied earlier when ``par`` is
-    initialized from radiation, and ``10`` is applied here. The precise unit
-    convention for ``conv``, ``txConversion`` and the ``10`` multiplier remains
-    to be scientifically validated. The NI equation is documented as current
-    behavior only; its source and calibration remain open questions.
+    `par` is expected in MJ m-2 day-1. If `NI` is defined, the current code
+    recomputes and mutates `paramVariete["txConversion"]`; that NI formalism
+    remains an open validation point.
     """
     if ~np.isnan(paramITK["NI"]): 
         #? the following (stupidly long) line was found commented, need to check why and if this is correct
@@ -750,44 +577,8 @@ def update_assimPot(j, data, paramVariete, paramITK):
 def update_assim(j, data):
     """Apply transpiration stress to potential assimilation.
 
-    Role in SARRA-Py
-    ----------------
-    Converts ``assimPot`` to actual ``assim`` using the ratio of actual to
-    potential transpiration.
-
-    Equation
-    --------
-    Current implementation:
-
     ``assim = assimPot * tr / trPot`` where ``trPot > 0``; otherwise ``assim``
     is set to 0.
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-
-    Reads
-    -----
-    data["assimPot"], data["tr"], data["trPot"]
-        ``assimPot`` is expected in kg/ha/day, ``tr`` and ``trPot`` in mm/day.
-
-    Writes
-    ------
-    data["assim"]
-        Actual daily assimilation in kg/ha/day.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    ``np.where`` may evaluate both branches, so invalid divisions can still
-    produce warnings even where the final output is masked to 0.
     """
 
     data["assim"][j,:,:] = np.where(
@@ -804,58 +595,9 @@ def update_assim(j, data):
 def calculate_maintainance_respiration(j, data, paramVariete):
     """Compute maintenance respiration for the current day.
 
-    Role in SARRA-Py
-    ----------------
-    Updates ``respMaint``, the daily assimilate cost subtracted from
-    assimilation in ``update_total_biomass``.
-
-    Equation
-    --------
-    Current implementation uses a Q10-like temperature coefficient with
-    ``Q10 = 2``:
-
-    ``coefficient_temp = 2 ** ((tpMoy - tempMaint) / 10)``
-
-    ``resp_totale = kRespMaint * biomasseTotale * coefficient_temp``
-
-    ``resp_feuille = kRespMaint * biomasseFeuille * coefficient_temp``
-
-    ``respMaint = resp_totale + resp_feuille``, except when
-    ``numPhase > 4`` and ``biomasseFeuille == 0``, where it is set to 0.
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-    paramVariete : dict
-        Reads ``tempMaint`` in degrees C and ``kRespMaint``.
-
-    Reads
-    -----
-    data["tpMoy"], data["biomasseTotale"], data["biomasseFeuille"],
-    data["numPhase"]
-        ``tpMoy`` is expected in degrees C. Biomass variables are expected in
-        kg/ha.
-
-    Writes
-    ------
-    data["respMaint"]
-        Maintenance respiration in kg/ha/day, broadcast from ``j`` onward.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    The audit flags a scientific ambiguity: ``biomasseFeuille`` is added on top
-    of ``biomasseTotale``. If total biomass already includes leaves, this may
-    be an intended weighting of leaf maintenance cost or a form of double
-    counting. This docstring records the current implementation without
-    changing it.
+    Uses a Q10-like coefficient `2 ** ((tpMoy - tempMaint) / 10)` and applies
+    it to total biomass plus leaf biomass. The extra leaf term remains a
+    validation question if total biomass already includes leaves.
     """
     coefficient_temp = 2**((data["tpMoy"][j,:,:] - paramVariete["tempMaint"]) / 10)
     resp_totale = paramVariete["kRespMaint"] * data["biomasseTotale"][j,:,:] * coefficient_temp
@@ -875,63 +617,9 @@ def calculate_maintainance_respiration(j, data, paramVariete):
 def update_total_biomass(j, data, paramVariete, paramITK):
     """Update total crop biomass and its daily increment.
 
-    Role in SARRA-Py
-    ----------------
-    Maintains ``biomasseTotale``, the central biomass pool used by later
-    aboveground/root partitioning, potential yield and nitrogen calculations.
-
-    Equation
-    --------
-    At the phase 1 to 2 transition, where ``numPhase == 2`` and
-    ``changePhase == 1``, current implementation initializes:
-
-    ``biomasseTotale = densite * max(1, densOpti / densite) * txResGrain
-    * poidsSecGrain / 1000``
-
-    Otherwise:
-
-    ``biomasseTotale = biomasseTotale + assim - respMaint``
-
-    ``deltaBiomasseTotale = assim - respMaint``
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-    paramVariete : dict
-        Reads ``densOpti``, ``txResGrain`` and ``poidsSecGrain``.
-    paramITK : dict
-        Reads ``densite`` in plants/ha.
-
-    Reads
-    -----
-    data["numPhase"], data["changePhase"], data["biomasseTotale"],
-    data["assim"], data["respMaint"]
-        Biomass and assimilation variables are expected in kg/ha or kg/ha/day.
-
-    Writes
-    ------
-    data["biomasseTotale"], data["deltaBiomasseTotale"]
-        Both variables are broadcast from ``j`` onward.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    The audit flags that ``densOpti`` is used here without the NaN guard present
-    in some other density-related functions, and that biomass can become
-    negative if respiration exceeds assimilation for long periods. This
-    docstring records the current behavior without changing it.
-
-    References
-    ----------
-    Adapted from the ``EvolBiomTotSarrahV4`` procedure of the SARRA-H Pascal
-    code (``bilancarbonsarra.pas``), as noted in the original source comments.
+    At emergence it initializes biomass from density and seed reserves.
+    Otherwise `biomasseTotale += assim - respMaint` and
+    `deltaBiomasseTotale = assim - respMaint`.
     """
 
     data["biomasseTotale"][j:,:,:] = np.where(
@@ -949,22 +637,9 @@ def update_total_biomass(j, data, paramVariete, paramITK):
 
 
 def update_total_biomass_stade_ip(j, data):
-    """
-    Update the total biomass of the plant at the end of the vegetative phase (ip = "initiation paniculaire").
+    """Store total biomass at panicle-initiation stage.
 
-    If the plant has reached phase 4 and has just changed phase, the current 
-    total biomass will be copied to the "biomTotStadeIp" variable, which represents 
-    the total biomass at the end of the vegetative phase (initiation paniculaire).
-
-    This function is adapted from the EvalRdtPotRespSarV42 procedure, of
-    the bilancarbonsarra.pas file from the original Pascal code.
-
-    Args:
-    j (int): Timestep index.
-    data (xarray.Dataset): Input dataset.
-
-    Returns:
-    xarray.Dataset: The updated dataset with the "biomTotStadeIp" variable updated.
+    Saves `biomasseTotale` into `biomTotStadeIp` when phase 4 starts.
     """
     data["biomTotStadeIp"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 4) & (data["changePhase"][j,:,:] == 1),
@@ -979,22 +654,9 @@ def update_total_biomass_stade_ip(j, data):
 
 
 def update_total_biomass_at_flowering_stage(j, data):
-    """
-    This function updates the total biomass of the plant at the end of the
-    flowering stage (biomTotStadeFloraison).
+    """Store total biomass at flowering stage.
 
-    If the plant is in phase 5, and the phase has changed, then the total
-    biomass is copied to the biomTotStadeFloraison variable.
-
-    This function is adapted from the EvalRdtPotRespSarV42 procedure, of
-    the bilancarbonsarra.pas file from the original Pascal code.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Saves `biomasseTotale` into `biomTotStadeFloraison` when phase 5 starts.
     """
     data["biomTotStadeFloraison"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 5) & (data["changePhase"][j,:,:] == 1),
@@ -1011,59 +673,13 @@ def update_total_biomass_at_flowering_stage(j, data):
 def update_potential_yield(j, data, paramVariete):
     """Initialize potential grain yield at the start of phase 5.
 
-    Role in SARRA-Py
-    ----------------
-    Updates ``rdtPot``, the potential grain yield later used to compute daily
-    potential yield demand during grain filling.
-
-    Equation
-    --------
-    Current implementation applies on pixels where ``numPhase == 5`` and
-    ``changePhase == 1``:
-
     ``delta = biomTotStadeFloraison - biomTotStadeIp``
 
     ``rdtPot = KRdtPotA * delta + KRdtPotB
     + KRdtBiom * biomTotStadeFloraison``
 
-    If ``phaseDevVeg < 6`` and this value exceeds ``2 * biomasseTige``,
-    ``rdtPot`` is capped to ``2 * biomasseTige``.
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-    paramVariete : dict
-        Reads ``KRdtPotA``, ``KRdtPotB``, ``KRdtBiom`` and ``phaseDevVeg``.
-
-    Reads
-    -----
-    data["numPhase"], data["changePhase"], data["biomTotStadeFloraison"],
-    data["biomTotStadeIp"], data["biomasseTige"], data["rdtPot"]
-        Biomass and yield variables are expected in kg/ha.
-
-    Writes
-    ------
-    data["rdtPot"]
-        Potential yield in kg/ha, broadcast from ``j`` onward.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    The audit flags the coefficients ``KRdt*`` and the ``2 * biomasseTige`` cap
-    as not externally sourced in the current documentation. This docstring
-    records the active behavior without changing it.
-
-    References
-    ----------
-    Adapted from the ``EvalRdtPotRespSarV42`` procedure of the SARRA-H Pascal
-    code (``bilancarbonsarra.pas``), as noted in the original source comments.
+    Applies at phase-5 entry; for `phaseDevVeg < 6`, the result is capped at
+    `2 * biomasseTige`. Coefficients remain calibration-sensitive.
     """
 
     delta_biomass_flowering_ip = data["biomTotStadeFloraison"][j,:,:] - data["biomTotStadeIp"][j,:,:]
@@ -1090,59 +706,11 @@ def update_potential_yield(j, data, paramVariete):
 def update_potential_yield_delta(j, data, paramVariete):
     """Update daily potential yield demand during grain filling.
 
-    Role in SARRA-Py
-    ----------------
-    Computes ``dRdtPot``, the daily potential grain yield increment used by
-    ``estimate_reallocation`` and ``update_yield_during_filling_phase``.
-
-    Equation
-    --------
-    For phase 5 only, current implementation sets:
-
     ``dRdtPot = max(rdtPot * (ddj / SDJMatu1) * (tr / trPot),
     respMaint * 0.15)`` where ``trPot > 0``.
 
-    If ``trPot <= 0``, ``dRdtPot`` is set to 0. Outside phase 5, the previous
-    value is kept.
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-    paramVariete : dict
-        Reads ``SDJMatu1`` in degree-days.
-
-    Reads
-    -----
-    data["numPhase"], data["trPot"], data["rdtPot"], data["ddj"],
-    data["tr"], data["respMaint"], data["dRdtPot"]
-        ``tr`` and ``trPot`` are expected in mm/day. ``rdtPot``, ``dRdtPot`` and
-        ``respMaint`` are expected in kg/ha or kg/ha/day.
-
-    Writes
-    ------
-    data["dRdtPot"]
-        Daily potential yield increment in kg/ha/day, broadcast from ``j``
-        onward.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    ``np.where`` may evaluate the division by ``trPot`` even where the final
-    branch is masked, so warnings can occur when ``trPot`` is zero. The
-    ``respMaint * 0.15`` lower bound is part of the current implementation and
-    remains to be scientifically sourced.
-
-    References
-    ----------
-    Adapted from the ``EvalRdtPotRespSarV42`` procedure of the SARRA-H Pascal
-    code (``bilancarbonsarra.pas``), as noted in the original source comments.
+    Applies during phase 5. `trPot == 0` gives 0, though NumPy may still emit
+    masked division warnings.
     """
     data["dRdtPot"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 5),
@@ -1166,60 +734,11 @@ def update_potential_yield_delta(j, data, paramVariete):
 def update_aboveground_biomass(j, data, paramVariete):
     """Partition total biomass into aboveground biomass for the current day.
 
-    Role in SARRA-Py
-    ----------------
-    Updates ``biomasseAerienne`` and its daily change before organ allocation
-    and yield filling are evaluated.
-
-    Equation
-    --------
-    For phases 2 to 4, current implementation uses:
-
     ``biomasseAerienne = min(0.9, aeroTotPente * biomasseTotale
     + aeroTotBase) * biomasseTotale``
 
-    For other phases, it adds ``deltaBiomasseTotale`` to the previous
-    ``biomasseAerienne`` value at the current day. Then:
-
-    ``deltaBiomasseAerienne = biomasseAerienne[j] - biomasseAerienne[j - 1]``
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-    paramVariete : dict
-        Reads ``aeroTotPente`` and ``aeroTotBase``.
-
-    Reads
-    -----
-    data["numPhase"], data["biomasseTotale"], data["biomasseAerienne"],
-    data["deltaBiomasseTotale"]
-        Biomass variables are expected in kg/ha.
-
-    Writes
-    ------
-    data["biomasseAerienne"], data["deltaBiomasseAerienne"]
-        Aboveground biomass and daily aboveground biomass increment in kg/ha.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    The cap ``0.9`` and the affine coefficients are part of the current
-    implementation; their scientific source is not documented in the audits.
-    The active code reads ``biomasseAerienne[j - 1]`` when computing the daily
-    delta.
-
-    References
-    ----------
-    Based on the ``EvolBiomAeroSarrahV3`` procedure of the SARRA-H Pascal code
-    (``bilancarbonsarra.pas`` and ``exmodules 1 & 2.pas``), as noted in the
-    original source comments.
+    This applies during phases 2-4. Other phases add `deltaBiomasseTotale`.
+    The daily delta is `biomasseAerienne[j] - biomasseAerienne[j - 1]`.
     """
     #// data["deltaBiomasseAerienne"][j:,:,:] = np.copy(data["biomasseAerienne"][j,:,:])
 
@@ -1240,34 +759,15 @@ def update_aboveground_biomass(j, data, paramVariete):
 
 
 def estimate_reallocation(j, data, paramVariete):
-    """
-    Estimate the daily biomass reallocation between stem and leaves.
+    """Estimate biomass reallocation toward grain filling.
 
-    This function computes the daily biomass reallocation between stem and leaves for the plant. The computation 
-    only occurs when the plant is in phase 5. The amount of biomass that can be reallocated is estimated as 
-    follows:
+    ``manqueAssim = max(0, dRdtPot - max(0, deltaBiomasseAerienne))``
 
-    1. The difference between the potential yield delta and the aboveground biomass delta, bound by 0, is 
-    calculated and referred to as manqueAssim. manqueAssim represents the daily variation in biomass that 
-    remains after the plant has built its aboveground biomass.
+    ``reallocation = min(manqueAssim * txRealloc,
+    max(0, biomasseFeuille - 30))``
 
-    2. The reallocation is computed as the minimum of the product of manqueAssim and the reallocation rate and 
-    the difference between the leaf biomass and 30, also bound by 0. The value of 30 is an arbitrary 
-    threshold which ensures that reallocation is 0 if the leaf biomass is below 30. If the leaf biomass is 
-    above 30, reallocation is bounded by biomasseFeuille - 30.
-
-    If the plant is not in phase 5, reallocation is set to 0.
-
-    This function is based on the EvalReallocationSarrahV3 procedure from the bilancarbonsarra.pas and 
-    exmodules 1 & 2.pas files from the original Pascal code.
-
-    Args:
-        j (int): Current time step of the simulation.
-        data (xarray.Dataset): The dataset containing all the simulation data.
-        paramVariete (dict): A dictionary containing the parameters for the simulation.
-
-    Returns:
-        xarray.Dataset: The updated dataset with the reallocation values.
+    Applies only during phase 5. The leaf reserve threshold `30` is an
+    active-code constant still to be sourced.
     """
 
     condition = (data["numPhase"][j,:,:] == 5)
@@ -1296,43 +796,7 @@ def estimate_reallocation(j, data, paramVariete):
 def update_root_biomass(j, data):
     """Update root biomass as the residual of total and aboveground biomass.
 
-    Role in SARRA-Py
-    ----------------
-    Maintains ``biomasseRacinaire`` after total and aboveground biomass have
-    been updated.
-
-    Equation
-    --------
-    Current implementation:
-
     ``biomasseRacinaire = biomasseTotale - biomasseAerienne``
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-
-    Reads
-    -----
-    data["biomasseTotale"], data["biomasseAerienne"]
-        Biomass variables are expected in kg/ha.
-
-    Writes
-    ------
-    data["biomasseRacinaire"]
-        Root biomass in kg/ha on the current day.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    References
-    ----------
-    Based on the ``EvalBiomasseRacinaire`` procedure of the SARRA-H Pascal
-    code, as noted in the original source comments.
     """
     data["biomasseRacinaire"][j,:,:] = data["biomasseTotale"][j,:,:] - data["biomasseAerienne"][j,:,:]
 
@@ -1343,25 +807,13 @@ def update_root_biomass(j, data):
 
 
 def update_leaf_biomass(j, data, paramVariete):
-    """
-    For phase above 1 and if the delta of aerial biomass is negative,
-    meaning that the plant is losing aerial biomass, the leaf biomass is
-    updated as the difference between the leaf biomass and the reallocation
-    minus the delta of aerial biomass multiplied by the reallocation rate in
-    leaves. This value is bound in 0.00000001.
+    """Update leaf biomass when aboveground biomass decreases.
 
-    Otherwise, the leaf biomass is not updated.
+    ``biomasseFeuille = max(1e-8, biomasseFeuille
+    - (reallocation - deltaBiomasseAerienne) * pcReallocFeuille)``
 
-    This function is adapted from the EvalFeuilleTigeSarrahV4 procedure, of
-    the bilancarbonsarra.pas and exmodules 1 & 2.pas files from the original
-    Pascal code.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Applies where the crop is active and aboveground biomass decreases. The
+    `1e-8` floor is a numerical guard, not a validated biological threshold.
     """
 
     data["biomasseFeuille"][j:,:,:] = np.where(
@@ -1378,25 +830,13 @@ def update_leaf_biomass(j, data, paramVariete):
 
 
 def update_stem_biomass(j, data, paramVariete):
-    """
-    For phase above 1 and if the delta of aerial biomass is negative,
-    meaning that the plant is losing aerial biomass, the stem biomass is
-    updated as the difference between the leaf biomass and the reallocation
-    minus the delta of aerial biomass multiplied by (1-reallocation rate in
-    leaves) (if it's not leaves, it's stems...). This value is bound in 0.00000001.
+    """Update stem biomass when aboveground biomass decreases.
 
-    Otherwise, the stem biomass is not updated.
+    ``biomasseTige = max(1e-8, biomasseTige
+    - (reallocation - deltaBiomasseAerienne) * (1 - pcReallocFeuille))``
 
-    This function is adapted from the EvalFeuilleTigeSarrahV4 procedure, of
-    the bilancarbonsarra.pas and exmodules 1 & 2.pas files from the original
-    Pascal code.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Applies where the crop is active and aboveground biomass decreases. The
+    `1e-8` floor is a numerical guard, not a validated biological threshold.
     """
     # group 122
     data["biomasseTige"][j:,:,:] = np.where(
@@ -1415,32 +855,31 @@ def update_stem_biomass(j, data, paramVariete):
 
 
 def condition_positive_delta_biomass(j, data, paramVariete):
+    """Return the mask for allometric leaf/stem partitioning.
+
+    Mask: `numPhase > 1`, `deltaBiomasseAerienne >= 0`, and
+    `(numPhase <= 4 or numPhase <= phaseDevVeg)`. The broad `or` condition is
+    intentionally documented as current behaviour.
+    """
 
 
-        condition = (data["numPhase"][j,:,:] > 1) & \
-            (data["deltaBiomasseAerienne"][j,:,:] >= 0) & \
-            ((data["numPhase"][j,:,:] <= 4) | (data["numPhase"][j,:,:] <= paramVariete["phaseDevVeg"]))
-            # (data["numPhase"][j,:,:] <= 4)
-        
-        return condition
+    condition = (data["numPhase"][j,:,:] > 1) & \
+        (data["deltaBiomasseAerienne"][j,:,:] >= 0) & \
+        ((data["numPhase"][j,:,:] <= 4) | (data["numPhase"][j,:,:] <= paramVariete["phaseDevVeg"]))
+        # (data["numPhase"][j,:,:] <= 4)
+
+    return condition
 
 
 def update_bM_and_cM(j, data, paramVariete):
-    """
-    This function returns the updated values of bM and cM.
-    bM and cM are updated if the delta of aerial biomass is positive, 
-    meaning that the plant is gaining aerial biomass, and if the phase is
-    above 1 and below 4 or the phase is below the vegetative phase.
+    """Update allometric coefficients for positive aboveground biomass growth.
 
-    This function is adapted from the EvalFeuilleTigeSarrahV4 procedure, of
-    the bilancarbonsarra.pas files from the original Pascal code.
+    ``bM = feuilAeroBase - 0.1``
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
+    ``cM = ((feuilAeroPente * 1000) / bM + 0.78) / 0.75``
 
-    Returns:
-        _type_: _description_
+    Used by positive-growth leaf/stem partitioning. `bM == 0` can produce
+    division warnings.
     """
 
     data["bM"][j,:,:] = np.where(
@@ -1460,14 +899,13 @@ def update_bM_and_cM(j, data, paramVariete):
 
 
 def update_leaf_biomass_positive_delta_aboveground_biomass(j, data, paramVariete):
-    """
+    """Update leaf biomass from allometry when aboveground biomass increases.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
+    ``biomasseFeuille = (0.1 + bM * cM ** ((biomasseAerienne - rdt) / 1000))
+    * (biomasseAerienne - rdt)``
 
-    Returns:
-        _type_: _description_
+    Applies only on the positive-growth partition mask. Coefficients remain
+    empirical current-code constants.
     """
     data["biomasseFeuille"][j:,:,:] = np.where(
         condition_positive_delta_biomass(j, data, paramVariete),
@@ -1481,14 +919,9 @@ def update_leaf_biomass_positive_delta_aboveground_biomass(j, data, paramVariete
 
 
 def update_stem_biomass_positive_delta_aboveground_biomass(j, data, paramVariete):
-    """_summary_
+    """Update stem biomass as the residual of aboveground organs.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    ``biomasseTige = biomasseAerienne - biomasseFeuille - rdt``
     """
     data["biomasseTige"][j:,:,:] = np.where(
         condition_positive_delta_biomass(j, data, paramVariete),
@@ -1502,7 +935,11 @@ def update_stem_biomass_positive_delta_aboveground_biomass(j, data, paramVariete
 
 
 def condition_positive_delta_aboveground_biomass_all_phases(j, data):
-        #// condition = (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] >= 0)
+    """Return the mask for reallocation adjustments during positive growth.
+
+    Mask: `numPhase > 1` and `deltaBiomasseAerienne > 0`.
+    """
+    #// condition = (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] >= 0)
     condition = (data["numPhase"][j,:,:] > 1) & (data["deltaBiomasseAerienne"][j,:,:] > 0)
     return condition
 
@@ -1510,14 +947,9 @@ def condition_positive_delta_aboveground_biomass_all_phases(j, data):
 
 
 def update_leaf_biomass_all_phases(j, data, paramVariete):
-    """_summary_
+    """Subtract the leaf share of reallocation during positive growth.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    ``biomasseFeuille = biomasseFeuille - reallocation * pcReallocFeuille``
     """
 
     data["biomasseFeuille"][j:,:,:] = np.where(
@@ -1531,14 +963,9 @@ def update_leaf_biomass_all_phases(j, data, paramVariete):
 
 
 def update_stem_biomass_all_phases(j, data, paramVariete):
-    """_summary_
+    """Subtract the stem share of reallocation during positive growth.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    ``biomasseTige = biomasseTige - reallocation * (1 - pcReallocFeuille)``
     """
     data["biomasseTige"][j:,:,:] = np.where(
         condition_positive_delta_aboveground_biomass_all_phases(j, data),
@@ -1550,14 +977,9 @@ def update_stem_biomass_all_phases(j, data, paramVariete):
 
 
 def update_aboveground_biomass_step_2(j, data):
-    """_summary_
+    """Recompose aboveground biomass from leaf, stem and grain biomass.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    ``biomasseAerienne = biomasseTige + biomasseFeuille + rdt``
     """
     data["biomasseAerienne"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] > 1),
@@ -1567,19 +989,11 @@ def update_aboveground_biomass_step_2(j, data):
     return data
 
 def EvalFeuilleTigeSarrahV4(j, data, paramVariete):
-    """
-    This function is a wrapper
+    """Update leaf and stem biomass partitioning for one day.
 
-    It is adapted from the EvalFeuilleTigeSarrahV4 procedure from the bilancarbonsarra.pas file
-    of the original Pascal code.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Coordinates negative-growth reallocation, positive-growth allometry, leaf
+    biomass delta, and recomposition of aboveground biomass. Several empirical
+    coefficients remain documented centrally rather than in this wrapper.
     """
 
     # data["deltaBiomasseFeuilles"][j:,:,:] = np.where(
@@ -1621,43 +1035,7 @@ def EvalFeuilleTigeSarrahV4(j, data, paramVariete):
 def update_vegetative_biomass(j, data):
     """Update vegetative biomass from leaf and stem biomass.
 
-    Role in SARRA-Py
-    ----------------
-    Maintains ``biomasseVegetative`` as the non-grain aboveground organ biomass
-    used by downstream diagnostics and outputs.
-
-    Equation
-    --------
-    Current implementation:
-
     ``biomasseVegetative = biomasseTige + biomasseFeuille``
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-
-    Reads
-    -----
-    data["biomasseTige"], data["biomasseFeuille"]
-        Stem and leaf biomass in kg/ha.
-
-    Writes
-    ------
-    data["biomasseVegetative"]
-        Vegetative biomass in kg/ha, broadcast from ``j`` onward.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    References
-    ----------
-    Adapted from the ``EvalBiomasseVegetati`` procedure of the SARRA-H Pascal
-    code, as noted in the original source comments.
     """
     data["biomasseVegetative"][j:,:,:] = (data["biomasseTige"][j,:,:] + data["biomasseFeuille"][j,:,:])
     return data
@@ -1666,91 +1044,17 @@ def update_vegetative_biomass(j, data):
 
 
 def calculate_canopy_specific_leaf_area(j, data, paramVariete):
-    """
-    Calculate the specific leaf area (SLA) of the canopy.
+    """Update canopy specific leaf area.
 
-    If the leaf biomass is positive, and if we are at the transition day between
-    phases 1 and 2 (numPhase = 2 and changePhase = 1), then the SLA is set to
-    `slaMax`. 
+    At phase-2 entry, positive leaf biomass sets `sla = slaMax`.
+    Afterwards, SLA decreases by `slaPente * (sla - slaMin)` and blends old
+    and new leaf biomass contributions when leaf biomass grows.
 
-    If the leaf biomass is positive and increasing (deltaBiomasseFeuilles is
-    positive), the SLA for existing leaves is calculated by reducing it by an
-    amount proportional to the current SLA, while the SLA for new leaves is
-    calculated as the average between SLA and `slaMax`. The SLA for the entire
-    canopy is then calculated as the weighted average of the SLAs for existing
-    and new leaves.
+    ``sla = (sla - sla_decrease) * ratio_old
+    + ((slaMax + sla) / 2) * ratio_new``
 
-    If there is no increase in leaf biomass (deltaBiomasseFeuilles is negative),
-    only the SLA for existing leaves is calculated.
-
-    If the leaf biomass is negative, the SLA is unchanged.
-
-    The calculated SLA value is bounded between `slaMin` and `slaMax`.
-
-    This function is adapted from the EvalSlaSarrahV3 procedure in the
-    bilancarbonsarra.pas and exmodules 1 & 2.pas files of the original Pascal
-    code.  This calculation method assumes that young leaves have a higher SLA
-    than old leaves and that the fraction of young leaves makes the canopy SLA
-    increase. The `penteSLA` parameter causes a general decrease in SLA
-    (penteSLA = relative decrease per day = fraction of difference between 
-    `slaMax` and `slaMin`).
-
-    Expected parameters:
-    SLAmax [0.001, 0.01]
-    SLAmin [0.001, 0.01]
-    penteSLA [0, 0.2]
-    SLAini = SLAmax
-    
-
-    
-    
-    This function estimates the specific leaf area (SLA) of the canopy.
-    
-    First, if the leaf biomass is positive, if numPhase = 2 and changePhase = 1,
-    which means we are at the transition day between phases 1 and 2, sla is set
-    to be equal to slaMax.
-
-    Then, if the leaf biomass is positive, and if deltaBiomasseFeuilles is
-    positive (meaning that the leaf biomass is increasing), SLA for already
-    existing leaves is calculated by removing a value that is an affine function
-    of SLA itself, and SLA for new leaves is calculated as the mean between SLA
-    and slaMax ; then the SLA is calculated as the weighted mean of the two SLA
-    values.
-
-    Logically, if there is no newly produced leaf biomass (deltaBiomasseFeuilles
-    is negative), only the SLA for already existing leaves is calculated.
-
-    If biomasseFeuille is negative, SLA is unchanged.
-
-    Finally, if biomasseFeuille is positive, SLA value is bounded between slaMin
-    and slaMax.
-
-    This function is adapted from the EvalSlaSarrahV3 procedure from the
-    bilancarbonsarra.pas and  exmodules 1 & 2.pas file of the original Pascal
-    code.  We note that multiple versions of the calculation methods have been
-    used in the original procecure. We may want to go back to that if this
-    function is problematic.
-
-    Notes :
-    In this approach, it is assumed that young leaves have a higher SLA than old
-    leaves. The fraction of young leaves makes the canopy SLA increase. The
-    penteSLA parameter causes a general decrease in SLA (penteSLA = relative
-    decrease per day = fraction of difference between SLAmax and SLAmin). This
-    approach is known for legumes, but can also be adapted to other species.
-
-    Generic/expected parameters :
-    SLAmax [0.001, 0.01]
-    SLAmin [0.001, 0.01]
-    penteSLA [0, 0.2]
-    SLAini = SLAmax
-
-    Args:
-    - j (int): The time step.
-    - data (xarray.Dataset): The data for all variables.
-    - paramVariete (dict): Parameters for the calculation.
-
-    Returns:
-    - data (xarray.Dataset): The updated data with the calculated SLA.
+    Values are clipped to `[slaMin, slaMax]`. Zero leaf biomass can still
+    trigger masked division warnings.
     """
 
     condition = (data["biomasseFeuille"][j,:,:] > 0) & \
@@ -1801,24 +1105,9 @@ def calculate_canopy_specific_leaf_area(j, data, paramVariete):
 
 
 def calculate_leaf_area_index(j, data):
-    """
-    Calculate the leaf area index (LAI) for a given time step.
+    """Update leaf area index from leaf biomass and SLA.
 
-    If the number of growth phase (numPhase) is less than or equal to 1, the LAI is set to 0. 
-    If the number of growth phase is between 2 and 6, the LAI is calculated as the product of 
-    the leaf biomass (biomasseFeuille) and specific leaf area (sla). 
-    If the number of growth phase is greater than 6, the LAI is set back to 0.
-
-    This function is adapted from the EvolLAIPhases procedure from the
-    milbilancarbone.pas and exmodules 1 & 2.pas file of the original Pascal
-    code.
-
-    Args:
-        timestep (int): The time step to calculate the LAI for.
-        data (xarray.Dataset): The xarray dataset that contains the relevant data.
-
-    Returns:
-        xarray.Dataset: The updated xarray dataset with the calculated LAI.
+    Current rule: `lai = biomasseFeuille * sla` for phases 2-6, otherwise 0.
     """
 
     data["lai"][j:,:,:] = np.where(
@@ -1840,56 +1129,10 @@ def calculate_leaf_area_index(j, data):
 def update_yield_during_filling_phase(j, data):
     """Update grain yield during the filling phase.
 
-    Role in SARRA-Py
-    ----------------
-    Increments ``rdt`` during phase 5 using available aboveground biomass gain
-    and reallocated biomass, capped by daily potential yield demand.
-
-    Equation
-    --------
-    Current implementation applies only where ``numPhase == 5``:
-
     ``rdt = rdt + min(dRdtPot, max(0, deltaBiomasseAerienne)
     + reallocation)``
 
-    Outside phase 5, ``rdt`` is unchanged.
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-
-    Reads
-    -----
-    data["numPhase"], data["rdt"], data["dRdtPot"],
-    data["deltaBiomasseAerienne"], data["reallocation"]
-        Yield and biomass variables are expected in kg/ha or kg/ha/day.
-
-    Writes
-    ------
-    data["rdt"]
-        Grain yield in kg/ha, broadcast from ``j`` onward.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    This docstring documents the active filling rule only. It does not change
-    the current bounds, phase condition, or the upstream calculation of
-    ``dRdtPot`` and ``reallocation``. The scientific audit flags several
-    coefficients and thresholds in the yield pathway as requiring source
-    validation.
-
-    References
-    ----------
-    Adapted from the ``EvolDayRdtSarraV3`` procedure of the SARRA-H Pascal code
-    (``bilancarbonesarra.pas`` and ``exmodules 1 & 2.pas``), as noted in the
-    original source comments.
+    Applies only during phase 5; outside phase 5, yield is unchanged.
     """
 
     data["rdt"][j:,:,:] = np.where(
@@ -2066,55 +1309,11 @@ def MAJBiomMcSV3(data):
 def estimate_critical_nitrogen_concentration(j, data):
     """Estimate critical nitrogen concentration from total biomass.
 
-    Role in SARRA-Py
-    ----------------
-    Updates ``Ncrit``, a diagnostic critical nitrogen concentration derived
-    from crop biomass.
-
-    Equation
-    --------
-    Current implementation:
-
     ``Ncrit = 5.35 * (biomasseTotale / 1000) ** (-0.44)``
 
-    ``biomasseTotale / 1000`` converts kg/ha to t/ha.
-
-    Parameters
-    ----------
-    j : int
-        Current daily time index.
-    data : xarray.Dataset or dict[str, numpy.ndarray]
-        Simulation state with daily raster variables.
-
-    Reads
-    -----
-    data["biomasseTotale"]
-        Total biomass in kg/ha.
-
-    Writes
-    ------
-    data["Ncrit"]
-        Critical nitrogen concentration on the current day. The audit and
-        docstring plan describe this as percent dry matter.
-
-    Returns
-    -------
-    xarray.Dataset or dict[str, numpy.ndarray]
-        The same model state, mutated in place.
-
-    Notes
-    -----
-    The audit links the coefficient order of magnitude to Justes et al. (1994),
-    but also flags that the original curve was developed for winter wheat shoot
-    biomass over a limited biomass range. SARRA-Py currently applies it to
-    ``biomasseTotale`` and does not guard zero biomass, which can produce
-    infinite values. This docstring records the current behavior without
-    changing it.
-
-    References
-    ----------
-    Justes et al. (1994), as already cited in the audit and docstring
-    improvement plan.
+    `biomasseTotale / 1000` converts kg/ha to t/ha. This is related to
+    critical nitrogen dilution curves, but the biomass basis and coefficients
+    still need crop-model validation.
     """
     # estimate critical nitrogen concentration from plant dry matter using the Justes et al (1994) relationship
     data["Ncrit"][j,:,:] = 5.35 * (data["biomasseTotale"][j,:,:]/1000) ** (-0.44)
