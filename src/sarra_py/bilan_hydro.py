@@ -763,20 +763,19 @@ def update_root_tank_stock(j, data):
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
-        np.invert((data["changePhase"][j,:,:] == 1) & (data["numPhase"][j,:,:] == 1)),
+        np.invert((data["changePhase"][j,:,:] == 1) & (data["numPhase"][j,:,:] == 1))
     
 
-    data["root_tank_stock"][j:,:,:] = xr.where(
+    data["root_tank_stock"][j:,:,:] = np.where(
         condition,
-        xr.where(
+        np.where(
             (data["root_tank_capacity"][j,:,:] > data["surface_tank_capacity"]),
             data["root_tank_stock"][j,:,:] + data["delta_root_tank_capacity"][j,:,:],
             np.maximum(
                 ((data["surface_tank_stock"][j,:,:] - data["surface_tank_capacity"] * 1/10) * \
                 (data["root_tank_capacity"][j,:,:] / data["surface_tank_capacity"])),
                 0),
-        ).expand_dims("time", axis=0), 
-        
+        ),
         data["root_tank_stock"][j,:,:],
     )
 
