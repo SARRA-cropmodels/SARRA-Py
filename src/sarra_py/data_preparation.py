@@ -87,19 +87,10 @@ def get_grid_size(rainfall_path, date_start, duration):
 
 
 def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
-    """
-    This function loops over the rainfall raster files, and loads them into a
-    xarray DataArray, which is then added to the rain data dictionary. It is
-    tailored to the TAMSAT rainfall data files, hence its name.
+    """Load daily TAMSAT rainfall rasters into ``data["rain"]``.
 
-    Args:
-        data (_type_): _description_
-        TAMSAT_path (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Assumes the local date-coded raster naming used by the notebooks. Rainfall
+    is stored in millimetres and the dataset is mutated in place.
     """
 
     TAMSAT_files_df = build_rainfall_files_df(TAMSAT_path, date_start, duration)
@@ -125,19 +116,10 @@ def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
 
 
 def load_TAMSAT_data_fast(data, rainfall_data_path, date_start, duration):
-    """
-    This function loops over the rainfall raster files, and loads them into a
-    xarray DataArray, which is then added to the rain data dictionary. It is
-    tailored to the TAMSAT rainfall data files, hence its name.
+    """Load daily TAMSAT rainfall rasters with ``xarray.open_mfdataset``.
 
-    Args:
-        data (_type_): _description_
-        TAMSAT_path (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Uses the same local date-coded convention as `load_TAMSAT_data`, removes
+    the raster band dimension, and stores `band_data` as daily rainfall.
     """
 
     rainfall_data_path_df = build_rainfall_files_df(rainfall_data_path, date_start, duration)
@@ -153,18 +135,10 @@ def load_TAMSAT_data_fast(data, rainfall_data_path, date_start, duration):
 
 
 def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
-    """
-    This function loops over the AgERA5 raster files, and loads them into 
-    xarray DataArray, which are then added to the data dictionary.
+    """Load AgERA5 forcing rasters used by SARRA-Py notebooks.
 
-    Args:
-        data (_type_): _description_
-        AgERA5_data_path (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Maps local folders to `tpMoy`, `ET0` and `rg`, reprojects to the base grid,
+    and divides `rg` by 1000 to produce MJ m-2 day-1.
     """
     # TODO : make the file listing error-proof regarding the structure of the folder and the file extensions
 
@@ -235,18 +209,10 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
 
 
 def load_AgERA5_data_fast_dask(data, AgERA5_data_path, date_start, duration):
-    """
-    This function loops over the AgERA5 raster files, and loads them into 
-    xarray DataArray, which are then added to the data dictionary.
+    """Load AgERA5 forcing rasters used by SARRA-Py notebooks.
 
-    Args:
-        data (_type_): _description_
-        AgERA5_data_path (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Fast variant using `open_mfdataset`; maps local folders to `tpMoy`, `ET0`
+    and `rg`, reprojects to the base grid, and divides `rg` by 1000.
     """
     # TODO : make the file listing error-proof regarding the structure of the folder and the file extensions
 
@@ -417,33 +383,7 @@ def load_YAML_parameters(file_paramVariete, file_paramITK, file_paramTypeSol):
 
 
 def initialize_default_irrigation(data):
-    """Add the default zero-irrigation input used by notebook workflows.
-
-    Parameters
-    ----------
-    data : xarray.Dataset
-        Simulation input dataset containing ``rain``. ``rain`` is expected to
-        be a daily raster variable with dimensions such as
-        ``("time", "x", "y")`` and coordinates already prepared by the
-        notebook data-loading helpers.
-
-    Returns
-    -------
-    xarray.Dataset
-        The same dataset object with an ``irrigation`` variable.
-
-    Side Effects
-    ------------
-    Mutates ``data`` in place by writing ``data["irrigation"]``. The new
-    variable keeps the same dimensions, coordinates, shape, and dtype behavior
-    as ``rain * 0``. It receives ``units="mm"`` and
-    ``long_name="irrigation"`` attributes.
-
-    Notes
-    -----
-    This helper initializes the absence of irrigation. It does not change any
-    automatic irrigation settings in ``paramITK``.
-    """
+    """Add a zero daily irrigation variable with the same grid as `rain`."""
     # default irrigation scheme 
     data["irrigation"] = data["rain"] * 0
     data["irrigation"].attrs = {"units":"mm", "long_name":"irrigation"}
@@ -649,15 +589,10 @@ def load_iSDA_soil_data_alternate(data, grid_width, grid_height):
 
 
 def calc_day_length(day, lat):
-    """
-    This function calculates the day length for a given day and latitude.
+    """Compute daylight duration for one date and latitude.
 
-    Args:
-        day (_type_): _description_
-        lat (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Uses Astral sunrise/sunset daylight and fixes longitude to 0.0; the result
+    is returned in hours.
     """
     # print(day, lat)
     coords = LocationInfo(latitude=float(lat), longitude=0.0)
@@ -668,28 +603,7 @@ def calc_day_length(day, lat):
 
 
 def _normalize_day_length_date(date_start):
-    """Normalize a day-length start date for cache keys.
-
-    Parameters
-    ----------
-    date_start : datetime.date, datetime.datetime, numpy scalar, or object
-        Start date used to compute the first day length. NumPy scalar values
-        are unboxed through their ``item`` method when available.
-
-    Returns
-    -------
-    str
-        Stable string key, preferably in ISO date format.
-
-    Side Effects
-    ------------
-    None.
-
-    Notes
-    -----
-    The returned value is used only as an ``lru_cache`` key for
-    ``_cached_day_length_matrix``.
-    """
+    """Normalize a day-length start date for the LRU cache key."""
     if isinstance(date_start, datetime.datetime):
         return date_start.date().isoformat()
     if isinstance(date_start, datetime.date):
@@ -701,34 +615,7 @@ def _normalize_day_length_date(date_start):
 
 @lru_cache(maxsize=64)
 def _cached_day_length_matrix(date_start_key, duration, latitudes):
-    """Compute or retrieve a time-by-latitude day-length matrix.
-
-    Parameters
-    ----------
-    date_start_key : str
-        ISO date string produced by ``_normalize_day_length_date``.
-    duration : int
-        Number of daily values to compute.
-    latitudes : tuple[float, ...]
-        Latitude coordinate values from the dataset ``y`` coordinate.
-
-    Returns
-    -------
-    numpy.ndarray
-        Two-dimensional array with shape ``(duration, len(latitudes))``. Values
-        are daylight duration in hours.
-
-    Side Effects
-    ------------
-    Uses an LRU cache keyed by date, duration, and latitude tuple. The function
-    does not mutate any dataset.
-
-    Notes
-    -----
-    This helper intentionally computes only the time-latitude matrix. Spatial
-    broadcasting to the rainfall grid is handled separately by
-    ``_broadcast_day_length_to_rain``.
-    """
+    """Compute or reuse daylight hours for each day and latitude."""
     date_start = datetime.date.fromisoformat(date_start_key)
     vectorized_func = np.vectorize(calc_day_length)
 
@@ -742,32 +629,7 @@ def _cached_day_length_matrix(date_start_key, duration, latitudes):
 
 
 def _broadcast_day_length_to_rain(day_length_by_latitude, rain):
-    """Broadcast cached day length values to the rainfall raster shape.
-
-    Parameters
-    ----------
-    day_length_by_latitude : numpy.ndarray
-        Array with one value per ``time`` and ``y`` coordinate, shaped like
-        ``(duration, len(y))``.
-    rain : xarray.DataArray
-        Rainfall data array whose dimensions define the target output shape.
-        It must contain ``time`` and ``y`` dimensions.
-
-    Returns
-    -------
-    numpy.ndarray
-        Writable array with the same shape as ``rain``.
-
-    Raises
-    ------
-    ValueError
-        If ``rain`` does not expose both ``time`` and ``y`` dimensions.
-
-    Side Effects
-    ------------
-    None. The returned array is a copy of the broadcasted view so callers can
-    safely attach it to an xarray dataset.
-    """
+    """Broadcast a `(time, y)` day-length matrix to the rainfall grid."""
     if "time" not in rain.dims or "y" not in rain.dims:
         raise ValueError("rain must have 'time' and 'y' dimensions to compute day length")
 
@@ -784,34 +646,8 @@ def _broadcast_day_length_to_rain(day_length_by_latitude, rain):
 def calc_day_length_raster_fast(data, date_start, duration):
     """Add a cached day-length raster to a simulation dataset.
 
-    Parameters
-    ----------
-    data : xarray.Dataset
-        Dataset containing ``rain`` and a ``y`` coordinate. ``rain`` is
-        expected to contain ``time`` and ``y`` dimensions; other dimensions are
-        preserved by broadcasting.
-    date_start : datetime.date, datetime.datetime, numpy scalar, or object
-        First calendar day corresponding to the simulation time axis.
-    duration : int
-        Number of daily time steps to compute.
-
-    Returns
-    -------
-    xarray.Dataset
-        The same dataset object with ``dureeDuJour`` added or replaced.
-
-    Side Effects
-    ------------
-    Mutates ``data`` in place by writing ``data["dureeDuJour"]`` with the same
-    dimensions and shape as ``rain``. Coordinates are inherited from the xarray
-    assignment through the rainfall dimensions.
-
-    Notes
-    -----
-    Day length is computed as a function of date and latitude, cached as a
-    ``(time, y)`` matrix, then broadcast to the full rainfall grid. The helper
-    does not change meteorological inputs other than adding or replacing
-    ``dureeDuJour``.
+    Computes daylight from date and `y` latitude, then broadcasts it to the
+    shape of `rain`. The dataset is mutated in place.
     """
 
     latitudes = tuple(float(value) for value in np.asarray(data["y"].values))
@@ -821,6 +657,3 @@ def calc_day_length_raster_fast(data, date_start, duration):
     data["dureeDuJour"] = (data["rain"].dims, values)
 
     return data
-
-
-

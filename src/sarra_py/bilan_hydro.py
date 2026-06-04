@@ -1624,35 +1624,12 @@ def fill_tanks(j, data):
 
 
 def estimate_fesw(j, data):
-    """
-    This function estimates the fraction of evaporable soil water (fesw, mm).
-    fesw is defined as the ratio of water stock in the surface tank over 110% of
-    the surface tank capacity.
-    
-    It is adapted from the EvalFESW procedure, from bileau.pas and
-    bhytypeFAO.pas files from the original FORTRAN code.
+    """Estimate the fraction of evaporable soil water.
 
-    Depuis thèse Alhassane : "FESW = fraction d'eau évaporable dans le sol (en
-    %), calculée à partir du taux d'humidité du sol (en %) à la capacité de
-    rétention et 1/2 du taux d'humidité du sol au pF 4.2 (Allen et al., 1998)"
+    ``fesw = surface_tank_stock / surface_tank_capacity``
 
-    in Alhassane thesis, FESW = (Stock CR - 0,5 Stock pF 4,2) x H) so is calculated taking only 
-    half of the surface reservoir 
-
-    ? Why is it calculated over 110% of surface_tank_capacity ?
-
-    ? it seems the 110% thingy comes from the update_surface_tank_stock
-    ? function where it is allowed to fill the surface tank up to 110% of its
-    ? capacity. but this does not make se,se to me.
-
-    ? in this case, fesw can take values between 0 and 1
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    The active code uses 100% of `surface_tank_capacity`; older comments
+    mention 110%. Division by zero is not guarded here.
     """
 
     # data["fesw"][j,:,:] = data["surface_tank_stock"][j,:,:] / (1.1 * data["surface_tank_capacity"])
@@ -1665,38 +1642,12 @@ def estimate_fesw(j, data):
 
 
 def estimate_kce(j, data, paramITK):
-    """
-    This function estimates the coefficient of evaporation from the soil (kce).
+    """Estimate the soil-evaporation coefficient.
 
-    This approach takes into consideration three factors acting on limitation of
-    kce :
+    ``kce = ltr * mulch * exp(-coefMc * surfMc * biomMc / 1000)``
 
-    1) ltr : plant cover, 1 = no plant cover, 0 = full plant cover
-    2) Mulch - permanent covering effect : we consider a value of 1.0 for no
-    covering, and 0.0 is full covering with plastic sheet ; this mulch parameter
-    has been used in previous versions of the model where evolution of mulch
-    biomass was not explicitely taken into consideration, can be used in the
-    case of crops with self-mulching phenomena, where a standard mulch parameter
-    value of 0.7 can be applied.
-    3) Mulch - evolutive covering effect BiomMc : biomass of mulch  
-
-    This function has been adapted from EvalKceMC procedure, bileau.pas and
-    exmodules 2.pas from the original FORTRAN code. In its spirit, it looks like
-    it has been adapted from the dual crop coefficient from the FAO56 paper. But
-    this is still to confirm on a point of view of the history of the model.
-
-    Depuis thèse Alhassane : "LTR = fraction de radiation non interceptée par le
-    couvert = [exp(-k*LAI)] où k = coefficient d'extinction de la lumière qui
-    est fonction des propriétés géométriques du couvert et LAI = indice de
-    surface foliaire"
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Combines canopy shading, a static mulch factor and an exponential mulch
+    biomass term. This is FAO-like in spirit, not an exact FAO-56 equation.
     """
 
     data["kce"][j,:,:] = data["ltr"][j,:,:] * paramITK["mulch"] * \
@@ -1709,28 +1660,11 @@ def estimate_kce(j, data, paramITK):
 
 
 def estimate_soil_potential_evaporation(j, data):
-    """
-    This function computes estimation of potential soil evaporation (mm,
-    evapPot). 
+    """Compute potential soil evaporation for the current day.
 
-    It performs its computations solely from the evaporation forcing driven by
-    climatic demand, limited by the coefficient of evaporation from the soil
-    (kce).
-    
-    Note : difference in humectation of the top and bottom tanks is not taken
-    into consideration in this approach.  The
-  
-    This function has been adapted from DemandeSol procedure, from bileau.pas
-    and exmodules 1 & 2.pas file from the original FORTRAN code.
+    ``evapPot = ET0 * kce``
 
-    in Alhassane thesis, EvapPot = Kmulch x ETo x LTR ; here kce = kmulch x LTR so this formalism is respected
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    `ET0` and `evapPot` are daily water depths in millimetres.
     """
 
     data["evapPot"][j,:,:] = data["ET0"][j,:,:] * data["kce"][j,:,:]
@@ -1742,44 +1676,12 @@ def estimate_soil_potential_evaporation(j, data):
 
 
 def estimate_soil_evaporation(j, data):
-    """
-    This function computes estimation of soil evaporable water (`evap`, mm). It uses
-    the potential soil evaporation (`evapPot`, mm) and the fraction of evaporable soil
-    water (`fesw`), bounded by the `surface_tank_stock` (mm).
+    """Estimate actual soil evaporation from potential demand and surface water.
 
-    We remind `fesw` is defined as the ratio of water stock in the surface tank
-    over 110% of the surface tank capacity, meaning it will be equal to 1 when
-    the surface tank is full, and 0 when the surface tank is empty.
+    ``evap = min(evapPot * fesw**2, surface_tank_stock)``
 
-    This approach is somewhat comparable to the soil evaporation reduction
-    coefficient kr approach presented in FAO56 paper, to the exception the soil
-    evaporation reduction coefficient kr is built using two linear functions
-    where the squared fesw approach uses a square function. Furthermore, the kr
-    approach function is build using REW and TEW values that are specific to the
-    type of soil, whereas the squared fesw approach uses a generic function that
-    is not soil specific.
-
-    in Alhassane thesis, evap is called EVj for "evaporation journanière", and
-    is calculated as Evj = EvapPot x FESW. More details are available in the PhD
-    dissertation of Alhassane https://hdl.handle.net/20.500.12177/1576 
-    
-    The `estimate_effective_evaporation_from_evaporable_water` function computed
-    later in the daily cycle uses the `evap` value to determine the effective
-    evaporation (`consoRur`, mm) on the quantity of water in the surface tank
-    (`surface_tank_stock`, mm). 
-
-    It has been adapted from the EvapRuSurf procedure, from bileau.pas and
-    exmodules 1 & 2.pas file from the original FORTRAN code.
-
-    ? evaporation is bounded by the surface tank stock, which means it is meant
-    ? to happen only in the depth described by the surface_tank 
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    The squared `fesw` response is SARRA-Py current behaviour and is not the
+    FAO-56 `Kr`/`REW`/`TEW` formulation.
     """
 
 
@@ -1844,27 +1746,11 @@ def estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK):
 
 
 def estimate_ftsw(j, data):
-    """
-    This function estimates the fraction of transpirable soil water (ftsw) from
-    the root reservoir. 
+    """Estimate the fraction of transpirable soil water.
 
-    It is based on the EvalFTSW procedure, from the bileau.pas, exmodules 1 &
-    2.pas, risocas.pas, riz.pas files from the original FORTRAN code.
+    ``ftsw = root_tank_stock / root_tank_capacity``
 
-    d'après alhassane thesis, "La fraction d'eau transpirable par la plante ou
-    "fraction of transpirable soil water (FTSW)" a été calculée une fois par
-    semaine durant le cycle de la variété : FTSW = ((Stock - pF4.2)/(RU x
-    profondeur racinaire)) x profondeur racinaire Avec : Stock = stock d'eau du
-    sol dans la zone racinaire (mm), pF4.2 = point de flétrissement et RU =
-    réserve utile (mm/msol). Ces variables sont fonction de la profondeur
-    racinaire, donc de la croissance de la culture"
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    If `root_tank_capacity <= 0`, the current code sets `ftsw` to 0.
     """
 
     data["ftsw"][j:,:,:] = np.where(
@@ -1880,20 +1766,12 @@ def estimate_ftsw(j, data):
 
 
 def estimate_potential_plant_transpiration(j, data):
-    """
-    This function computes the potential transpiration from the plant.
+    """Compute potential plant transpiration.
 
-    Computation is based on the climate forcing (ET0), as well as the kcp coefficient.
+    ``trPot = kcp * ET0``
 
-    This code is based on the DemandePlante procedure, from the bileau.pas, bhytypeFAO.pas, and
-    exmodules 1 & 2.pas files from the original FORTRAN code.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    `ET0` and `trPot` are daily water depths in millimetres. `kcp` is computed
+    from SARRA-Py canopy state.
     """
     # ggroup 51
     data["trPot"][j,:,:] = (data["kcp"][j,:,:] * data["ET0"][j,:,:])
@@ -1938,67 +1816,14 @@ def estimate_potential_plant_transpiration(j, data):
 
 
 def estimate_pFact(j, data, paramVariete):
-    """_summary_
+    """Estimate the depletion fraction threshold used for water stress.
 
-    This function computes the pFactor, which is a bound coefficient used in the
-    computation of cstr from ftsw. This coefficient delimits the portion of the
-    FTSW below which water stress starts to influence the transpiration.
+    ``pFact = PFactor + 0.04 * (5 - kcp * ET0)``
+    ``pFact = clip(pFact, 0.1, 0.8)``
 
-    FAO reference for critical FTSW value for transpiration response (0 =
-    stomata respond immediately if FTSW<1; 0.5 for most of the crops)
-
-    pFact is bounded in [0.1, 0.8].
-
-    For details see https://agritrop.cirad.fr/556855/1/document_556855.pdf
-
-    This function is based on the CstrPFactor procedure, from bileau.pas,
-    exmodules 1 & 2.pas, risocas.pas files, from the original FORTRAN code.
-
-    d'après alhassane :
-
-    "Selon Allen et al., (1998), on peut également appliquer la méthode de
-    calculs développée par la FAO, dite du pFactor, basée sur les notions de
-    réserve d'eau facilement utilisable (RFU) et difficilement utilisable (RDU)
-    définies par un point d'inflexion, si on considère que la dynamique de
-    consommation hydrique de la plante diffère selon la demande climatique (ETo)
-    et la fraction d'eau du sol transpirable (FTSW). En effet, pfactor est un
-    coefficient utilisé pour le calcul du taux de transpiration et qui s'obtient
-    en divisant la réserve d'eau du sol utilisable par les racines par la
-    réserve totale disponible dans la zone racinaire de la plante (Allen et al.,
-    1998). On l'obtient également par la formule suivante :
-
-    pfactor = parP + 0,04 x (5 - ETM)
-    
-    Avec : parP = paramètre spécifique à
-    l'espèce, qui exprime le seuil critique d'humidité du sol à partir duquel le
-    stress hydrique réduit linéairement la transpiration (Doorenbos et Kassam,
-    1979)."
-
-    #! this function seems quite arbitrary and would need verifications regarding the underlying assumptions
-
-    ok so this function comes from FAO56 paper, https://www.fao.org/3/x0490e/x0490e0e.htm#chapter%208%20%20%20etc%20under%20soil%20water%20stress%20conditions
-    table 22 annex 2
-
-    FAO56 uses the RAW/TAW formalism where RAW = p TAW 
-    with TAW being the total available water in the root zone TAW = 1000(q FC - q WP) Zr 
-    corresponding to the root tank capacity
-    and RAW being calculated as RAW = p TAW 
-    p average fraction of Total Available Soil Water (TAW) that can be depleted from the root zone before moisture stress (reduction in ET) occurs
-
-    "A value of 0.50 for p is commonly used for many crops"
-    "A numerical approximation for adjusting p for ETc rate is p = pTable 22 + 0.04 (5 - ETc) where the adjusted p is limited to 0.1 £ p £ 0.8 and ETc is in mm/day"
-
-    in the legacy code, ETc is computed with np.maximum(data["kcp"][j,:,:], 1) * data["ET0"][j,:,:]
-    however why is kcp bound to 1 ?
-    there seem to be no reason of keeping this bound.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    This is close to FAO-56 p-factor adjustment, expressed with SARRA-Py
+    reservoir variables. Legacy code bounded `kcp` to at least 1; active code
+    does not.
     """
     # we keep these lines for legacy reference
     # data["pFact"][j:,:,:] = paramVariete["PFactor"] + \
@@ -2022,31 +1847,12 @@ def estimate_pFact(j, data, paramVariete):
 
 
 def estimate_cstr(j, data):
-    """
-    This function computes the water stress coefficient cstr.
+    """Estimate the daily water-stress coefficient.
 
-    It uses ftsw and pFact. cstr is bounded in [0, 1].
+    ``cstr = clip(ftsw / (1 - pFact), 0, 1)``
 
-    This function is based on the CstrPFactor procedure, from bileau.pas,
-    exmodules 1 & 2.pas, risocas.pas files, from the original FORTRAN code.
-
-    in FAO56 paper RAW being calculated as RAW = p TAW and TAW is 
-    p average fraction of Total Available Soil Water (TAW) that can be depleted from the root zone before moisture stress (reduction in ET) occurs
-
-    donc pour avoir la proportion de remplissage correspondant à la limite de stress hydrique, il faut faire
-    1 - pFact
-
-    et donc quand ftsw est inférieur à 1 - pFact, on est en stress hydrique et cstr est inférieur à 1
-    et quand ftsw est au dessus de 1 - pFact, on est pas en stress hydrique et cstr est égal à 1
-
-    en fait cstr correspond au coefficient Ks de FAO56 (figure 42 FAO56)
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Related to FAO-56 `Ks`, but uses reservoir filling (`ftsw`) rather than
+    depletion. `estimate_pFact` currently keeps `pFact` below 1.
     """
     #group 55
     data["cstr"][j:,:,:] = np.minimum((data["ftsw"][j,:,:] / (1 - data["pFact"][j,:,:])), 1)
@@ -2059,26 +1865,12 @@ def estimate_cstr(j, data):
 
 
 def estimate_plant_transpiration(j, data):
-    """
+    """Scale potential transpiration by water stress.
 
-    This function computes the adjusted plant transpiration (tr, mm) from the
-    plant, by adjusting the potential transpiration (trPot, mm) with cstr.
+    ``tr = trPot * cstr``
 
-    This function adjusts the potential transpiration (trPot, mm) that was
-    calculated through trPot = kcp * ET0, by adding the stress coefficient cstr
-    (that corresponds to Ks in the FAO56 paper) Thus we obtain an adjusted plant
-    transpiration tr, which corresponds to ETc_adj in the FAO56 (see equation
-    80).
-
-    This function is based on the EvalTranspi procedure, from bileau.pas,
-    bhytypeFAO.pas, exmodules 1 & 2.pas, from the original FORTRAN code.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    `trPot` and `tr` are daily water depths in millimetres; `cstr` is
+    dimensionless.
     """
 
     data["tr"][j:,:,:] = data["trPot"][j,:,:] * data["cstr"][j,:,:]
