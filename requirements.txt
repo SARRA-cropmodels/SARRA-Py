@@ -7,3 +7,5 @@ matplotlib
 tqdm
 rasterio
 rioxarray
+PyYAML
+netCDF4

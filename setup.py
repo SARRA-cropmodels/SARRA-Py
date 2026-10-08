@@ -17,5 +17,6 @@ setup(
 	author='Jérémy LAVARENNE (@codename5281)',
 	packages=find_packages(where='src'),
 	install_requires=parse_requirements('requirements.txt'),
-	package_dir={'': 'src'}
+	package_dir={'': 'src'},
+	entry_points={'console_scripts': ['sarra-py=sarra_py.cli:main']}
 	)
