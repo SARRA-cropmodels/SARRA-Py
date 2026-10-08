@@ -106,7 +106,7 @@ else:
 
 Temperatures are in degrees C and `ddj` is in degree-days day-1.
 
-Status: **Code-observed** for the active `tpMoy` equation.
+Status: **Code-observed** for the active `tpMoy` equation. The [SARRA-H formalism](https://sarra-h.teledetection.fr/?page_id=13) describes the rising, optimum and declining thermal response, but does not establish the exact input-temperature convention used here.
 
 Open validation point: older comments mention a Tmin/Tmax formulation. The
 active mean-temperature equation should not be described as scientifically
@@ -238,12 +238,16 @@ pFact = PFactor + 0.04 * (5 - kcp * ET0)
 pFact = clip(pFact, 0.1, 0.8)
 cstr = clip(ftsw / (1 - pFact), 0, 1)
 trPot = kcp * ET0
-tr = trPot * cstr
+tr_demand = trPot * cstr
+tr = min(tr_demand, max(root_tank_stock, 0))
+root_tank_stock_after_transpiration = max(root_tank_stock - tr, 0)
 ```
 
-Status: **Source-related**. The p-factor adjustment is FAO-56-like, but
-SARRA-Py uses reservoir filling (`ftsw`) rather than FAO root-zone depletion.
-Do not describe this as an exact FAO-56 implementation.
+The transpiration cap uses the root stock after evaporation. If demand is
+5 mm and 3 mm remain available, transpiration is 3 mm and the root stock is
+reduced to 0 mm. This rule was confirmed for SARRA-Py on 2026-10-08.
+
+Status: **Source-related**. [FAO-56, chapter 8](https://www.fao.org/4/X0490E/x0490e0e.htm) gives the `p + 0.04 (5 - ETc)` adjustment and a depletion-based `Ks`. SARRA-Py uses `kcp * ET0` as demand and reservoir filling (`ftsw`) rather than FAO root-zone depletion. This is not an exact FAO-56 implementation.
 
 ## Root Reservoir And Humectation Front
 
@@ -258,6 +262,12 @@ if root_tank_capacity > surface_tank_capacity:
 delta_root_tank_capacity =
     min(delta_root_tank_capacity, humectation_front - root_tank_capacity)
 ```
+
+The wetting-front cap has no zero floor in this function. When roots extend
+below the surface reservoir, the following stock updater adds the capacity
+increment to accessible root stock in the same step. Thus the newly accessible
+capacity is treated as filled at this point in the code. It remains unknown
+whether this should represent water already present in newly explored soil.
 
 Status: **Source-related** to SARRA-H reservoir and humectation-front
 formalisms at family level; exact stock/capacity updates are **Code-observed**.
@@ -345,7 +355,8 @@ Light interception and potential assimilation:
 ```text
 ltr = exp(-kdf * lai)
 PAR = 0.5 * rg
-assimPot = PAR * (1 - exp(-kdf * lai)) * conv * 10
+conversion = txConversion if NI is defined, else conv
+assimPot = PAR * (1 - exp(-kdf * lai)) * conversion * 10
 ```
 
 Water stress on assimilation:
@@ -358,9 +369,13 @@ assim = 0                      # when trPot <= 0
 Maintenance respiration and total biomass:
 
 ```text
-respMaint = kRespMaint * biomasseTotale * 2**((tpMoy - tempMaint) / 10)
+respMaint = kRespMaint * (biomasseTotale + biomasseFeuille)
+            * 2**((tpMoy - tempMaint) / 10)
+respMaint = 0 if numPhase > 4 and biomasseFeuille == 0
 biomasseTotale(d+1) = biomasseTotale(d) + assim - respMaint
 ```
+
+The [SARRA-H formalism](https://sarra-h.teledetection.fr/?page_id=13) describes Beer-law light interception, a PAR fraction of 0.5, a Q10 factor of 2 and extra leaf weighting in maintenance respiration. The phase-5 zero-leaf exception and the precise biomass pool are implementation details that still need scientific review.
 
 Status: **Source-related** for Beer-Lambert interception and big-leaf /
 radiation-use-efficiency crop modelling. The PAR fraction `0.5`, the conversion
@@ -417,6 +432,7 @@ Potential yield at phase-5 entry:
 ```text
 delta = biomTotStadeFloraison - biomTotStadeIp
 rdtPot = KRdtPotA * delta + KRdtPotB + KRdtBiom * biomTotStadeFloraison
+if phaseDevVeg < 6: rdtPot = min(rdtPot, 2 * biomasseTige)
 ```
 
 Daily potential filling demand:
@@ -425,8 +441,14 @@ Daily potential filling demand:
 dRdtPot = max(
     rdtPot * (ddj / SDJMatu1) * (tr / trPot),
     respMaint * 0.15
-)  # where trPot > 0
+)  # phase 5 and trPot > 0; otherwise the daily demand is zero
 ```
+
+The SARRA-H formalism relates yield potential to biomass gained between
+panicle initiation and flowering, and grain filling to thermal time.
+The additional `KRdtBiom` term, stem-biomass cap and
+`0.15 * respMaint` floor are documented from the active code;
+an exact public source match has not been established.
 
 Yield filling:
 
@@ -471,7 +493,8 @@ Implemented in: `sarra_py/data_preparation.py`.
 - The active AgERA5 loaders divide `rg` by 1000, documenting a local conversion
   to MJ m-2 day-1.
 - Soil helpers reproject local rasters and project CSV tables to the rainfall
-  grid. The local CSV mapping defines several soil parameters used by the model.
+  grid. Both iSDA paths supply the required deep-layer thickness and initial
+  surface stock from the existing soil-class correspondence table.
 - Day length helpers compute daylight from date and latitude, with longitude
   fixed to 0.0, then broadcast to the grid.
 
@@ -485,9 +508,7 @@ be verified before adding exact titles, DOIs, URLs or page numbers.
 
 ### Direct SARRA Or SARRA-H Sources
 
-- SARRA-H and SARRA-O repositories/documentation: source family for legacy model
-  structure and Pascal procedure names. TODO: verify exact formalism page and
-  citation details to use in published documentation.
+- [SARRA-H/O formalism](https://sarra-h.teledetection.fr/?page_id=13): primary model documentation for the reservoir concept, canopy light interception, maintenance respiration and phenological response shapes. The active SARRA-Py equations remain checked against code separately.
 - Dingkuhn et al. 2003; Baron et al. 2005; Kouressy et al. 2008; Lalou et al.
   2019. TODO: verify bibliographic details and which equations correspond to
   active SARRA-Py functions before citing as exact sources.

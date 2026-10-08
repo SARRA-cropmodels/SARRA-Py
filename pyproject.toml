@@ -11,6 +11,12 @@ repo='fontawesome/brands/gitlab'
 [[tool.portray.mkdocs.nav]]
 Home = "README.md"
 [[tool.portray.mkdocs.nav]]
+"API and CLI" = "docs/usage_api_cli.md"
+[[tool.portray.mkdocs.nav]]
+"Parameter files" = "docs/parameter_files.md"
+[[tool.portray.mkdocs.nav]]
+"Architecture" = "docs/architecture.md"
+[[tool.portray.mkdocs.nav]]
 "Model formalisms" = "docs/model_formalisms.md"
 [[tool.portray.mkdocs.nav]]
 "Spatialization strategy" = "docs/spatialization_strategy.md"

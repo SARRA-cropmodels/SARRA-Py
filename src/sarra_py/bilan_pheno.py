@@ -378,6 +378,8 @@ def calculate_daily_thermal_time(j, data, paramVariete):
     a validation question, not active code.
 
     Source status: code-observed.
+
+    SARRA-H describes the response shape; the use of tpMoy is code-observed.
     """
 
     tp_moy = _to_numpy(data["tpMoy"][j,:,:])

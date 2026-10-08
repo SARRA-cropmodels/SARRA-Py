@@ -353,6 +353,9 @@ def estimate_ltr(j, data, paramVariete):
     Values near 1 indicate little canopy interception.
 
     Source status: source-related to Beer-Lambert canopy interception.
+
+    SARRA-H describes Beer-law canopy interception; the expression above is
+    observed in the active code.
     """
     # group 80   
     data["ltr"][j:,:,:] = np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])
@@ -552,6 +555,8 @@ def update_assimPot(j, data, paramVariete, paramITK):
 
     Source status: source-related to big-leaf/RUE modelling; conversion factors
     and NI response are code-observed.
+
+    SARRA-H supports the big-leaf concept, not the exact NI response or factor 10.
     """
     if ~np.isnan(paramITK["NI"]): 
         #? the following (stupidly long) line was found commented, need to check why and if this is correct
@@ -692,6 +697,9 @@ def update_potential_yield(j, data, paramVariete):
     `2 * biomasseTige`. Coefficients remain calibration-sensitive.
 
     Source status: code-observed, not externally validated here.
+
+    SARRA-H describes a biomass-difference yield concept; the additional
+    term and stem cap remain specific to this implementation.
     """
 
     delta_biomass_flowering_ip = data["biomTotStadeFloraison"][j,:,:] - data["biomTotStadeIp"][j,:,:]
@@ -725,6 +733,9 @@ def update_potential_yield_delta(j, data, paramVariete):
     masked division warnings.
 
     Source status: code-observed, not externally validated here.
+
+    SARRA-H describes thermal-time filling; the respiration floor remains
+    specific to the active code.
     """
     data["dRdtPot"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 5),

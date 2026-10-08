@@ -21,7 +21,7 @@ SARRA-Py integrates tools to facilitate regional scale analyses. We aim its code
 
 These instructions will get you a copy of the project up and running on your machine.
 
-This package will work with Python >3.8.x.
+This package requires Python 3.8 or newer.
 
 Clone this repository and navigate to the directory:
 
@@ -45,6 +45,22 @@ Install **sarra_py** package and its dependencies with pip:
 
 This package is provided with a set of Jupyter notebooks to illustrate its use. You can find them in the `notebooks` folder (to use it you can install jupyter `pip install jupyterlab` and run it `jupyter-lab`. Do not forget to switch to a IPython kernel calling for your virtual environment if created.
 
+Run the notebooks from the `notebooks/` directory. See the [example notebook guide](docs/notebook_examples.md) for workflows, data availability and scenario runs through the public API.
+
+## Python API and CLI
+
+A simulation can be run through the validated Python API or with a YAML file:
+
+```bash
+sarra-py run.yaml
+# or: python -m sarra_py run.yaml
+```
+
+The CLI accepts a prepared NetCDF dataset or date-coded TAMSAT/AgERA5
+GeoTIFF directories plus a soil NetCDF on the rainfall grid. See the
+[API and CLI guide](docs/usage_api_cli.md), [parameter files](docs/parameter_files.md)
+and [architecture](docs/architecture.md) for configuration and input requirements.
+
 ## Documentation
 
 The documentation is available at [https://sarra-cropmodels.github.io/SARRA-Py/](https://sarra-cropmodels.github.io/SARRA-Py/).
@@ -59,7 +75,7 @@ If you have any questions, feel free to [post an issue in our GitHub repo](https
 
 ## License
 
-This project is licensed under the GNU GPLv3 license - see the [LICENSE](https://github.com/SARRA-cropmodels/SARRA-Py/blob/main/LICENSE) file for details.
+This project is licensed under the GNU GPLv3 license - see the [LICENCE](LICENCE) file for details.
 
 ## Publications
 

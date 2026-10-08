@@ -10,9 +10,9 @@ The spatialization of the simulation in SARRA-Py has several benefits for users 
 
 ## Simulation logic
 
-The whole simulation results and intermediate steps are stored in a xarray with dimensions (d, x, y), where d is the index of the Julian day and x,y are the spatial coordinates. On each day, the simulation performs a series of operations using variables from both the current day and the previous day, updating the slice in the xarray.
+The whole simulation results and intermediate steps are stored in a xarray with dimensions `(time, x, y)` or `(time, y, x)`, where `time` indexes consecutive simulation days and `x`, `y` are spatial coordinates. On each day, the simulation performs a series of operations using variables from both the current day and the previous day, updating the slice in the xarray.
 
-The simulation in SARRA-Py works by updating the xarray of variables on a daily basis. For each day, the model performs a series of operations using the variables from the current and previous day, and updates the corresponding slice in the xarray. The whole simulation and its intermediate steps are stored in a 3D xarray, with dimensions for the Julian day, and the x and y spatial coordinates.
+The simulation in SARRA-Py works by updating the xarray of variables on a daily basis. For each day, the model performs a series of operations using the variables from the current and previous day, and updates the corresponding slice in the xarray. The whole simulation and its intermediate steps are stored in a 3D xarray, with daily time and the x and y spatial coordinates.
 
 ## Array resolution
 

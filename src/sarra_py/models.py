@@ -229,12 +229,10 @@ def _run_with_engine(loop, paramVariete, paramITK, paramTypeSol, data, duration,
 
 
 def run_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarray", progress=True):
-    """Run the full daily SARRA-Py crop simulation.
+    """Advance an already initialized Dataset through the full daily model.
 
-    `engine="xarray"` is the public default. `engine="numpy"` only changes the
-    internal container used during the daily loop and restores xarray outputs.
-    The input dataset is mutated in place, matching notebook workflows.
-    """
+    Return the updated Dataset; engine defaults to xarray. Prefer
+    run_simulation for input validation and state initialization."""
     return _run_with_engine(
         _run_loop,
         paramVariete,
@@ -249,12 +247,10 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarr
 
 
 def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarray", progress=True):
-    """Run the daily SARRA-Py water-balance model variant.
+    """Advance an initialized Dataset through the water balance variant.
 
-    Keeps the same API and `engine="xarray"` default as `run_model`; the NumPy
-    engine is an internal execution option and does not change returned xarray
-    outputs.
-    """
+    Return the updated Dataset; engine defaults to xarray. Prefer
+    run_simulation with model="waterbalance" for new callers."""
     return _run_with_engine(
         _run_waterbalance_loop,
         paramVariete,
