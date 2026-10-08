@@ -536,6 +536,9 @@ def initialize_delta_root_tank_capacity(j, data):
 
     Returns:
         xarray.Dataset: The updated input data with the daily root capacity variation calculated and stored.
+
+    Source status: SARRA-H-related rooting concept; the 0.3 offset is
+    code-observed and needs calibration provenance.
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
@@ -585,6 +588,9 @@ def update_delta_root_tank_capacity(j, data):
     Args:
         j (_type_): _description_
         data (_type_): _description_
+
+    Code-observed: this cap has no zero floor when the front is behind
+    the current root capacity.
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
@@ -651,6 +657,9 @@ def update_root_tank_stock(j, data):
 
     Source status: code-observed. The stock/capacity mix is an open validation
     point and should not be treated as scientifically validated.
+
+    In the deep-root branch the added capacity enters accessible stock
+    immediately. Whether this represents existing deeper water is unresolved.
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
@@ -1995,43 +2004,20 @@ def subtract_effective_evaporation_from_root_tank_stock(j, data):
 
 
 def update_plant_transpiration(j, data):
+    """Limit actual transpiration to accessible root water for day j.
+
+    At this point tr is demand after stress (trPot * cstr) and the
+    root stock already reflects soil evaporation. If demand exceeds stock,
+    actual transpiration is capped at the nonnegative stock in millimetres.
+
+    The earlier residual expression could turn a 5 mm demand with 3 mm
+    available into 0 mm transpiration; the active cap gives 3 mm.
     """
-    This function updates the value of plant transpiration (`tr`, mm) according
-    to the quantity of water in the root tank (`root_tank_stock`, mm).
-
-    If the transpiration (which as this point on the daily cycle equals `trPot *
-    cstr`) is higher than the root tank stock (which at this point has been
-    updated to reflect the effective evaporation), then plant transpiration is
-    updated to be equal to the difference between the root tank stock and the
-    plant transpiration.
-    
-    Else, its value is unmodified.
-
-    #? However, if this test is true, this always leads to transpiration value = 0.
-    #? We may want to rethink it to check if it does what it was supposed to.
-    
-    #? Instead it would make more sense to bound tr by the value of root tank stock, 
-    #? meaning the maximum quantity of water that can be transpired by the plant 
-    #? is limited by the quantity of water accessible to roots...
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-    Returns:
-        _type_: _description_
-    """
-
-    data["tr"][j:,:,:] = np.where(
-        data["tr"][j,:,:] > data["root_tank_stock"][j,:,:],
-        np.maximum(data["root_tank_stock"][j,:,:] - data["tr"][j,:,:], 0),
-        #! il peut être intéressant d'introduire dans la prochaine version
-        #! le correctif suivant :
-        # data["root_tank_stock"][j,:,:],
+    data["tr"][j:,:,:] = np.minimum(
         data["tr"][j,:,:],
+        np.maximum(data["root_tank_stock"][j,:,:], 0),
     )
     return data
-
-
 
 
 def subtract_transpiration_from_surface_tank_stock_according_to_root_tank_stock(j, data):
