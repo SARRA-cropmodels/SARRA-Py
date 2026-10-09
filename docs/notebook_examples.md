@@ -31,7 +31,16 @@ NetCDF examples use `select_daily_window` to check date coverage.
 This allows a notebook to alter weather, soil grids, sowing dates and variety
 values in memory without writing a CLI configuration file.
 
-Examples 1, 3, 4 and 5 require additional input files absent from this
+Example 1 downloads its 2017 Niger archive from Zenodo on first run
+(about 116 MB compressed and 364 MB extracted). Its optional
+`spatial_window` reduces memory use for a first trial; it applies
+parameter changes through `override_parameters` and uses `run_simulation`.
+Example 2 reads its own observation CSV, boundaries and YAML files, shows
+input-variable metadata, and first runs a baseline maize year. Its optional
+optimization defaults to two years with complete local weather coverage
+(2018 and 2020); the full 1999–2022 range requires the complete northern
+Cameroon weather archive.
+Examples 3, 4 and 5 require additional input files absent from this
 checkout. Example 11 defaults to the complete climate triplet included under
 `data/exemple_data/exemple_10`; set `CLIMATE_DIR` to a larger
 collection to analyze multiple models. Example 8 uses its local NetCDF files
