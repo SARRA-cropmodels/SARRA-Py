@@ -121,6 +121,40 @@ def validate_parameters(parameters):
         raise ValueError("management parameter irrigAuto must be boolean")
 
 
+def override_parameters(parameters, *, variety=None, management=None, soil=None):
+    """Return a validated parameter copy with selected values replaced."""
+    validate_parameters(parameters)
+    updated = {}
+    for name, changes in (
+        ("variety", variety), ("management", management), ("soil", soil),
+    ):
+        original = getattr(parameters, name)
+        values = deepcopy(dict(original))
+        if changes is not None:
+            if not isinstance(changes, Mapping):
+                raise TypeError(f"{name} overrides must be a mapping")
+            unknown = sorted(set(changes) - set(values), key=str)
+            if unknown:
+                raise ValueError(
+                    f"Unknown {name} parameters: {', '.join(map(str, unknown))}"
+                )
+            values.update(deepcopy(dict(changes)))
+        updated[name] = values
+
+    sowing_date = updated["management"]["DateSemis"]
+    if isinstance(sowing_date, str):
+        try:
+            updated["management"]["DateSemis"] = date.fromisoformat(sowing_date)
+        except ValueError as exc:
+            raise ValueError("DateSemis must be an ISO date") from exc
+    elif isinstance(sowing_date, datetime):
+        updated["management"]["DateSemis"] = sowing_date.date()
+
+    result = ModelParameters(**updated)
+    validate_parameters(result)
+    return result
+
+
 def select_daily_window(data, date_start, duration):
     """Return exactly duration daily values starting at date_start.
 

@@ -28,8 +28,16 @@ The spatial soil fields used by the current daily model come from the input
 when preparing a run: providing a soil YAML alone does not supply the gridded
 `ru`, reservoir stocks, depths or runoff fields. The [API and CLI guide](usage_api_cli.md#input-contract) lists these dataset fields.
 
+For scenarios, `override_parameters(base, variety={...}, management={...})`
+returns an independent, validated copy. The CLI accepts the same changes under
+`parameters.overrides` in its run YAML. Overrides are applied after loading the
+three base files and before simulation; unknown parameter names are rejected.
+`simulation.date_start` and `management.DateSemis` remain separate dates.
+
 The model updates internal parameter copies where its existing equations
 require it. A `ModelParameters` instance supplied to `run_simulation` is not
-modified. Parameter units and scientific interpretation belong in
+modified. The existing `NI` to `txConversion` calculation is unchanged and
+remains a scientific validation question. Parameter units and scientific
+interpretation belong in
 [Model formalisms](model_formalisms.md); unresolved scientific choices belong
 in [Scientific validation questions](scientific_validation_questions.md).

@@ -6,7 +6,7 @@ from pathlib import Path
 import xarray as xr
 import yaml
 
-from .api import SimulationConfig, load_model_parameters, run_simulation
+from .api import SimulationConfig, load_model_parameters, override_parameters, run_simulation
 from .data_preparation import load_AgERA5_data, load_TAMSAT_data
 
 
@@ -67,6 +67,17 @@ def execute_config(config_path, overwrite=False):
         _path(base, parameters.get("management"), "parameters.management"),
         _path(base, parameters.get("soil"), "parameters.soil"),
     )
+    if "overrides" in parameters:
+        changes = _mapping(parameters["overrides"], "parameters.overrides")
+        unknown = sorted(set(changes) - {"variety", "management", "soil"})
+        if unknown:
+            raise ValueError(f"Unknown parameter override groups: {', '.join(unknown)}")
+        parameter_set = override_parameters(
+            parameter_set,
+            **{name: _mapping(value, f"parameters.overrides.{name}")
+               for name, value in changes.items()},
+        )
+
     output_path = _path(base, output.get("path"), "output.path")
     if output_path.exists() and not overwrite:
         raise FileExistsError(f"Output exists: {output_path}; use --overwrite to replace it")

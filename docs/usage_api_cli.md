@@ -45,22 +45,23 @@ To compare sowing dates, varieties or climate scenarios, create a new
 run. For example:
 
 ```python
-from copy import deepcopy
-from sarra_py import ModelParameters, SimulationConfig, run_simulation
+from sarra_py import SimulationConfig, override_parameters, run_simulation
 
 outputs = {}
 for name, rainfall_factor in {"baseline": 1.0, "dry": 0.8}.items():
     scenario = inputs.copy(deep=True)
     scenario["rain"] = scenario["rain"] * rainfall_factor
-    management = deepcopy(dict(parameters.management))
-    management["DateSemis"] = date(2023, 5, 1)
+    scenario_parameters = override_parameters(
+        parameters, management={"DateSemis": date(2023, 5, 1)},
+    )
     outputs[name] = run_simulation(
-        scenario,
-        ModelParameters(parameters.variety, management, parameters.soil),
-        SimulationConfig(date(2023, 4, 1), 120),
+        scenario, scenario_parameters, SimulationConfig(date(2023, 4, 1), 120),
     )
 ```
 
+`override_parameters` also accepts `variety` and `soil` mappings. It makes an
+independent copy, rejects unknown parameter names, normalizes `DateSemis`, and
+validates the result. The original YAML files and parameter object are unchanged.
 The same API handles optimization loops and `model="waterbalance"`.
 See [the example notebooks](notebook_examples.md) for local input files and
 the individual workflows.
@@ -88,6 +89,11 @@ parameters:
   variety: data/params/variety/millet_variety.yaml
   management: data/params/itk/millet_niger_2017.yaml
   soil: data/params/soil/USA_iowa_V42.yaml
+  overrides:
+    variety:
+      TBase: 12.0
+    management:
+      DateSemis: "2016-05-02"
 simulation:
   date_start: 2016-05-01
   duration: 120
@@ -117,7 +123,10 @@ output:
   path: results/run.nc
 ```
 
-All paths in the configuration are resolved relative to `run.yaml`. The soil
+All paths in the configuration are resolved relative to `run.yaml`. Optional
+`parameters.overrides` uses the same copy and validation function as Python;
+omit it to use the YAML values unchanged. `simulation.date_start` selects the
+first input day, while `management.DateSemis` is the sowing date. The soil
 NetCDF must already be on the rainfall grid. An existing output is protected;
 pass `--overwrite` to replace it. The command prints the output path on success.
 Set `simulation.progress: true` to show model and raster-loading progress.

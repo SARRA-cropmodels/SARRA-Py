@@ -18,6 +18,7 @@ from sarra_py import (
     ModelParameters,
     SimulationConfig,
     load_model_parameters,
+    override_parameters,
     calculate_once_daily_thermal_time,
     initialize_default_irrigation,
     initialize_simulation,
@@ -81,6 +82,10 @@ def test_cli_runs_prepared_netcdf_with_relative_paths(tmp_path, capsys):
         "input": {"kind": "prepared_netcdf", "path": "input.nc"},
         "parameters": {
             "variety": "variety.yaml", "management": "management.yaml", "soil": "soil.yaml",
+            "overrides": {
+                "variety": {"TBase": variety["TBase"] + 2.0},
+                "management": {"DateSemis": (start + dt.timedelta(days=1)).isoformat()},
+            },
         },
         "simulation": {"date_start": start.isoformat(), "duration": 8, "progress": False},
         "output": {"path": "outputs/result.nc"},
@@ -93,6 +98,14 @@ def test_cli_runs_prepared_netcdf_with_relative_paths(tmp_path, capsys):
     with xr.open_dataset(tmp_path / "outputs" / "result.nc") as result:
         assert result.sizes["time"] == 8
         assert "rdt" in result
+        assert result["sowing_date"][0, 0, 0].item() == 1
+        expected_variety = {**variety, "TBase": variety["TBase"] + 2.0}
+        expected = initialize_simulation(
+            data.copy(deep=True), 3, 2, 8,
+            expected_variety, sample_itk_params(start), start,
+        )
+        expected = calculate_once_daily_thermal_time(expected, expected_variety)
+        np.testing.assert_allclose(result["ddj"], expected["ddj"])
 
     with pytest.raises(SystemExit) as exc:
         main([str(config_path)])
@@ -110,6 +123,26 @@ def test_reference_parameter_files_load_outside_repo_cwd(tmp_path, monkeypatch):
     )
     assert parameters.management["DateSemis"] == dt.date(2016, 5, 1)
     assert "TBase" in parameters.variety
+
+
+def test_parameter_overrides_validate_without_mutating_the_base():
+    start = dt.date(2020, 5, 1)
+    base = _parameters(start)
+    changed = override_parameters(
+        base,
+        variety={"TBase": base.variety["TBase"] + 2.0},
+        management={"DateSemis": "2020-05-02"},
+    )
+    assert changed.management["DateSemis"] == dt.date(2020, 5, 2)
+    assert base.management["DateSemis"] == start
+    assert changed.variety["TBase"] == base.variety["TBase"] + 2.0
+
+    with pytest.raises(ValueError, match="Unknown variety parameters"):
+        override_parameters(base, variety={"TBas": 12.0})
+    with pytest.raises(TypeError, match="management overrides must be a mapping"):
+        override_parameters(base, management=3)
+    with pytest.raises(ValueError, match="DateSemis must be an ISO date"):
+        override_parameters(base, management={"DateSemis": "tomorrow"})
 
 
 def test_api_rejects_nonconsecutive_positional_time_and_nonboolean_progress():
@@ -219,17 +252,15 @@ def test_notebook_scenarios_accept_in_memory_weather_and_parameter_variants():
 
     drier = base.copy(deep=True)
     drier["rain"] = drier["rain"] * 0.8
-    changed_variety = dict(baseline_parameters.variety)
-    changed_variety["TBase"] += 2.0
-    variant_parameters = ModelParameters(
-        changed_variety, dict(baseline_parameters.management), baseline_parameters.soil,
+    variant_parameters = override_parameters(
+        baseline_parameters, variety={"TBase": baseline_parameters.variety["TBase"] + 2.0},
     )
     variant = run_simulation(drier, variant_parameters, SimulationConfig(start, 8))
 
     np.testing.assert_allclose(variant["rain"], baseline["rain"] * 0.8)
     assert not np.allclose(variant["ddj"], baseline["ddj"])
     np.testing.assert_allclose(base["rain"], baseline["rain"])
-    assert baseline_parameters.variety["TBase"] != changed_variety["TBase"]
+    assert baseline_parameters.variety["TBase"] != variant_parameters.variety["TBase"]
     assert "rdt" not in base
 
 def test_alternate_soil_loader_supplies_full_notebook_input_contract(monkeypatch):
