@@ -56,7 +56,7 @@ def test_grid_size_rejects_missing_middle_day_before_opening_raster(tmp_path):
         get_grid_size(tmp_path, dt.date(2020, 1, 1), 3)
 
 
-def test_agera5_loader_uses_requested_dates_and_preserves_mapping(tmp_path):
+def test_agera5_loader_uses_requested_dates_and_preserves_mapping(tmp_path, capsys):
     values = {
         "2m_temperature_24_hour_mean": (10, 20, 30),
         "ET0Hargeaves": (1, 2, 3),
@@ -79,6 +79,10 @@ def test_agera5_loader_uses_requested_dates_and_preserves_mapping(tmp_path):
     np.testing.assert_allclose(result["tpMoy"][:, 0, 0], [20, 30])
     np.testing.assert_allclose(result["ET0"][:, 0, 0], [2, 3])
     np.testing.assert_allclose(result["rg"][:, 0, 0], [2, 3])
+    for name in ("tpMoy", "ET0", "rg"):
+        assert all(result[name].attrs.get(key) for key in ("long_name", "units", "description"))
+    assert result["rg"].attrs["units"] == "MJ/m2/day"
+    assert capsys.readouterr().out == ""
 
 
 def test_agera5_fast_loader_rejects_incomplete_dates(tmp_path):
@@ -162,6 +166,7 @@ def test_raw_tamsat_agera5_adapter_keeps_daily_alignment(tmp_path):
     np.testing.assert_allclose(data["rain"][:, 0, 0], [10, 20])
     np.testing.assert_allclose(data["tpMoy"][:, 0, 0], [25, 26])
     np.testing.assert_allclose(data["rg"][:, 0, 0], [18, 19])
+    assert all(data[name].attrs.get("description") for name in ("rain", "tpMoy", "ET0", "rg"))
 
 
 
@@ -202,3 +207,4 @@ def test_fast_tiff_loaders_read_and_align_daily_values(tmp_path):
     np.testing.assert_allclose(data["rain"][:, 0, 0], [10, 20])
     np.testing.assert_allclose(data["tpMoy"][:, 0, 0], [25, 26])
     np.testing.assert_allclose(data["rg"][:, 0, 0], [18, 19])
+    assert all(data[name].attrs.get("description") for name in ("rain", "tpMoy", "ET0", "rg"))

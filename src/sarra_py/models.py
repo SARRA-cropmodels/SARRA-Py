@@ -5,7 +5,7 @@ from .data_preparation import *
 
 import numpy as np
 import xarray as xr
-from tqdm import tqdm as tqdm
+from tqdm.auto import tqdm
 
 
 def _normalize_engine(engine):
@@ -211,7 +211,7 @@ def _make_iterator(duration, progress):
     """Build the daily iterator, optionally wrapped in a progress bar."""
     days = range(duration)
     if progress:
-        return tqdm(days)
+        return tqdm(days, desc="Simulation", unit="day")
     return days
 
 

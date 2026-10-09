@@ -22,6 +22,7 @@ from sarra_py import (
     calculate_once_daily_thermal_time,
     initialize_default_irrigation,
     initialize_simulation,
+    load_iSDA_soil_data,
     load_iSDA_soil_data_alternate,
     run_model,
     run_simulation,
@@ -263,12 +264,13 @@ def test_notebook_scenarios_accept_in_memory_weather_and_parameter_variants():
     assert baseline_parameters.variety["TBase"] != variant_parameters.variety["TBase"]
     assert "rdt" not in base
 
-def test_alternate_soil_loader_supplies_full_notebook_input_contract(monkeypatch):
+@pytest.mark.parametrize("loader", [load_iSDA_soil_data, load_iSDA_soil_data_alternate])
+def test_soil_loaders_supply_documented_notebook_inputs(monkeypatch, loader):
     root = Path(__file__).resolve().parents[1]
     monkeypatch.chdir(root / "notebooks")
     grid = xr.Dataset(coords={"y": [9.57, 9.35], "x": [13.31, 13.53]})
     grid = grid.rio.write_crs("EPSG:4326")
-    soil = load_iSDA_soil_data_alternate(grid, 2, 2)
+    soil = loader(grid, 2, 2)
 
     required = {
         "ru", "epaisseurSurf", "epaisseurProf", "profRu",
@@ -277,3 +279,7 @@ def test_alternate_soil_loader_supplies_full_notebook_input_contract(monkeypatch
     assert required <= set(soil.data_vars)
     assert all(soil[name].dims == ("y", "x") for name in required)
     assert bool(np.isfinite(soil["epaisseurProf"]).any())
+    for name in required | {"soil_type"}:
+        assert all(soil[name].attrs.get(key) for key in ("long_name", "units", "description"))
+    assert soil["runoff_rate"].attrs["units"] == "1"
+    assert soil["ru"].attrs["units"] == "mm/m"
