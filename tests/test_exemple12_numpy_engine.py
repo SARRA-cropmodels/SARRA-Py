@@ -42,7 +42,7 @@ def test_exemple12_public_notebook_api_symbols_still_importable():
     assert callable(run_model)
     assert callable(load_YAML_parameters)
     assert callable(load_iSDA_soil_data_alternate)
-    assert inspect.signature(run_model).parameters["engine"].default == "xarray"
+    assert inspect.signature(run_model).parameters["engine"].default == "numpy"
 
     notebook_namespace = {}
     exec("from sarra_py import *", notebook_namespace)

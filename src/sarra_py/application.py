@@ -57,7 +57,7 @@ def execute_config(config_path, overwrite=False):
     spec = SimulationConfig(
         date_start=start,
         duration=simulation.get("duration"),
-        engine=simulation.get("engine", "xarray"),
+        engine=simulation.get("engine", "numpy"),
         model=simulation.get("model", "full"),
         progress=simulation.get("progress", False),
     )

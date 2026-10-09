@@ -31,7 +31,7 @@ previous daily slices and writes state into the result dataset. The API copies
 caller inputs before initialization and passes copies of parameter mappings to
 the established model loop.
 
-The default engine is `xarray`. `engine="numpy"` selects the existing NumPy
+The default engine is `numpy`. `engine="xarray"` selects the xarray
 daily loop through the same API; the output remains an `xarray.Dataset`.
 The two engine outputs are compared in the reproducible benchmarks. Scientific
 equations and their validation status are documented in

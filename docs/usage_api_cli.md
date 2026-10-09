@@ -3,7 +3,7 @@
 SARRA-Py can run from a prepared `xarray.Dataset` or from a YAML configuration.
 Both routes call `run_simulation`; the command line contains no separate model
 calculation. The existing notebook functions, including `run_model`, remain
-available. `engine="xarray"` is the default in both interfaces.
+available. `engine="numpy"` is the default in both interfaces.
 
 ## Python API
 
@@ -31,7 +31,7 @@ with xr.open_dataset("prepared_inputs.nc") as inputs:
 day length and zero irrigation if absent, initializes the model state, computes
 daily thermal time, and runs the selected model. It does not mutate the caller's
 input dataset or parameter mappings. Use `model="waterbalance"` for the reduced
-model and `engine="numpy"` to opt into the NumPy engine.
+model and `engine="xarray"` to select the xarray engine.
 
 For notebooks, load or build any weather and soil grid as an in-memory
 `xarray.Dataset`. The runner has no dependency on a particular file
@@ -97,7 +97,7 @@ parameters:
 simulation:
   date_start: 2016-05-01
   duration: 120
-  engine: xarray
+  engine: numpy
   model: full
   progress: false
 output:

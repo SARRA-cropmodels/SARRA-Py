@@ -216,7 +216,7 @@ def _make_iterator(duration, progress):
 
 
 def _run_with_engine(loop, paramVariete, paramITK, paramTypeSol, data, duration, engine, progress):
-    """Dispatch a model run to the legacy xarray or opt-in NumPy engine."""
+    """Dispatch a model run to the selected execution engine."""
     engine = _normalize_engine(engine)
     iterator = _make_iterator(duration, progress)
 
@@ -228,10 +228,10 @@ def _run_with_engine(loop, paramVariete, paramITK, paramTypeSol, data, duration,
     return _restore_numpy_state(data, state)
 
 
-def run_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarray", progress=True):
+def run_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="numpy", progress=True):
     """Advance an already initialized Dataset through the full daily model.
 
-    Return the updated Dataset; engine defaults to xarray. Prefer
+    Return the updated Dataset; engine defaults to NumPy. Prefer
     run_simulation for input validation and state initialization."""
     return _run_with_engine(
         _run_loop,
@@ -246,10 +246,10 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarr
 
 
 
-def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarray", progress=True):
+def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="numpy", progress=True):
     """Advance an initialized Dataset through the water balance variant.
 
-    Return the updated Dataset; engine defaults to xarray. Prefer
+    Return the updated Dataset; engine defaults to NumPy. Prefer
     run_simulation with model="waterbalance" for new callers."""
     return _run_with_engine(
         _run_waterbalance_loop,

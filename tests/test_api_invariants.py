@@ -19,9 +19,10 @@ from sarra_py.bilan_carbo import variable_dict
 from sarra_py.data_preparation import _cached_day_length_matrix
 
 
-def test_public_model_defaults_keep_xarray_engine():
-    assert run_model.__defaults__[-2:] == ("xarray", True)
-    assert run_waterbalance_model.__defaults__[-2:] == ("xarray", True)
+def test_public_model_defaults_use_numpy_engine():
+    assert sarra_py.SimulationConfig(dt.date(2020, 1, 1), 1).engine == "numpy"
+    assert run_model.__defaults__[-2:] == ("numpy", True)
+    assert run_waterbalance_model.__defaults__[-2:] == ("numpy", True)
 
 
 def test_key_notebook_functions_remain_importable_from_package_root():

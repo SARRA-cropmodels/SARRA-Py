@@ -52,11 +52,11 @@ class ModelParameters:
 
 @dataclass(frozen=True)
 class SimulationConfig:
-    """Simulation dates and execution options; xarray remains the default."""
+    """Simulation dates and execution options; NumPy is the default engine."""
 
     date_start: date
     duration: int
-    engine: str = "xarray"
+    engine: str = "numpy"
     model: str = "full"
     progress: bool = False
 

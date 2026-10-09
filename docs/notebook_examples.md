@@ -6,7 +6,7 @@ first using the instructions in [the README](../README.md). Each runnable
 example now builds a weather and soil `xarray.Dataset`, loads
 validated YAML parameters, and calls the same public
 `run_simulation(data, parameters, SimulationConfig(...))` entry point
-used by the CLI. The public default remains `engine="xarray"`.
+used by the CLI. The public default is `engine="numpy"`.
 
 | Example | Workflow |
 |---|---|
@@ -21,6 +21,7 @@ used by the CLI. The public default remains `engine="xarray"`.
 | 11 | Run all complete climate model triplets in a directory |
 | 12 | Compare rainfall and temperature scenarios |
 | 13 | Download TAMSAT and AgERA5 NetCDF data and simulate Niger millet |
+| 14 | Benchmark Example 1 with real inputs and compare simulation engines |
 | Grid example 2 | Run the water balance model on a sowing date grid |
 | Example xx | Bayesian parameter calibration |
 
@@ -48,3 +49,11 @@ handled by selecting a compatible season or preparing a Gregorian daily series.
 `notebooks/SARRA-Py - Example 13 - Download and simulate Niger millet.ipynb` downloads TAMSAT v3.1 daily rainfall NetCDFs and AgERA5 v2 climate NetCDFs, prepares a weather and soil dataset, then runs the public simulation API. The AgERA5 downloader needs CDS API credentials and accepted dataset terms. Downloads are cached under `data/exemple_data/exemple_13/` by date range and geographic box. This notebook uses AgERA5 v2 Penman–Monteith ET0; Example 1 uses archived Hargreaves ET0 GeoTIFFs, so their results need not match.
 
 The reusable functions are `download_tamsat_daily`, `download_agera5_v2`, and `prepare_remote_inputs`. `prepare_remote_inputs` takes explicit paths to soil assets and returns the same variable contract accepted by `run_simulation` and the `prepared_netcdf` CLI mode.
+
+## Real-data performance benchmark
+
+`notebooks/SARRA-Py - Example 14 - Benchmark Niger millet 2017.ipynb`
+records a full 250-day, 60 × 60-cell run of Example 1 with real TAMSAT,
+AgERA5 and soil inputs. It reads the measured JSON report under
+`docs/dev/audits/` and offers an optional rerun. The same benchmark can be
+run from `benchmarks/benchmark_exemple_1.py`.

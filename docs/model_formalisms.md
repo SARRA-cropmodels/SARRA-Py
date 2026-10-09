@@ -8,9 +8,8 @@ agronomic validation report. Raw audit notes are archived under
 `docs/dev/audits/`.
 
 SARRA-Py is a daily spatial crop model run from notebook workflows on xarray
-inputs and outputs. The public default remains `engine="xarray"`;
-`engine="numpy"` is an internal execution option intended to preserve the same
-scientific behaviour and xarray-facing outputs.
+inputs and outputs. The public default is `engine="numpy"`; `engine="xarray"` remains available.
+Both execution engines return xarray datasets and use the same model equations.
 
 ## Validation Status Legend
 
