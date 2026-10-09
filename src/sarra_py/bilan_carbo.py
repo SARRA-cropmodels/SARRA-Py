@@ -1380,17 +1380,9 @@ def MAJBiomMcSV3(data):
 
 
 def estimate_critical_nitrogen_concentration(j, data):
-    """Estimate critical nitrogen concentration from total biomass.
-
-    ``Ncrit = 5.35 * (biomasseTotale / 1000) ** (-0.44)``
-
-    `biomasseTotale / 1000` converts kg/ha to t/ha. This is related to
-    critical nitrogen dilution curves, but the biomass basis and coefficients
-    still need crop-model validation.
-
-    Source status: source-related to Justes-type dilution curves, not validated
-    as an exact Justes implementation.
-    """
-    # estimate critical nitrogen concentration from plant dry matter using the Justes et al (1994) relationship
-    data["Ncrit"][j,:,:] = 5.35 * (data["biomasseTotale"][j,:,:]/1000) ** (-0.44)
+    """Estimate Ncrit for positive biomass; leave undefined cells as NaN."""
+    biomass_t_ha = np.asarray(data["biomasseTotale"][j,:,:]) / 1000
+    ncrit = np.full(biomass_t_ha.shape, np.nan, dtype=float)
+    np.power(biomass_t_ha, -0.44, out=ncrit, where=biomass_t_ha > 0)
+    data["Ncrit"][j,:,:] = 5.35 * ncrit
     return data

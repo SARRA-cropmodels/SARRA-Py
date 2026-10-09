@@ -471,9 +471,11 @@ Implemented in:
 Ncrit = 5.35 * (biomasseTotale / 1000)**(-0.44)
 ```
 
-If `biomasseTotale` is kg ha-1, division by 1000 converts it to t ha-1. The
-code does not assign units to `Ncrit`, and no downstream agronomic use was
-identified in the current daily loop beyond storing the diagnostic value.
+If `biomasseTotale` is kg ha-1, division by 1000 converts it to t ha-1.
+The power law is evaluated only for positive biomass. `Ncrit` is `NaN` at zero
+or negative biomass, where the dilution curve is undefined. The code does not
+assign units to `Ncrit`, and no downstream agronomic use was identified in the
+current daily loop beyond storing the diagnostic value.
 
 Status: **Source-related** only. The equation resembles critical nitrogen
 dilution curves such as Justes et al. (1994), but the coefficient, exponent,
