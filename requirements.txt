@@ -9,3 +9,4 @@ rasterio
 rioxarray
 PyYAML
 netCDF4
+cdsapi

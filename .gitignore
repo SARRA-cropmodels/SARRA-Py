@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Downloaded weather cache for Example 13
+/data/exemple_data/exemple_13/
+/data/remote_cache/niger_2017/
