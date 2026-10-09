@@ -1621,6 +1621,8 @@ def compute_soil_evaporation(j, data, paramITK):
     return data
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK):
     """Update mulch evaporable-water fraction and mulch water stock.
 
@@ -1653,6 +1655,8 @@ def estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def estimate_ftsw(j, data):
     """Estimate the fraction of transpirable soil water.
 
@@ -2020,6 +2024,8 @@ def update_plant_transpiration(j, data):
     return data
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def subtract_transpiration_from_surface_tank_stock_according_to_root_tank_stock(j, data):
 
     """

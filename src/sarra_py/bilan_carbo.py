@@ -365,6 +365,8 @@ def estimate_ltr(j, data, paramVariete):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def estimate_KAssim(j, data, paramVariete):
     """Estimate the phase-dependent assimilation coefficient.
 
@@ -577,6 +579,8 @@ def update_assimPot(j, data, paramVariete, paramITK):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def update_assim(j, data):
     """Apply transpiration stress to potential assimilation.
 
@@ -723,6 +727,8 @@ def update_potential_yield(j, data, paramVariete):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def update_potential_yield_delta(j, data, paramVariete):
     """Update daily potential yield demand during grain filling.
 
@@ -908,6 +914,8 @@ def condition_positive_delta_biomass(j, data, paramVariete):
     return condition
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def update_bM_and_cM(j, data, paramVariete):
     """Update allometric coefficients for positive aboveground biomass growth.
 
@@ -937,6 +945,8 @@ def update_bM_and_cM(j, data, paramVariete):
     return data
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def update_leaf_biomass_positive_delta_aboveground_biomass(j, data, paramVariete):
     """Update leaf biomass from allometry when aboveground biomass increases.
 
@@ -1098,6 +1108,8 @@ def update_vegetative_biomass(j, data):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def calculate_canopy_specific_leaf_area(j, data, paramVariete):
     """Update canopy specific leaf area.
 
