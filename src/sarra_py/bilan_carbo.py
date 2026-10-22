@@ -141,6 +141,10 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
 
     Creates daily state variables with `data["rain"].dims`, sets default units
     and metadata where available, and mutates the input dataset in place.
+    Initial surface water is `stockIniSurf` (mm); total initial water is
+    `stockIniSurf + stockIniProf` (mm). Root-accessible storage subsequently
+    follows the existing daily root-access rules rather than adding water to
+    this total.
 
     Source status: code-observed initialization, source-related to SARRA-H
     `InitiationCulture` and `InitPlotMc` procedure comments.
@@ -225,13 +229,14 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
     #   //    StTot := StockIniSurf - PfTranspi/2 + StockIniProf;
     #   StTot := StockIniSurf  + StockIniProf;
     # data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniSurf"] + paramTypeSol["stockIniProf"]))
-    #! modifié pour faire correspondre les résultats de simulation, à remettre en place pour un calcul correct dès que possible
+    # Initial surface and deeper stocks are disjoint inputs (mm). The total
+    # includes both; overlapping root-accessible storage is not added again.
     # data["stTot"] = np.full((grid_width, grid_height, duration), (paramTypeSol["stockIniProf"]))
     #! renaming stTot to total_tank_stock
     #// data["stTot"] = data["stockIniProf"]
     #//data["total_tank_stock"] = data["stockIniProf"]
     #! coorecting total_tank_stock initialization as it did not have the time dimensions that are required as stock evolves through time
-    data["total_tank_stock"] = (data["rain"].dims, np.repeat(np.array(data["stockIniProf"])[np.newaxis,:,:], duration, axis=0))
+    data["total_tank_stock"] = (data["rain"].dims, np.repeat(np.asarray(data["stockIniSurf"] + data["stockIniProf"])[np.newaxis,:,:], duration, axis=0))
     #// data["stTot"].attrs = {"units": "mm", "long_name": "?"}
     data["total_tank_stock"].attrs = {"units": "mm", "long_name": "?"}
     
@@ -308,6 +313,13 @@ def initialize_simulation(data, grid_width, grid_height, duration, paramVariete,
         data[variable].attrs = {"units":variables[variable][1], "long_name":variables[variable][0]}
         data[variable] = data[variable].astype("float32")
 
+    # Restore the supplied surface stock after the generic zero initialization.
+    # Root-accessible water is subsequently derived by the existing root rules.
+    data["surface_tank_stock"].data = np.repeat(
+        np.asarray(data["stockIniSurf"], dtype=np.float32)[np.newaxis, :, :],
+        duration, axis=0,
+    )
+
     return data
 
 
@@ -353,6 +365,9 @@ def estimate_ltr(j, data, paramVariete):
     Values near 1 indicate little canopy interception.
 
     Source status: source-related to Beer-Lambert canopy interception.
+
+    SARRA-H describes Beer-law canopy interception; the expression above is
+    observed in the active code.
     """
     # group 80   
     data["ltr"][j:,:,:] = np.exp(-paramVariete["kdf"] * data["lai"][j,:,:])
@@ -362,6 +377,8 @@ def estimate_ltr(j, data, paramVariete):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def estimate_KAssim(j, data, paramVariete):
     """Estimate the phase-dependent assimilation coefficient.
 
@@ -552,6 +569,8 @@ def update_assimPot(j, data, paramVariete, paramITK):
 
     Source status: source-related to big-leaf/RUE modelling; conversion factors
     and NI response are code-observed.
+
+    SARRA-H supports the big-leaf concept, not the exact NI response or factor 10.
     """
     if ~np.isnan(paramITK["NI"]): 
         #? the following (stupidly long) line was found commented, need to check why and if this is correct
@@ -572,6 +591,8 @@ def update_assimPot(j, data, paramVariete, paramITK):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def update_assim(j, data):
     """Apply transpiration stress to potential assimilation.
 
@@ -692,6 +713,9 @@ def update_potential_yield(j, data, paramVariete):
     `2 * biomasseTige`. Coefficients remain calibration-sensitive.
 
     Source status: code-observed, not externally validated here.
+
+    SARRA-H describes a biomass-difference yield concept; the additional
+    term and stem cap remain specific to this implementation.
     """
 
     delta_biomass_flowering_ip = data["biomTotStadeFloraison"][j,:,:] - data["biomTotStadeIp"][j,:,:]
@@ -715,6 +739,8 @@ def update_potential_yield(j, data, paramVariete):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def update_potential_yield_delta(j, data, paramVariete):
     """Update daily potential yield demand during grain filling.
 
@@ -725,6 +751,9 @@ def update_potential_yield_delta(j, data, paramVariete):
     masked division warnings.
 
     Source status: code-observed, not externally validated here.
+
+    SARRA-H describes thermal-time filling; the respiration floor remains
+    specific to the active code.
     """
     data["dRdtPot"][j:,:,:] = np.where(
         (data["numPhase"][j,:,:] == 5),
@@ -897,6 +926,8 @@ def condition_positive_delta_biomass(j, data, paramVariete):
     return condition
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def update_bM_and_cM(j, data, paramVariete):
     """Update allometric coefficients for positive aboveground biomass growth.
 
@@ -926,6 +957,8 @@ def update_bM_and_cM(j, data, paramVariete):
     return data
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def update_leaf_biomass_positive_delta_aboveground_biomass(j, data, paramVariete):
     """Update leaf biomass from allometry when aboveground biomass increases.
 
@@ -1087,6 +1120,8 @@ def update_vegetative_biomass(j, data):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def calculate_canopy_specific_leaf_area(j, data, paramVariete):
     """Update canopy specific leaf area.
 
@@ -1357,17 +1392,9 @@ def MAJBiomMcSV3(data):
 
 
 def estimate_critical_nitrogen_concentration(j, data):
-    """Estimate critical nitrogen concentration from total biomass.
-
-    ``Ncrit = 5.35 * (biomasseTotale / 1000) ** (-0.44)``
-
-    `biomasseTotale / 1000` converts kg/ha to t/ha. This is related to
-    critical nitrogen dilution curves, but the biomass basis and coefficients
-    still need crop-model validation.
-
-    Source status: source-related to Justes-type dilution curves, not validated
-    as an exact Justes implementation.
-    """
-    # estimate critical nitrogen concentration from plant dry matter using the Justes et al (1994) relationship
-    data["Ncrit"][j,:,:] = 5.35 * (data["biomasseTotale"][j,:,:]/1000) ** (-0.44)
+    """Estimate Ncrit for positive biomass; leave undefined cells as NaN."""
+    biomass_t_ha = np.asarray(data["biomasseTotale"][j,:,:]) / 1000
+    ncrit = np.full(biomass_t_ha.shape, np.nan, dtype=float)
+    np.power(biomass_t_ha, -0.44, out=ncrit, where=biomass_t_ha > 0)
+    data["Ncrit"][j,:,:] = 5.35 * ncrit
     return data

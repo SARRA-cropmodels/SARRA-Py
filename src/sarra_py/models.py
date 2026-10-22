@@ -5,7 +5,7 @@ from .data_preparation import *
 
 import numpy as np
 import xarray as xr
-from tqdm import tqdm as tqdm
+from tqdm.auto import tqdm
 
 
 def _normalize_engine(engine):
@@ -211,12 +211,12 @@ def _make_iterator(duration, progress):
     """Build the daily iterator, optionally wrapped in a progress bar."""
     days = range(duration)
     if progress:
-        return tqdm(days)
+        return tqdm(days, desc="Simulation", unit="day")
     return days
 
 
 def _run_with_engine(loop, paramVariete, paramITK, paramTypeSol, data, duration, engine, progress):
-    """Dispatch a model run to the legacy xarray or opt-in NumPy engine."""
+    """Dispatch a model run to the selected execution engine."""
     engine = _normalize_engine(engine)
     iterator = _make_iterator(duration, progress)
 
@@ -228,13 +228,11 @@ def _run_with_engine(loop, paramVariete, paramITK, paramTypeSol, data, duration,
     return _restore_numpy_state(data, state)
 
 
-def run_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarray", progress=True):
-    """Run the full daily SARRA-Py crop simulation.
+def run_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="numpy", progress=True):
+    """Advance an already initialized Dataset through the full daily model.
 
-    `engine="xarray"` is the public default. `engine="numpy"` only changes the
-    internal container used during the daily loop and restores xarray outputs.
-    The input dataset is mutated in place, matching notebook workflows.
-    """
+    Return the updated Dataset; engine defaults to NumPy. Prefer
+    run_simulation for input validation and state initialization."""
     return _run_with_engine(
         _run_loop,
         paramVariete,
@@ -248,13 +246,11 @@ def run_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarr
 
 
 
-def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="xarray", progress=True):
-    """Run the daily SARRA-Py water-balance model variant.
+def run_waterbalance_model(paramVariete, paramITK, paramTypeSol, data, duration, engine="numpy", progress=True):
+    """Advance an initialized Dataset through the water balance variant.
 
-    Keeps the same API and `engine="xarray"` default as `run_model`; the NumPy
-    engine is an internal execution option and does not change returned xarray
-    outputs.
-    """
+    Return the updated Dataset; engine defaults to NumPy. Prefer
+    run_simulation with model="waterbalance" for new callers."""
     return _run_with_engine(
         _run_waterbalance_loop,
         paramVariete,

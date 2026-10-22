@@ -1,9 +1,13 @@
 numpy
 pandas
 xarray
+dask[array]
 pcse
 astral
 matplotlib
 tqdm
 rasterio
 rioxarray
+PyYAML
+netCDF4
+cdsapi

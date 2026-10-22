@@ -1,0 +1,8 @@
+include LICENCE README.md CHANGELOG.md
+include requirements.txt requirements-notebooks.txt
+recursive-include docs *.md
+prune docs/dev
+prune benchmarks
+recursive-include tests *.py
+recursive-include data/params *.yaml
+exclude tests/test_benchmark_smoke.py

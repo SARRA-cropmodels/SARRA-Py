@@ -127,3 +127,43 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Downloaded weather cache for Example 13
+/data/exemple_data/exemple_13/
+/data/remote_cache/niger_2017/
+/data/exemple_data/exemple_14/
+
+
+# Example weather archives and extracted local data (notebook paths stay unchanged)
+/data/exemple_data/exemple_1/
+/data/exemple_data/exemple_2/AgERA5_north_cameroon/
+/data/exemple_data/exemple_2/TAMSAT_v3.1_north_cameroon_rfe_filled/
+/data/exemple_data/exemple_2/North_Cameroon_1990_2022.zip
+/data/exemple_data/exemple_3/
+/data/exemple_data/exemple_6/
+/data/exemple_data/exemple_7/
+/data/exemple_data/exemple_8/
+/data/exemple_data/exemple_9/
+/data/exemple_data/exemple_10/
+/data/exemple_data/exemple_12/
+/data/exemple_data/climatologie_sen_slope/
+
+# Local editor/agent settings and working notebooks
+/.vscode/
+/AGENTS.md
+/notebooks/IBK_SARRA-Py - Calibration.ipynb
+/notebooks/IBK_SARRA-Py - Calibration_original.ipynb
+/notebooks/IB_SARRA-Py - Calibration.ipynb
+/notebooks/SARRA-Py - Climatologie_Sen Slope.ipynb
+
+# Local audit notes and verification evidence
+/docs/dev/audits/
+
+# Local development guides, experiments and performance measurements
+/docs/dev/releasing.md
+/benchmarks/
+/tests/test_benchmark_smoke.py
+/notebooks/*Exemple 2 Victor*.ipynb
+/notebooks/*Exemple xx*.ipynb
+/notebooks/SARRA-Py_grid*.ipynb
+/notebooks/*Benchmark*.ipynb

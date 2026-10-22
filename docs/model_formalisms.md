@@ -4,13 +4,11 @@
 
 This document describes the active scientific and technical formalisms observed
 in the current SARRA-Py code. It is a maintained model overview, not a complete
-agronomic validation report. Raw audit notes are archived under
-`docs/dev/audits/`.
+agronomic validation report.
 
 SARRA-Py is a daily spatial crop model run from notebook workflows on xarray
-inputs and outputs. The public default remains `engine="xarray"`;
-`engine="numpy"` is an internal execution option intended to preserve the same
-scientific behaviour and xarray-facing outputs.
+inputs and outputs. The public default is `engine="numpy"`; `engine="xarray"` remains available.
+Both execution engines return xarray datasets and use the same model equations.
 
 ## Validation Status Legend
 
@@ -26,8 +24,12 @@ scientific behaviour and xarray-facing outputs.
 Implemented in: `sarra_py/models.py::run_model`,
 `sarra_py/models.py::_run_loop`.
 
-Dynamic variables are simulated on a daily time axis and a spatial grid. Most
-scientific functions mutate the model state in place and often propagate the
+Dynamic variables are simulated on a daily time axis and a spatial grid. The
+simulation start date selects the first weather day; `DateSemis` selects sowing.
+Starting the weather series before sowing lets the water balance evolve during
+the pre-sowing period.
+
+Most scientific functions mutate the model state in place and often propagate the
 current value from day `j` to the end of the simulation with `j:`.
 
 State convention used in this document:
@@ -78,7 +80,7 @@ of guessing.
 | `assimPot` | Potential assimilation | metadata says kg ha-1; daily flux implied by equation | `update_assimPot` |
 | `assim` | Actual assimilation | metadata says kg ha-1; daily flux implied by equation | `update_assim` |
 | `rdt` | Grain yield | kg ha-1 | `update_yield_during_filling_phase` |
-| `Ncrit` | Critical nitrogen indicator | open: likely percent or internal index; not set in metadata | `estimate_critical_nitrogen_concentration` |
+| `Ncrit` | Critical nitrogen indicator | unit undetermined; not set in metadata | `estimate_critical_nitrogen_concentration` |
 
 ## Phenology
 
@@ -106,7 +108,7 @@ else:
 
 Temperatures are in degrees C and `ddj` is in degree-days day-1.
 
-Status: **Code-observed** for the active `tpMoy` equation.
+Status: **Code-observed** for the active `tpMoy` equation. The [SARRA-H formalism](https://sarra-h.teledetection.fr/?page_id=13) describes the rising, optimum and declining thermal response, but does not establish the exact input-temperature convention used here.
 
 Open validation point: older comments mention a Tmin/Tmax formulation. The
 active mean-temperature equation should not be described as scientifically
@@ -238,12 +240,16 @@ pFact = PFactor + 0.04 * (5 - kcp * ET0)
 pFact = clip(pFact, 0.1, 0.8)
 cstr = clip(ftsw / (1 - pFact), 0, 1)
 trPot = kcp * ET0
-tr = trPot * cstr
+tr_demand = trPot * cstr
+tr = min(tr_demand, max(root_tank_stock, 0))
+root_tank_stock_after_transpiration = max(root_tank_stock - tr, 0)
 ```
 
-Status: **Source-related**. The p-factor adjustment is FAO-56-like, but
-SARRA-Py uses reservoir filling (`ftsw`) rather than FAO root-zone depletion.
-Do not describe this as an exact FAO-56 implementation.
+The transpiration cap uses the root stock after evaporation. If demand is
+5 mm and 3 mm remain available, transpiration is 3 mm and the root stock is
+reduced to 0 mm. This rule was confirmed for SARRA-Py on 2026-10-08.
+
+Status: **Source-related**. [FAO-56, chapter 8](https://www.fao.org/4/X0490E/x0490e0e.htm) gives the `p + 0.04 (5 - ETc)` adjustment and a depletion-based `Ks`. SARRA-Py uses `kcp * ET0` as demand and reservoir filling (`ftsw`) rather than FAO root-zone depletion. This is not an exact FAO-56 implementation.
 
 ## Root Reservoir And Humectation Front
 
@@ -258,6 +264,12 @@ if root_tank_capacity > surface_tank_capacity:
 delta_root_tank_capacity =
     min(delta_root_tank_capacity, humectation_front - root_tank_capacity)
 ```
+
+The wetting-front cap has no zero floor in this function. When roots extend
+below the surface reservoir, the following stock updater adds the capacity
+increment to accessible root stock in the same step. Thus the newly accessible
+capacity is treated as filled at this point in the code. It remains unknown
+whether this should represent water already present in newly explored soil.
 
 Status: **Source-related** to SARRA-H reservoir and humectation-front
 formalisms at family level; exact stock/capacity updates are **Code-observed**.
@@ -277,13 +289,28 @@ Runoff:
 
 ```text
 if rain > runoff_threshold:
-    runoff = (available_water - runoff_threshold) * runoff_rate
+    candidate = max((available_water - runoff_threshold) * runoff_rate, 0)
+    runoff = min(candidate, max(available_water, 0))
 else:
     runoff = 0
 ```
 
 Status: **Code-observed**. The trigger uses rainfall while the amount uses
 `available_water`, which can include irrigation and post-mulch adjustments.
+
+**Runoff bounds in version 0.2.0.** The previous amount
+was unbounded. With 30 mm of rainfall, a 20 mm threshold, a runoff rate of
+0.27 and 28.50639 mm intercepted by mulch, it produced -4.99673 mm of runoff.
+Subtracting that negative amount increased available water artificially.
+The corrected equation bounds runoff between zero and the nonnegative water
+remaining after interception. For this case, runoff is now 0 mm and 1.49361 mm
+remain available. The rainfall trigger and the coefficient formula are
+retained; the bounds apply in both calculation engines. Missing values remain
+missing in the amount calculation. Regression tests cover the mulched case,
+ordinary runoff, the rainfall trigger and the upper water-availability bound.
+
+Open scientific question: whether the trigger should use rainfall or water
+remaining after interception, especially when irrigation is present.
 
 ### Crop-Residue Mulch Formalism
 
@@ -345,7 +372,8 @@ Light interception and potential assimilation:
 ```text
 ltr = exp(-kdf * lai)
 PAR = 0.5 * rg
-assimPot = PAR * (1 - exp(-kdf * lai)) * conv * 10
+conversion = txConversion if NI is defined, else conv
+assimPot = PAR * (1 - exp(-kdf * lai)) * conversion * 10
 ```
 
 Water stress on assimilation:
@@ -358,9 +386,13 @@ assim = 0                      # when trPot <= 0
 Maintenance respiration and total biomass:
 
 ```text
-respMaint = kRespMaint * biomasseTotale * 2**((tpMoy - tempMaint) / 10)
+respMaint = kRespMaint * (biomasseTotale + biomasseFeuille)
+            * 2**((tpMoy - tempMaint) / 10)
+respMaint = 0 if numPhase > 4 and biomasseFeuille == 0
 biomasseTotale(d+1) = biomasseTotale(d) + assim - respMaint
 ```
+
+The [SARRA-H formalism](https://sarra-h.teledetection.fr/?page_id=13) describes Beer-law light interception, a PAR fraction of 0.5, a Q10 factor of 2 and extra leaf weighting in maintenance respiration. The phase-5 zero-leaf exception and the precise biomass pool are implementation details that still need scientific review.
 
 Status: **Source-related** for Beer-Lambert interception and big-leaf /
 radiation-use-efficiency crop modelling. The PAR fraction `0.5`, the conversion
@@ -417,6 +449,7 @@ Potential yield at phase-5 entry:
 ```text
 delta = biomTotStadeFloraison - biomTotStadeIp
 rdtPot = KRdtPotA * delta + KRdtPotB + KRdtBiom * biomTotStadeFloraison
+if phaseDevVeg < 6: rdtPot = min(rdtPot, 2 * biomasseTige)
 ```
 
 Daily potential filling demand:
@@ -425,8 +458,14 @@ Daily potential filling demand:
 dRdtPot = max(
     rdtPot * (ddj / SDJMatu1) * (tr / trPot),
     respMaint * 0.15
-)  # where trPot > 0
+)  # phase 5 and trPot > 0; otherwise the daily demand is zero
 ```
+
+The SARRA-H formalism relates yield potential to biomass gained between
+panicle initiation and flowering, and grain filling to thermal time.
+The additional `KRdtBiom` term, stem-biomass cap and
+`0.15 * respMaint` floor are documented from the active code;
+an exact public source match has not been established.
 
 Yield filling:
 
@@ -450,9 +489,11 @@ Implemented in:
 Ncrit = 5.35 * (biomasseTotale / 1000)**(-0.44)
 ```
 
-If `biomasseTotale` is kg ha-1, division by 1000 converts it to t ha-1. The
-code does not assign units to `Ncrit`, and no downstream agronomic use was
-identified in the current daily loop beyond storing the diagnostic value.
+If `biomasseTotale` is kg ha-1, division by 1000 converts it to t ha-1.
+The power law is evaluated only for positive biomass. `Ncrit` is `NaN` at zero
+or negative biomass, where the dilution curve is undefined. The code does not
+assign units to `Ncrit`, and no downstream agronomic use was identified in the
+current daily loop beyond storing the diagnostic value.
 
 Status: **Source-related** only. The equation resembles critical nitrogen
 dilution curves such as Justes et al. (1994), but the coefficient, exponent,
@@ -460,23 +501,37 @@ crop scope and total-biomass basis must be confirmed before calling it an exact
 implementation. Treat `Ncrit` as an internal indicator until units and use are
 validated.
 
-Open validation point: zero biomass produces infinite values.
+Open validation point: confirm the coefficient, exponent, biomass pool and
+units of the positive-biomass curve. Zero and negative biomass are intentionally
+represented as `NaN`.
 
 ## Data Preparation Formalisms
 
-Implemented in: `sarra_py/data_preparation.py`.
+Implemented in: `sarra_py/data_preparation.py` and
+`sarra_py/remote_data.py`. File format and source units determine the
+preparation route; the daily model receives the same named variables either way.
 
-- TAMSAT helpers load daily rainfall into `rain`, expected in mm day-1.
-- AgERA5 helpers map local files to `tpMoy`, `ET0` and `rg`.
-- The active AgERA5 loaders divide `rg` by 1000, documenting a local conversion
-  to MJ m-2 day-1.
-- Soil helpers reproject local rasters and project CSV tables to the rainfall
-  grid. The local CSV mapping defines several soil parameters used by the model.
-- Day length helpers compute daylight from date and latitude, with longitude
-  fixed to 0.0, then broadcast to the grid.
+- In the local GeoTIFF workflow, dated TAMSAT rainfall files establish `rain`,
+  the daily dates and the target grid. The AgERA5 adapter adds `tpMoy`, `ET0`
+  and `rg` on that grid. It divides the local radiation raster values by
+  `1000`, assuming those files contain kJ m-2 day-1.
+- In the downloaded NetCDF workflow, `prepare_remote_inputs` reads TAMSAT
+  `rfe_filled` and AgERA5 v2 fields. It converts mean temperature from K to
+  degrees C and radiation from J m-2 day-1 to MJ m-2 day-1 by dividing by
+  `1_000_000`. The AgERA5 fields are reprojected to the TAMSAT grid. This
+  route uses the AgERA5 v2 Penman-Monteith ET0 product.
+- Soil preparation derives the required gridded fields from the configured
+  soil assets. A caller can instead supply a prepared `xarray.Dataset` with
+  the required weather and soil variables; `run_simulation` does not
+  reproject that dataset.
+- Day length is computed from date and latitude when `dureeDuJour` is absent.
+  The helper uses longitude 0.0 and broadcasts the result to the grid.
 
-Status: **Code-observed** for file handling and conversions. Dataset provenance,
-local preprocessing and soil table units remain open validation points.
+Status: **Code-observed** for file handling and conversions. The assumed units
+of local preprocessed files, provenance of soil assets and suitability of the
+chosen resampling method remain validation points. See the
+[API input contract](usage_api_cli.md#input-contract) and
+[spatialization strategy](spatialization_strategy.md) for the run boundary.
 
 ## References And Source Status
 
@@ -485,9 +540,7 @@ be verified before adding exact titles, DOIs, URLs or page numbers.
 
 ### Direct SARRA Or SARRA-H Sources
 
-- SARRA-H and SARRA-O repositories/documentation: source family for legacy model
-  structure and Pascal procedure names. TODO: verify exact formalism page and
-  citation details to use in published documentation.
+- [SARRA-H/O formalism](https://sarra-h.teledetection.fr/?page_id=13): primary model documentation for the reservoir concept, canopy light interception, maintenance respiration and phenological response shapes. The active SARRA-Py equations remain checked against code separately.
 - Dingkuhn et al. 2003; Baron et al. 2005; Kouressy et al. 2008; Lalou et al.
   2019. TODO: verify bibliographic details and which equations correspond to
   active SARRA-Py functions before citing as exact sources.
@@ -535,3 +588,59 @@ be verified before adding exact titles, DOIs, URLs or page numbers.
 - Justes et al. (1994). Used as **Source-related** for critical nitrogen
   dilution curves. The active SARRA-Py `Ncrit` equation is not documented here
   as an exact implementation.
+
+## Water-input and root-growth conventions
+
+The following conventions are shared by the NumPy and xarray engines.
+
+### Prescribed and automatic irrigation
+
+`irrigation[t]` is the prescribed daily water input in mm. It is applied even
+when `irrigAuto=False` and outside active crop phases. Without an input series,
+the public API supplies zero irrigation. Daily rainfall plus `irrigTotDay`
+provides water to the existing interception and infiltration routines.
+
+With automatic irrigation enabled, the existing scheduling rule is retained.
+For crop phases 1 through 5 and a tank filling fraction below `irrigAutoTarget`:
+
+```text
+automatic_supplement = min(max(0.9 * (capacity - stock) - irrigation, 0), maxIrrig)
+irrigTotDay = irrigation + automatic_supplement
+```
+
+Otherwise the automatic supplement is zero. `maxIrrig` caps the automatic
+supplement, not the prescribed dose. The decision precedes today's rainfall
+and does not directly compensate today's evapotranspiration. An undefined
+filling fraction in an empty inactive tank does not trigger supplementation.
+
+### Initial soil water
+
+`stockIniSurf` and `stockIniProf` are the initial water stocks (mm) in the
+surface and deeper soil compartments, respectively. Initialization now sets:
+
+```text
+surface_tank_stock = stockIniSurf
+total_tank_stock = stockIniSurf + stockIniProf
+```
+
+The previous total stock and initial humectation front use this total.
+The surface and root reservoirs overlap: root storage must not be added to
+this sum. Root-accessible storage continues to follow the existing root
+initialization and daily access rules. Previously the surface input was
+ignored; nonzero initial surface moisture can now affect sowing and growth.
+
+### Rainfall GeoTIFF missing values
+
+Both local TAMSAT GeoTIFF loaders decode the file's declared NoData value,
+including finite sentinels such as -9999, to `NaN`. Existing NaNs remain missing.
+They do not interpolate missing rain or replace it with dry weather (zero).
+Valid zero rainfall remains zero. An undeclared finite sentinel cannot be
+identified automatically and must be corrected in the source dataset.
+
+### Phase-6 rooting
+
+`update_root_growth_speed` now applies the cultivar parameter `VRacMatu2`
+(mm/day) during phase 6, following the owner's explicit confirmation. Previously
+phase 6 inherited the last phase-5 speed. For example, `VRacMatu1=25` and
+`VRacMatu2=2` now select 2 rather than 25 mm/day in phase 6. Phases 0 and 7
+retain zero speed. Existing soil-depth and root-access limits still apply.

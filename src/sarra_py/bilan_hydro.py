@@ -211,9 +211,11 @@ def compute_daily_irrigation(j, data, paramITK):
     to the irrigation tank. If the above conditions are not met, the computed
     value is 0.
 
-    Then, we calculate the total irrigation of the day by summing the estimated
-    irrigation need (`irrigation`) with the previous irrigation history of the
-    day (`irrigTotDay`).
+    Prescribed irrigation (`irrigation`, mm/day) is always applied. The
+    automatic supplement subtracts this prescribed dose from 90% of the tank
+    deficit before clipping to [0, maxIrrig]. Their sum is `irrigTotDay`.
+    This reservoir-filling rule is evaluated before today's rainfall; it does
+    not directly compensate today's evapotranspiration.
 
     Note : the logic of this function has not yet been validated in SARRA-Py, as
     simulations are mainly based on rainfed conditions.
@@ -227,11 +229,15 @@ def compute_daily_irrigation(j, data, paramITK):
         data: A xarray dataset with the updated irrigationTotDay field.
     """
 
+    # Empty inactive tanks have an undefined filling ratio; they do not trigger
+    # automatic irrigation. Preserve that decision without a 0/0 warning.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        filling_ratio = (data["irrigation_tank_stock"][j, :, :] /
+                         data["irrigation_tank_capacity"][j, :, :])
     condition = (data["irrigAuto"][j, :, :] == True) & \
         (data["numPhase"][j, :, :] > 0) & \
         (data["numPhase"][j, :, :] < 6) & \
-        (data["irrigation_tank_stock"][j, :, :] / data["irrigation_tank_capacity"][j,:,:] \
-            < paramITK["irrigAutoTarget"])
+        (filling_ratio < paramITK["irrigAutoTarget"])
         
     data["irrigTotDay"][j, :, :] = xr.where(
         condition,
@@ -257,9 +263,11 @@ def compute_irrigation_state(j, data, paramITK):
     """
     This wrapper function computes the irrigation state for a given day,
     including the size and filling of the irrigation tank and the irrigation
-    demand. It is computed only if `paramITK["irrigAuto"] == True` ; this means
-    that irrigAuto shall be the same all over the grid, which is a reasonable
-    assumption
+    demand. Prescribed irrigation is applied independently of `irrigAuto`.
+    Automatic tank updates and supplementation run only when
+    `paramITK["irrigAuto"] == True`; that management switch is grid-wide.
+    Without automatic mode, an absent irrigation field means zero irrigation
+    for callers of the lower-level daily routines.
 
     It has been Translated from the procedure EvalIrrigPhase, of the original
     Pascal codes bileau.pas and exmodules2.pas. Calculation precision is not
@@ -289,6 +297,11 @@ def compute_irrigation_state(j, data, paramITK):
         data = update_irrigation_tank_stock(j, data)
         data = update_irrigation_tank_capacity(j, data)
         data = compute_daily_irrigation(j, data, paramITK)
+    else:
+        # Assign the prescribed daily dose once, including outside crop phases.
+        data["irrigTotDay"][j, :, :] = (
+            data["irrigation"][j, :, :] if "irrigation" in data else 0
+        )
 
     return data
 
@@ -402,18 +415,21 @@ def fill_mulch(j, data, paramITK):
 def estimate_runoff(j, data):
     """Estimate daily runoff from a rainfall threshold and runoff fraction.
 
-    If `rain > runoff_threshold`, runoff is computed from available water above
-    the threshold multiplied by `runoff_rate`; otherwise it is zero. Because
-    mulch filling runs first, `available_water` may already be reduced by mulch
-    interception.
+    The rainfall threshold triggers runoff. The amount is bounded between
+    zero and the nonnegative water remaining after mulch interception.
+    See docs/model_formalisms.md for the equation and correction history.
 
     Source status: code-observed. The rainfall trigger versus available-water
     amount remains an open validation point.
     """
     
+    available = data["available_water"][j,:,:]
+    candidate = np.maximum(
+        (available - data["runoff_threshold"]) * data["runoff_rate"], 0,
+    )
     data["runoff"][j,:,:] = xr.where(
         data["rain"][j,:,:] > data["runoff_threshold"],
-        (data["available_water"][j,:,:]  - data["runoff_threshold"]) * data["runoff_rate"],
+        np.minimum(candidate, np.maximum(available, 0)),
         0,
     )
 
@@ -536,6 +552,9 @@ def initialize_delta_root_tank_capacity(j, data):
 
     Returns:
         xarray.Dataset: The updated input data with the daily root capacity variation calculated and stored.
+
+    Source status: SARRA-H-related rooting concept; the 0.3 offset is
+    code-observed and needs calibration provenance.
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
@@ -585,6 +604,9 @@ def update_delta_root_tank_capacity(j, data):
     Args:
         j (_type_): _description_
         data (_type_): _description_
+
+    Code-observed: this cap has no zero floor when the front is behind
+    the current root capacity.
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
@@ -651,6 +673,9 @@ def update_root_tank_stock(j, data):
 
     Source status: code-observed. The stock/capacity mix is an open validation
     point and should not be treated as scientifically validated.
+
+    In the deep-root branch the added capacity enters accessible stock
+    immediately. Whether this represents existing deeper water is unresolved.
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
@@ -1612,6 +1637,8 @@ def compute_soil_evaporation(j, data, paramITK):
     return data
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK):
     """Update mulch evaporable-water fraction and mulch water stock.
 
@@ -1644,6 +1671,8 @@ def estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def estimate_ftsw(j, data):
     """Estimate the fraction of transpirable soil water.
 
@@ -1995,45 +2024,24 @@ def subtract_effective_evaporation_from_root_tank_stock(j, data):
 
 
 def update_plant_transpiration(j, data):
+    """Limit actual transpiration to accessible root water for day j.
+
+    At this point tr is demand after stress (trPot * cstr) and the
+    root stock already reflects soil evaporation. If demand exceeds stock,
+    actual transpiration is capped at the nonnegative stock in millimetres.
+
+    The earlier residual expression could turn a 5 mm demand with 3 mm
+    available into 0 mm transpiration; the active cap gives 3 mm.
     """
-    This function updates the value of plant transpiration (`tr`, mm) according
-    to the quantity of water in the root tank (`root_tank_stock`, mm).
-
-    If the transpiration (which as this point on the daily cycle equals `trPot *
-    cstr`) is higher than the root tank stock (which at this point has been
-    updated to reflect the effective evaporation), then plant transpiration is
-    updated to be equal to the difference between the root tank stock and the
-    plant transpiration.
-    
-    Else, its value is unmodified.
-
-    #? However, if this test is true, this always leads to transpiration value = 0.
-    #? We may want to rethink it to check if it does what it was supposed to.
-    
-    #? Instead it would make more sense to bound tr by the value of root tank stock, 
-    #? meaning the maximum quantity of water that can be transpired by the plant 
-    #? is limited by the quantity of water accessible to roots...
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-    Returns:
-        _type_: _description_
-    """
-
-    data["tr"][j:,:,:] = np.where(
-        data["tr"][j,:,:] > data["root_tank_stock"][j,:,:],
-        np.maximum(data["root_tank_stock"][j,:,:] - data["tr"][j,:,:], 0),
-        #! il peut être intéressant d'introduire dans la prochaine version
-        #! le correctif suivant :
-        # data["root_tank_stock"][j,:,:],
+    data["tr"][j:,:,:] = np.minimum(
         data["tr"][j,:,:],
+        np.maximum(data["root_tank_stock"][j,:,:], 0),
     )
     return data
 
 
-
-
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def subtract_transpiration_from_surface_tank_stock_according_to_root_tank_stock(j, data):
 
     """
