@@ -451,8 +451,9 @@ def calculate_sum_of_thermal_time(j, data):
 def update_root_growth_speed(j, data, paramVariete):
     """Update root growth speed according to the current phenological phase.
 
-    Uses phase-specific `VRac*` parameters in mm/day. The active loop updates
-    phases 1-5; the phase-6 mapping exists but is not iterated.
+    Uses phase-specific `VRac*` parameters in mm/day for phases 1-6,
+    including `VRacMatu2` in phase 6. Phases 0 and 7 have zero root growth.
+    The selected speed is propagated to subsequent days until updated.
 
     Source status: code-observed, source-related to SARRA-H root-growth
     procedure comments.
@@ -469,7 +470,7 @@ def update_root_growth_speed(j, data, paramVariete):
     }
 
     # phases 1 to 6 
-    for phase in range(1,6):
+    for phase in range(1,7):
         data["vRac"][j:,:,:] = np.where(
             data["numPhase"][j,:,:] == phase,
             phase_correspondances[phase],

@@ -1,8 +1,11 @@
 # Example notebooks
 
-Run notebooks from the `notebooks/` directory so that their
-`../data/` paths resolve. Install the project and dependencies
-first using the instructions in [the README](../README.md). Each runnable
+Install the package and the example dependencies with
+`python -m pip install ".[notebooks]"` from the repository root.
+The base installation installs the simulation dependencies; the optional
+group also installs the mapping, statistics and calibration libraries used
+by these notebooks. Run notebooks from the `notebooks/` directory so that
+their `../data/` paths resolve. See [the README](../README.md) for setup. Each runnable
 example now builds a weather and soil `xarray.Dataset`, loads
 validated YAML parameters, and calls the same public
 `run_simulation(data, parameters, SimulationConfig(...))` entry point
@@ -11,7 +14,7 @@ used by the CLI. The public default is `engine="numpy"`.
 | Example | Workflow |
 |---|---|
 | 1 | One millet crop and spatial yield maps |
-| 2 and 2 Victor | Parameter optimization against measured yield |
+| 2 | Parameter optimization against measured yield |
 | 3 | Search for the best sowing date |
 | 4 | Search for phenological phase lengths |
 | 5 | Compare modeled vegetation dynamics with MODIS LAI |
@@ -21,9 +24,6 @@ used by the CLI. The public default is `engine="numpy"`.
 | 11 | Run all complete climate model triplets in a directory |
 | 12 | Compare rainfall and temperature scenarios |
 | 13 | Download TAMSAT and AgERA5 NetCDF data and simulate Niger millet |
-| 14 | Benchmark Example 1 with real inputs and compare simulation engines |
-| Grid example 2 | Run the water balance model on a sowing date grid |
-| Example xx | Bayesian parameter calibration |
 
 The notebooks retain their preparation and visualization code. Scenario and
 optimization loops create an independent parameter mapping for each run;
@@ -41,9 +41,10 @@ optimization defaults to two years with complete local weather coverage
 (2018 and 2020); the full 1999–2022 range requires the complete northern
 Cameroon weather archive.
 Examples 3, 4 and 5 require additional input files absent from this
-checkout. Example 11 defaults to the complete climate triplet included under
-`data/exemple_data/exemple_10`; set `CLIMATE_DIR` to a larger
-collection to analyze multiple models. Example 8 uses its local NetCDF files
+checkout. Example 11 expects a locally prepared climate triplet under
+`data/exemple_data/exemple_10`; these large weather files are not part of the
+published source. Set `CLIMATE_DIR` to your prepared collection to analyze
+multiple models. Example 8 uses its local NetCDF files
 and does not require a CDS download. Example 12's full grid and four scenario
 runs can need substantial memory; reduce the `y` and `x` extent
 while experimenting.
@@ -59,10 +60,8 @@ handled by selecting a compatible season or preparing a Gregorian daily series.
 
 The reusable functions are `download_tamsat_daily`, `download_agera5_v2`, and `prepare_remote_inputs`. `prepare_remote_inputs` takes explicit paths to soil assets and returns the same variable contract accepted by `run_simulation` and the `prepared_netcdf` CLI mode.
 
-## Real-data performance benchmark
+## Analysis limits
 
-`notebooks/SARRA-Py - Example 14 - Benchmark Niger millet 2017.ipynb`
-records a full 250-day, 60 × 60-cell run of Example 1 with real TAMSAT,
-AgERA5 and soil inputs. It reads the measured JSON report under
-`docs/dev/audits/` and offers an optional rerun. The same benchmark can be
-run from `benchmarks/benchmark_exemple_1.py`.
+Examples 10 and 11 use ordinary Mann-Kendall diagnostics with tie correction,
+not a Hamed-Rao correction for serial correlation. Their Sen slope is indexed
+by retained observations; missing-year series need separate treatment.

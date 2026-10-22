@@ -3,7 +3,7 @@ import copy
 import numpy as np
 import xarray as xr
 
-from benchmarks.benchmark_run_model import (
+from model_fixtures import (
     assert_equivalent_outputs,
     build_initialized_simulation,
 )

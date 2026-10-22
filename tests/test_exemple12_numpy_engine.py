@@ -2,13 +2,11 @@ import inspect
 
 import pytest
 
-from benchmarks.benchmark_exemple_12 import (
-    EXEMPLE12_DATA,
-    NOTEBOOK_PATH,
-    NOTEBOOK_VALUE_VARIABLES,
-    SUMMARY_VARIABLES,
-    run_realistic_benchmark,
-)
+from exemple12_inputs import EXEMPLE12_DATA, NOTEBOOK_PATH, load_exemple12_base_data, load_exemple12_parameters
+from model_fixtures import assert_equivalent_outputs
+from sarra_py import ModelParameters, SimulationConfig, run_simulation
+import pandas as pd
+
 
 
 pytest.importorskip("rioxarray")
@@ -58,28 +56,13 @@ def test_exemple12_public_notebook_api_symbols_still_importable():
         assert callable(notebook_namespace[name])
 
 
-@pytest.mark.skipif(not DATA_AVAILABLE, reason="Exemple 12 notebook data is not available")
-def test_exemple12_reduced_realistic_benchmark_numpy_matches_xarray():
-    result = run_realistic_benchmark(
-        duration=32,
-        subset_y=3,
-        subset_x=2,
-        scenario_names=("Baseline",),
-        check=True,
-        rtol=1e-5,
-        atol=1e-5,
-    )
-
-    assert result["notebook"] == str(NOTEBOOK_PATH.relative_to(NOTEBOOK_PATH.parents[1]))
-    assert result["duration"] == 32
-    assert result["grid_y"] == 3
-    assert result["grid_x"] == 2
-    assert set(result["comparison"]["value_variables"]) == set(NOTEBOOK_VALUE_VARIABLES)
-    assert set(result["comparison"]["summary_variables"]) == set(SUMMARY_VARIABLES)
-    assert result["comparison"]["equal_nan"] is True
-
-    baseline = result["scenarios"]["Baseline"]
-    assert baseline["xarray"]["run_seconds"] >= 0
-    assert baseline["numpy"]["run_seconds"] >= 0
-    assert baseline["speedup_run"] > 0
-    assert result["totals"]["speedup_total"] > 0
+@pytest.mark.skipif(not DATA_AVAILABLE, reason="Example 12 input data is not available")
+def test_exemple12_reduced_inputs_numpy_matches_xarray():
+    data, _, _, rows, columns = load_exemple12_base_data(duration=32, subset_y=3, subset_x=2)
+    variety, management, soil = load_exemple12_parameters()
+    start = pd.Timestamp(data.time.values[0]).date()
+    parameters = ModelParameters(variety, management, soil)
+    reference = run_simulation(data, parameters, SimulationConfig(start, 32, engine="xarray"))
+    candidate = run_simulation(data, parameters, SimulationConfig(start, 32, engine="numpy"))
+    assert (rows, columns) == (3, 2)
+    assert_equivalent_outputs(reference, candidate, rtol=1e-5, atol=1e-5)

@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 
 import sarra_py
-from benchmarks.benchmark_run_model import (
+from model_fixtures import (
     build_input_dataset,
     sample_itk_params,
     sample_variety_params,

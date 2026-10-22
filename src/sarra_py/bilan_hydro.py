@@ -211,9 +211,11 @@ def compute_daily_irrigation(j, data, paramITK):
     to the irrigation tank. If the above conditions are not met, the computed
     value is 0.
 
-    Then, we calculate the total irrigation of the day by summing the estimated
-    irrigation need (`irrigation`) with the previous irrigation history of the
-    day (`irrigTotDay`).
+    Prescribed irrigation (`irrigation`, mm/day) is always applied. The
+    automatic supplement subtracts this prescribed dose from 90% of the tank
+    deficit before clipping to [0, maxIrrig]. Their sum is `irrigTotDay`.
+    This reservoir-filling rule is evaluated before today's rainfall; it does
+    not directly compensate today's evapotranspiration.
 
     Note : the logic of this function has not yet been validated in SARRA-Py, as
     simulations are mainly based on rainfed conditions.
@@ -227,11 +229,15 @@ def compute_daily_irrigation(j, data, paramITK):
         data: A xarray dataset with the updated irrigationTotDay field.
     """
 
+    # Empty inactive tanks have an undefined filling ratio; they do not trigger
+    # automatic irrigation. Preserve that decision without a 0/0 warning.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        filling_ratio = (data["irrigation_tank_stock"][j, :, :] /
+                         data["irrigation_tank_capacity"][j, :, :])
     condition = (data["irrigAuto"][j, :, :] == True) & \
         (data["numPhase"][j, :, :] > 0) & \
         (data["numPhase"][j, :, :] < 6) & \
-        (data["irrigation_tank_stock"][j, :, :] / data["irrigation_tank_capacity"][j,:,:] \
-            < paramITK["irrigAutoTarget"])
+        (filling_ratio < paramITK["irrigAutoTarget"])
         
     data["irrigTotDay"][j, :, :] = xr.where(
         condition,
@@ -257,9 +263,11 @@ def compute_irrigation_state(j, data, paramITK):
     """
     This wrapper function computes the irrigation state for a given day,
     including the size and filling of the irrigation tank and the irrigation
-    demand. It is computed only if `paramITK["irrigAuto"] == True` ; this means
-    that irrigAuto shall be the same all over the grid, which is a reasonable
-    assumption
+    demand. Prescribed irrigation is applied independently of `irrigAuto`.
+    Automatic tank updates and supplementation run only when
+    `paramITK["irrigAuto"] == True`; that management switch is grid-wide.
+    Without automatic mode, an absent irrigation field means zero irrigation
+    for callers of the lower-level daily routines.
 
     It has been Translated from the procedure EvalIrrigPhase, of the original
     Pascal codes bileau.pas and exmodules2.pas. Calculation precision is not
@@ -289,6 +297,11 @@ def compute_irrigation_state(j, data, paramITK):
         data = update_irrigation_tank_stock(j, data)
         data = update_irrigation_tank_capacity(j, data)
         data = compute_daily_irrigation(j, data, paramITK)
+    else:
+        # Assign the prescribed daily dose once, including outside crop phases.
+        data["irrigTotDay"][j, :, :] = (
+            data["irrigation"][j, :, :] if "irrigation" in data else 0
+        )
 
     return data
 
@@ -402,18 +415,21 @@ def fill_mulch(j, data, paramITK):
 def estimate_runoff(j, data):
     """Estimate daily runoff from a rainfall threshold and runoff fraction.
 
-    If `rain > runoff_threshold`, runoff is computed from available water above
-    the threshold multiplied by `runoff_rate`; otherwise it is zero. Because
-    mulch filling runs first, `available_water` may already be reduced by mulch
-    interception.
+    The rainfall threshold triggers runoff. The amount is bounded between
+    zero and the nonnegative water remaining after mulch interception.
+    See docs/model_formalisms.md for the equation and correction history.
 
     Source status: code-observed. The rainfall trigger versus available-water
     amount remains an open validation point.
     """
     
+    available = data["available_water"][j,:,:]
+    candidate = np.maximum(
+        (available - data["runoff_threshold"]) * data["runoff_rate"], 0,
+    )
     data["runoff"][j,:,:] = xr.where(
         data["rain"][j,:,:] > data["runoff_threshold"],
-        (data["available_water"][j,:,:]  - data["runoff_threshold"]) * data["runoff_rate"],
+        np.minimum(candidate, np.maximum(available, 0)),
         0,
     )
 

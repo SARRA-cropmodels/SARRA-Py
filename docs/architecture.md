@@ -33,7 +33,7 @@ the established model loop.
 
 The default engine is `numpy`. `engine="xarray"` selects the xarray
 daily loop through the same API; the output remains an `xarray.Dataset`.
-The two engine outputs are compared in the reproducible benchmarks. Scientific
+The test suite checks that the two engines produce equivalent outputs. Scientific
 equations and their validation status are documented in
 [Model formalisms](model_formalisms.md).
 
@@ -50,5 +50,5 @@ The API checks field presence, dimension order, date alignment and required
 parameter types. It does not currently validate all physical ranges, units or
 missing-value patterns. The existing daily loop stores many intermediate arrays
 for diagnostics, which increases memory use with grid size and simulation
-duration. See the performance baseline in `docs/dev/audits` for measured
-engine timings and remaining work.
+duration. Use the measurement approach described in the
+[API guide](usage_api_cli.md#performance-checks) to measure your workloads.

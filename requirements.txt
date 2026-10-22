@@ -1,6 +1,7 @@
 numpy
 pandas
 xarray
+dask[array]
 pcse
 astral
 matplotlib

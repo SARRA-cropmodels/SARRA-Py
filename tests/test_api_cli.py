@@ -8,7 +8,7 @@ import xarray as xr
 import yaml
 from rasterio.transform import from_origin
 
-from benchmarks.benchmark_run_model import (
+from model_fixtures import (
     assert_equivalent_outputs,
     build_input_dataset,
     sample_itk_params,
@@ -70,13 +70,14 @@ def test_high_level_api_rejects_missing_parameters_and_misaligned_time():
         run_simulation(base, ModelParameters(variety, sample_itk_params(start), {}), SimulationConfig(start, 3))
 
 
-def test_cli_runs_prepared_netcdf_with_relative_paths(tmp_path, capsys):
+@pytest.mark.parametrize("native_yaml_date", [False, True])
+def test_cli_runs_prepared_netcdf_with_relative_paths(tmp_path, capsys, native_yaml_date):
     start = dt.date(2020, 5, 1)
     data = build_input_dataset(duration=8, width=3, height=2)
     data.to_netcdf(tmp_path / "input.nc")
     variety = sample_variety_params()
     management = sample_itk_params(start)
-    management["DateSemis"] = start.isoformat()
+    management["DateSemis"] = start if native_yaml_date else start.isoformat()
     for name, values in (("variety", variety), ("management", management), ("soil", {})):
         (tmp_path / f"{name}.yaml").write_text(yaml.safe_dump(values), encoding="utf-8")
     config = {

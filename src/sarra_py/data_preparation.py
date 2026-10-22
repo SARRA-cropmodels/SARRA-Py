@@ -169,13 +169,16 @@ def get_grid_size(rainfall_path, date_start, duration):
 def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
     """Add daily rainfall in mm to data and return the same Dataset.
 
-    Require one date-coded TIFF per day on a consistent grid."""
+    Require one date-coded TIFF per day on a consistent grid. Declared GeoTIFF
+    NoData values are decoded to NaN before metadata are replaced. Missing
+    rainfall is retained as missing, never interpolated or replaced by zero.
+    Finite values without a NoData declaration remain measurements."""
 
     TAMSAT_files_df = build_rainfall_files_df(TAMSAT_path, date_start, duration)
     _ensure_daily_time(data, date_start, duration)
     arrays = []
     for filename in TAMSAT_files_df["filename"]:
-        raster = rioxarray.open_rasterio(os.path.join(TAMSAT_path, filename))
+        raster = rioxarray.open_rasterio(os.path.join(TAMSAT_path, filename), masked=True)
         try:
             daily = raster.squeeze("band").drop_vars(["band", "spatial_ref"])
             daily.attrs = {}
@@ -199,13 +202,14 @@ def load_TAMSAT_data_fast(data, rainfall_data_path, date_start, duration):
 
     Uses the same local date-coded convention as `load_TAMSAT_data`, removes
     the raster band dimension, and stores `band_data` as daily rainfall.
+    Declared NoData values are decoded to NaN; missing rainfall is not filled.
 
     Source status: code-observed local loader.
     """
 
     rainfall_data_path_df = build_rainfall_files_df(rainfall_data_path, date_start, duration)
     _ensure_daily_time(data, date_start, duration)
-    dataarray_full = xr.open_mfdataset([os.path.join(rainfall_data_path,rainfall_data_path_df.loc[i,"filename"]) for i in range(len(rainfall_data_path_df))], concat_dim="time", combine="nested", chunks={"x":100,"y":100})
+    dataarray_full = xr.open_mfdataset([os.path.join(rainfall_data_path,rainfall_data_path_df.loc[i,"filename"]) for i in range(len(rainfall_data_path_df))], concat_dim="time", combine="nested", chunks={"x":100,"y":100}, mask_and_scale=True)
     dataarray_full = dataarray_full.squeeze("band").drop_vars(["band"])
     dataarray_full = dataarray_full.assign_coords(
         time=np.asarray(rainfall_data_path_df["date"], dtype="datetime64[ns]")
@@ -389,10 +393,21 @@ def load_paramVariete(file_paramVariete) :
 
 
 def load_paramITK(file_paramITK):
-    """Load management parameters from ../data/params/itk and parse DateSemis."""
+    """Load management YAML and normalize DateSemis to a Python date.
+
+    Accept quoted date strings and YAML-native date/timestamp values. Relative
+    filenames resolve under ../data/params/itk; absolute paths are supported.
+    """
     with open(os.path.join('../data/params/itk/',file_paramITK), 'r') as stream:
         paramITK = yaml.safe_load(stream)
-    paramITK["DateSemis"] = datetime.datetime.strptime(paramITK["DateSemis"], "%Y-%m-%d").date()
+    sowing_date = paramITK["DateSemis"]
+    if isinstance(sowing_date, datetime.datetime):
+        sowing_date = sowing_date.date()
+    elif isinstance(sowing_date, str):
+        sowing_date = datetime.datetime.strptime(sowing_date, "%Y-%m-%d").date()
+    elif not isinstance(sowing_date, datetime.date):
+        raise ValueError("DateSemis must be a date or an ISO date string")
+    paramITK["DateSemis"] = sowing_date
     return paramITK
 
 

@@ -167,7 +167,9 @@ TIFFs contain kJ m-2 per day.
 
 `load_model_parameters` accepts explicit paths, validates required keys and
 returns a `ModelParameters` object containing `variety`, `management` and `soil`
-mappings. `DateSemis` is an ISO date in the management YAML. Numerical values
+mappings. `DateSemis` is a date in the management YAML. Both a quoted ISO
+string (`"2020-05-01"`) and a native YAML date (`2020-05-01`) are accepted;
+YAML timestamps are normalized to their calendar date. Numerical values
 are passed to the established model equations without conversion. The model
 may update internal copies of some parameters during a run; the supplied
 mappings remain unchanged.
@@ -179,10 +181,18 @@ Missing or malformed required values fail before the daily loop. See
 
 ## Performance checks
 
-Use `python benchmarks/benchmark_run_model.py --duration 45 --width 8
---height 7 --repeats 3` to compare the daily loops, or
-`python benchmarks/benchmark_api.py --duration 45 --width 8 --height 7
---repeats 2` for a complete API run including validation and initialization.
-Both benchmarks check output equivalence. Benchmark results depend on grid size,
-duration and available memory; record all three with timings. A measured
-baseline and limitations are in [the performance audit](dev/audits/2026-10-08-performance-baseline.md).
+Measure preparation and simulation separately, recording the grid size, duration,
+engine and installed versions. Reuse the prepared input dataset when comparing
+parameter scenarios. For an existing `inputs`, `parameters` and `config`:
+
+```python
+from time import perf_counter
+
+started = perf_counter()
+result = run_simulation(inputs, parameters, config)
+elapsed = perf_counter() - started
+print(f"Simulation: {elapsed:.2f} s ({elapsed / config.duration:.3f} s/day)")
+```
+
+The test suite checks output equivalence between NumPy and xarray; timings
+remain machine-dependent and are not a correctness criterion.
