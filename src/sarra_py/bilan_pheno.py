@@ -3,6 +3,12 @@ import copy
 import xarray as xr
 
 
+def _to_numpy(values):
+    if hasattr(values, "values"):
+        return np.asarray(values.values)
+    return np.asarray(values)
+
+
 def reset(j, data):
 
   data = data.copy(deep=True)
@@ -20,30 +26,11 @@ def reset(j, data):
 
 
 def testing_for_initialization(j, data, paramITK, paramVariete):
-    """
-    This function tests if the conditions are met to initiate the crop.
+    """Initialize the crop when sowing conditions are met.
 
-    If numPhase is 0, if the current day is equal or above the sowing date, and
-    if surface_tank_stock is above the threshold for sowing, we initiate the
-    crop :
-
-    1) we set numPhase to 1 ; we broadcast the value over remaining days.
-    2) we set changePhase of this particular day to 1.
-    3) set the sum of thermal time to the next phase (seuilTempPhaseSuivante) to
-       be SDJLevee ; we broadcast the value over remaining days.
-    4) we set initPhase to 1 ; we broadcast the value over remaining days.
-
-    initPhase is only used in update_pheno_phase_1_to_2 function, so that we do
-    not go directly from phase 0 to phase 2. It is used as a specific flag for
-    phase 0 to 1 transition.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Phase 0 becomes phase 1 when the date is at or after sowing and surface
+    water exceeds `seuilEauSemis` (mm). `SDJLevee` initializes the next
+    degree-day threshold; `initPhase` prevents a second phase change that day.
     """
 
     #! replacing stRuSurf by surface_tank_stock
@@ -77,19 +64,10 @@ def testing_for_initialization(j, data, paramITK, paramVariete):
 
 
 def flag_change_phase(j, data, num_phase):
-    """
-    This function flags the day for phase change.
+    """Flag a thermal-time phase transition on the current day.
 
-    If the phase number is above the num_phase value, and if the sum of thermal
-    time is above the threshold, this function returns changePhase flags.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        num_phase (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Sets `changePhase` where the current phase matches `num_phase` and
+    accumulated degree-days reach `seuilTempPhaseSuivante`.
     """
     # flagging the day for phase change
     condition = \
@@ -106,30 +84,10 @@ def flag_change_phase(j, data, num_phase):
 
 
 def update_thermal_time_next_phase(j, data, num_phase, thermal_time_threshold):
-    """
-    This function updates the sum of thermal time needed to reach the next
-    phase.
+    """Update the accumulated threshold for the next phenological phase.
 
-    When numPhase equals the requested phase number, and if changePhase is 1
-    (meaning that we are at a phase transition day), the seuilTempPhaseSuivante
-    is incremented by the thermal_time_threshold value. This value is
-    stage-specific :
-
-    - 1 to 2 : SDJLevee
-    - 2 to 3 : SDJBVP
-    - 4 to 5 : SDJRPR
-    - 5 to 6 : SDJMatu1
-    - 6 to 7 : SDJMatu2
-
-    These parameters are passed explicitly when calling this function.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        num_phase (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Adds the phase-specific degree-day threshold and propagates it from day
+    `j` onward where `changePhase == 1`.
     """
     condition = \
         (data["numPhase"][j,:,:] == num_phase) & \
@@ -148,20 +106,10 @@ def update_thermal_time_next_phase(j, data, num_phase, thermal_time_threshold):
 
 
 def increment_phase_number(j, data):
-    """
-    This function increments the phase number.
+    """Increment the phenological phase after a transition has been flagged.
 
-    When the phase number is not 0, and if changePhase is 1 (meaning that we are
-    at a phase transition day), and initPhase is 0 (meaning that the phase
-    number has not been incremented yet this day), the phase number is
-    incremented by 1. Also, the phase change flag initPhase is set to 1. 
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    `initPhase` acts as a same-day guard so a pixel cannot move through two
+    phases during one phenology evaluation.
     """
 
     condition = \
@@ -189,17 +137,9 @@ def increment_phase_number(j, data):
 
 
 def update_thermal_time_previous_phase(j, data, num_phase):
-    """
-    This function stores the present thermal time threshold in the
-    seuilTempPhasePrec variable.
+    """Store the current thermal-time threshold as the previous phase threshold.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        num_phase (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Used by later phase-specific calculations; thresholds are in degree-days.
     """
     condition = \
         (data["numPhase"][j,:,:] == num_phase) & \
@@ -217,35 +157,9 @@ def update_thermal_time_previous_phase(j, data, num_phase):
 
 
 def update_pheno_phase_1_to_2(j, data, paramVariete):
-    """
-    This function manages phase change from phases number 1 to 2.
+    """Handle the phase 1 to phase 2 thermal-time transition.
 
-    First, it flags the day for phase change : If numPhase is 1 and sum of
-    thermal time is above the threshold (which value comes here from the
-    previous function testing_for_initialization), we set changePhase of this
-    particular day to 1.
-
-    Second, we update the thermal time to next phase : if numPhase is 1 and
-    changePhase is 1 (meaning that we are at the transition day between phases 1
-    and 2), we set the sum of thermal time to the next phase as SDJLevee ; we
-    broadcast the value over remaining days.
-
-    We do it before updating phase number because we need to test what is the
-    phase number before updating it
-
-    Third, we update the phase number : if numPhase is different from 0 and
-    changePhase is 1 (meaning that we are at the transition day between two
-    phases, to the exception of transition day between phases 0 and 1), we
-    increment numPhase by 1 ; we broadcast the value over remaining days.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Uses `SDJLevee` as the degree-day increment for the next threshold.
     """
 
     num_phase = 1
@@ -267,21 +181,10 @@ def update_pheno_phase_1_to_2(j, data, paramVariete):
 
 
 def update_pheno_phase_2_to_3(j, data, paramVariete):
-    """
-    This function manages phase change from phases number 2 to 3.
+    """Handle the phase 2 to phase 3 thermal-time transition.
 
-    It has the same structure as update_pheno_phase_1_to_2, with the exception
-    of update_thermal_time_previous_phase function, which is called to store the
-    present thermal time threshold in the seuilTempPhasePrec variable.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Stores the previous threshold, then adds `SDJBVP` degree-days for the next
+    phase boundary.
     """
 
     num_phase = 2
@@ -304,32 +207,10 @@ def update_pheno_phase_2_to_3(j, data, paramVariete):
 
 
 def update_pheno_phase_3_to_4(j, data):
-    """
-    This function manages phase change from phases number 3 to 4.
+    """Handle the phase 3 to phase 4 photoperiodic transition.
 
-    It is specific as phase 3 is photoperiodic ; its length is not computed the
-    same way as the other phases. Notably, the phasePhotoper flag is updated
-    with the PhotoperSarrahV3() function.
-
-    First, this function flags the day for phase change : If numPhase is 3 and
-    the phasePhotoper flag is 0, we set changePhase of this particular day to 1.
-    This means the photoperiodic phase is over.
-
-    Second, we update the phasePhotoper flag : if numPhase is 3 and changePhase
-    is 1 (meaning that we are at the transition day between phases 3 and 4), we
-    set the phasePhotoper flag to 1.
-
-    Third, we update the phase number and flag incrementation using
-    increment_phase_number().
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Phase 3 ends when ``phasePhotoper[j, :, :] == 0``. The value of
+    ``phasePhotoper`` is updated elsewhere by ``update_photoperiodism``.
     """
 
     # flagging the day for phase change (specific to phase 3)
@@ -366,19 +247,10 @@ def update_pheno_phase_3_to_4(j, data):
 
 
 def update_pheno_phase_4_to_5(j, data, paramVariete):
-    """
-    This function manages phase change from phases number 4 to 5.
+    """Handle the phase 4 to phase 5 thermal-time transition.
 
-    It has the same structure as update_pheno_phase_2_to_3.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Stores the previous threshold, then adds `SDJRPR` degree-days for the next
+    phase boundary.
     """
 
     num_phase = 4
@@ -406,19 +278,10 @@ def update_pheno_phase_4_to_5(j, data, paramVariete):
 
 
 def update_pheno_phase_5_to_6(j, data, paramVariete):
-    """
-    This function manages phase change from phases number 5 to 6.
+    """Handle the phase 5 to phase 6 thermal-time transition.
 
-    It has the same structure as update_pheno_phase_2_to_3.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Stores the previous threshold, then adds `SDJMatu1` degree-days for the
+    next phase boundary.
     """
 
     num_phase = 5
@@ -444,19 +307,10 @@ def update_pheno_phase_5_to_6(j, data, paramVariete):
 
 
 def update_pheno_phase_6_to_7(j, data, paramVariete):
-    """
-    This function manages phase change from phases number 6 to 7.
+    """Handle the phase 6 to phase 7 thermal-time transition.
 
-    It has the same structure as update_pheno_phase_2_to_3.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Stores the previous threshold, then adds `SDJMatu2` degree-days to reach
+    harvest phase 7.
     """
 
     num_phase = 6
@@ -482,60 +336,15 @@ def update_pheno_phase_6_to_7(j, data, paramVariete):
 
 
 def EvalPhenoSarrahV3(j, data, paramITK, paramVariete): 
-    """
-    This function manages the evolution of the phenological phases. It is a
-    wrapper function that calls the specific functions for each phase.
+    """Evaluate phenological phase transitions for one simulation day.
 
-    This function is called at the beginning of the day and makes the
-    phenological phases evolve. For this, it increments the phase number and
-    changes the value of the thermal time threshold of the next phase.
-    ChangePhase is a boolean informing the model to know if a day is a day of
-    phase change, which is used to initialize specific variables in certain
-    functions. It includes a generic method for the test of the end of the
-    photoperiodic phase. PhasePhotoper = 0 at the end of the photoperiodic phase
-    and = 1 at the beginning of the phase.
+    Phases 0-7 represent no crop, initiation, vegetative development,
+    photoperiod-sensitive phase, reproductive phase, two maturation steps and
+    harvest. Thermal transitions use accumulated degree-days; phase 3 ends via
+    `phasePhotoper`.
 
-    Phenological phases used in this model (as for cereal crops) :
-
-    0. from the sowing day to the beginning of the conditions favorable for
-       germination, and from the harvest to the end of the simulation (no crop)
-
-    1. from the beginning of the conditions favorable for germination to the day
-       of germination (du début des conditions favorables pour la germination au
-       jour de la levée)
-
-    2. from the day of germination to the beginning of the photoperiodic phase
-       (du jour de la levée au début de la phase photopériodique)
-    
-    3. from the beginning of the photoperiodic phase to the beginning of the
-       reproductive phase
-    
-    4. from the beginning of the reproductive phase to the beginning of the
-       maturation (only for maize and rice) 
-    
-    5. from the beginning of the maturation to the grain milk stage (du début de
-       la maturation au stade grain laiteux)
-    
-    6. from the grain milk stage to the end of the maturation (du début du stade
-       grain laiteux au jour de récolte)
-    
-    7. the day of the harvest
-
-    We first test if the considered day has any pixel with the considered
-    phases, and only if it is the case we either test for initialization or
-    update the phenological phases.
-    
-    Notes :
-
-    In the case of multiannual continuous simulations, we do not reinitialize
-    the reservoirs, at harvest we put the moisture front at the depth of the
-    surface reservoir This allows to keep the rooting constraint phenomenon for
-    the following season if there is little rain while having the water stock in
-    depth remaining from the previous season.
-
-    This function has been originally translated from the EvalPhenoSarrahV3
-    procedure of the phenologie.pas and exmodules.pas files of the Sarra-H
-    model, Pascal version.
+    Source status: code-observed SARRA-Py sequence, source-related to SARRA-H
+    procedure names and phase structure.
     """
 
     # in order to save computational resources, we test if there is
@@ -558,31 +367,27 @@ def EvalPhenoSarrahV3(j, data, paramITK, paramVariete):
 
 
 def calculate_daily_thermal_time(j, data, paramVariete):
-    """calculating daily thermal time
-    Translated from the EvalDegresJourSarrahV3 procedure of the phenologie.pas and exmodules.pas files of theSarra-H model, Pascal version.
-    Pb de méthode !?
-    v1:= ((Max(TMin,TBase)+Min(TOpt1,TMax))/2 -TBase )/( TOpt1 - TBase);
-    v2:= (TL - max(TMax,TOpt2)) / (TL - TOpt2);
-    v:= (v1 * (min(TMax,TOpt1) - TMin)+(min(TOpt2,max(TOpt1,TMax)) - TOpt1) + v2 * (max(TOpt2,TMax)-TOpt2))/( TMax-TMin);
-    DegresDuJour:= v * (TOpt1-TBase);
+    """Compute daily thermal time for one simulation day.
 
-    
-    #   If Tmoy <= Topt2 then
-    #      DegresDuJour:= max(min(TOpt1,TMoy),TBase)-Tbase
-    #   else
-    #      DegresDuJour := (TOpt1-TBase) * (1 - ( (min(TL, TMoy) - TOpt2 )/(TL -TOpt2)));
-    #    If (Numphase >=1) then
-    #         SomDegresJour := SomDegresJour + DegresDuJour
-    #    else SomDegresJour := 0;
+    The active implementation uses mean daily temperature `T = tpMoy[j]`:
 
-    Returns:
-        _type_: _description_
+    ``ddj = max(min(TOpt1, T), TBase) - TBase`` if ``T <= TOpt2``.
+
+    Otherwise it decreases linearly from `TOpt2` to `TLim`. Temperatures are in
+    degrees C and `ddj` is in degree-days. Historical Tmin/Tmax comments remain
+    a validation question, not active code.
+
+    Source status: code-observed.
+
+    SARRA-H describes the response shape; the use of tpMoy is code-observed.
     """
 
-    data["ddj"][j,:,:] = xr.where(
-        data["tpMoy"][j,:,:] <= paramVariete["TOpt2"],
-        np.maximum(np.minimum(paramVariete["TOpt1"], data["tpMoy"][j,:,:]), paramVariete["TBase"]) - paramVariete["TBase"],
-        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], data["tpMoy"][j,:,:]) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
+    tp_moy = _to_numpy(data["tpMoy"][j,:,:])
+
+    data["ddj"][j,:,:] = np.where(
+        tp_moy <= paramVariete["TOpt2"],
+        np.maximum(np.minimum(paramVariete["TOpt1"], tp_moy), paramVariete["TBase"]) - paramVariete["TBase"],
+        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], tp_moy) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
     ) 
 
     return data
@@ -592,32 +397,30 @@ def calculate_daily_thermal_time(j, data, paramVariete):
 
 
 def calculate_once_daily_thermal_time(data, paramVariete):
-    """calculating daily thermal time
-    Translated from the EvalDegresJourSarrahV3 procedure of the phenologie.pas and exmodules.pas files of theSarra-H model, Pascal version.
-    Pb de méthode !?
-    v1:= ((Max(TMin,TBase)+Min(TOpt1,TMax))/2 -TBase )/( TOpt1 - TBase);
-    v2:= (TL - max(TMax,TOpt2)) / (TL - TOpt2);
-    v:= (v1 * (min(TMax,TOpt1) - TMin)+(min(TOpt2,max(TOpt1,TMax)) - TOpt1) + v2 * (max(TOpt2,TMax)-TOpt2))/( TMax-TMin);
-    DegresDuJour:= v * (TOpt1-TBase);
+    """Compute daily thermal time for the full simulation period.
 
-    
-    #   If Tmoy <= Topt2 then
-    #      DegresDuJour:= max(min(TOpt1,TMoy),TBase)-Tbase
-    #   else
-    #      DegresDuJour := (TOpt1-TBase) * (1 - ( (min(TL, TMoy) - TOpt2 )/(TL -TOpt2)));
-    #    If (Numphase >=1) then
-    #         SomDegresJour := SomDegresJour + DegresDuJour
-    #    else SomDegresJour := 0;
+    Vectorized notebook helper using the same active `tpMoy` equation as
+    `calculate_daily_thermal_time`:
 
-    Returns:
-        _type_: _description_
+    ``ddj = max(min(TOpt1, T), TBase) - TBase`` if ``T <= TOpt2``.
+
+    Otherwise it decreases linearly from `TOpt2` to `TLim`. Temperatures are in
+    degrees C and `ddj` is in degree-days.
+
+    Source status: code-observed.
     """
 
-    data["ddj"].data = xr.where(
-        data["tpMoy"] <= paramVariete["TOpt2"],
-        np.maximum(np.minimum(paramVariete["TOpt1"], data["tpMoy"]), paramVariete["TBase"]) - paramVariete["TBase"],
-        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], data["tpMoy"]) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
+    tp_moy = _to_numpy(data["tpMoy"])
+    ddj = np.where(
+        tp_moy <= paramVariete["TOpt2"],
+        np.maximum(np.minimum(paramVariete["TOpt1"], tp_moy), paramVariete["TBase"]) - paramVariete["TBase"],
+        (paramVariete["TOpt1"] - paramVariete["TBase"]) * (1 - ((np.minimum(paramVariete["TLim"], tp_moy) - paramVariete["TOpt2"]) / (paramVariete["TLim"] - paramVariete["TOpt2"]))),
     ) 
+
+    if hasattr(data["ddj"], "values"):
+        data["ddj"].data = ddj
+    else:
+        data["ddj"][:] = ddj
 
     return data
 
@@ -627,25 +430,12 @@ def calculate_once_daily_thermal_time(data, paramVariete):
 
 
 def calculate_sum_of_thermal_time(j, data):
-    """
-    This function calculates the sum of thermal time ("somme de degrés jour",
-    sdj) for the current day. Accumulation of sum of thermal time is performed
-    starting from the sowing date, and only on pixels where numPhase is above 0.
-    If these conditions are not met, sdj is set to 0.
+    """Accumulate thermal time since crop initialization.
 
-    sdj value has to be broadcasted along time dimension (or computed first in
-    the process list) so that phenology-related functions can work properly.
-    Here, it is broadcasted.
+    `sdj` is updated from `sdj[j - 1] + ddj[j]` where the crop has been sown
+    and `numPhase >= 1`; otherwise it is reset to 0.
 
-    This function has been translated from the EvalDegresJourSarrahV3 procedure
-    of the phenologie.pas and exmodules.pas files of the Sarra-H model, Pascal
-    version.
-
-    Note : in SARRA-H, when numPhase > 7, sdj is set to 0 and sdj stops
-    accumulating. This behavior has not been translated here.
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed.
     """
     data["sdj"][j:,:,:] = xr.where(
         (j >= data["sowing_date"][j,:,:]) & (data["numPhase"][j,:,:] >= 1),
@@ -659,21 +449,14 @@ def calculate_sum_of_thermal_time(j, data):
 
 
 def update_root_growth_speed(j, data, paramVariete):
-    """
-    This function updates the root growth speed (`vRac`, mm/day) according to
-    the current phase (`numPhase`).
+    """Update root growth speed according to the current phenological phase.
 
-    This function has been adapted from the EvalVitesseRacSarraV3 procedure of
-    the phenologie.pas and exmodules 1 & 2.pas files of the Sarra-H model,
-    Pascal version.
+    Uses phase-specific `VRac*` parameters in mm/day for phases 1-6,
+    including `VRacMatu2` in phase 6. Phases 0 and 7 have zero root growth.
+    The selected speed is propagated to subsequent days until updated.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed, source-related to SARRA-H root-growth
+    procedure comments.
     """
 
 
@@ -687,7 +470,7 @@ def update_root_growth_speed(j, data, paramVariete):
     }
 
     # phases 1 to 6 
-    for phase in range(1,6):
+    for phase in range(1,7):
         data["vRac"][j:,:,:] = np.where(
             data["numPhase"][j,:,:] == phase,
             phase_correspondances[phase],
@@ -707,48 +490,18 @@ def update_root_growth_speed(j, data, paramVariete):
 
 
 def update_photoperiodism(j, data, paramVariete):
-    """
-    This function aims at managing the photoperiodic sensitivity of the crop.
+    """Update photoperiodic response variables during phase 3.
 
-    It first updates the sumPP variable : on the transition day between phase 2
-    and 3 (numPhase = 3 and changePhase = 1), the sumPP variable is set to 100.
+    During phase 3, `sumPP` is reset to 100 on phase entry; otherwise:
 
-    Then, we compute the thermal_time_since_previous_phase (thermal time since
-    the transition between phases 2 and 3), and the
-    time_above_critical_day_length, which is the difference between day length
-    and critical day length PPcrit, in decimal hours.
-    
-    On all days with numPhase = 3 (so including the transition day), the sumPP
-    is calculated as a function of thermal_time_since_previous_phase and PPExp
-    (attenuator for progressive PSP response to PP ; rarely used in calibration
-    procedure, a robust value is 0.17), multiplied by a ratio between the daily
-    time above critical day length and the difference between SeuilPP (Upper day
-    length limit of PP response) and PPCrit (Lower day length limit to PP
-    response). 
+    ``sumPP = (1000 / thermal_time_since_previous_phase) ** PPExp
+    * time_above_critical_day_length / (SeuilPP - PPCrit)``
 
-    Finally, phasePhotoper is updated : when numPhase = 3 and sumPP is lower than
-    PPsens, phasePhotoper is set to 0. PP sensitivity, important variable. Range
-    0.3-0.6 is PP sensitive, sensitivity disappears towards values of 0.7 to
-    1. Described in Dingkuhn et al. 2008; Euro.J.Agron. (Impatience model)
+    `phasePhotoper` becomes 0 when `sumPP < PPsens`. This is related to
+    "Impatience"-style photoperiodism, but exact calibration remains a
+    validation question.
 
-    This function has been adapted from the PhotoperSarrahV3 procedure of the
-    phenologie.pas and exmodules 1 et 2.pas of the Sarra-H model, Pascal version.
-
-    Notes CB : 
-    Procedure speciale Vaksman Dingkuhn valable pour tous types de sensibilite
-    photoperiodique et pour les varietes non photoperiodique. PPsens varie de
-    0,4 a 1,2. Pour PPsens > 2.5 = variété non photoperiodique.
-    SeuilPP = 13.5
-    PPcrit = 12
-    SumPP est dans ce cas une variable quotidienne (et non un cumul)
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: source-related; not an exact Impatience implementation claim.
     """
 
     thermal_time_since_previous_phase = np.maximum(0.01, data["sdj"][j,:,:] - data["seuilTempPhasePrec"][j,:,:])
@@ -780,40 +533,14 @@ def update_photoperiodism(j, data, paramVariete):
 
 
 def MortaliteSarraV3(j, data, paramITK, paramVariete):
-    """
-    This functions tests for death of young plants.
+    """Apply the juvenile mortality rule for stressed young plants.
 
-    First, for numphase = 2 and changePhase = 1, hence at the transition day
-    between phase 1 and 2 at this point of the loop, the nbJourCompte and
-    nbjStress variables are set to 0.
+    Counts early days with non-positive aerial biomass increment. Mortality
+    triggers when `nbjStress == seuilCstrMortality`, which is an active-code
+    detail still listed for scientific validation.
 
-    Second, for numPhase equal or above 2, on each day nbJourCompte is
-    incremented by 1. Thus this part just count days since emergence.
-
-    Third, for numPhase equal or above 2, for days where nbJourCompte is lower
-    than nbjTestSemis and where deltaBiomasseAerienne is negative, the nbjStress
-    variable is incremented by 1. Thus, we count the number of days with
-    negative deltaBiomasseAerienne since emergence as stress days.
-
-    Finally, for days where nbjStress is equal or higher than
-    seuilCstrMortality, the crop is reset by setting numPhase,
-    root_tank_capacity and nbjStress to 0.
-
-    This all seems a bit simplistic though, and can be improved.
-
-    This function has been adapted from the MortaliteSarraV3 procedure of the
-    bilancarbonsarra.pas and exmodules 1 & 2.pas codes of the Sarra-H model,
-    Pascal version.
-
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed, source-related to legacy SARRA-H procedure
+    comments.
     """
 
     condition = (data["numPhase"][j,:,:] >= 2) & \
@@ -878,9 +605,3 @@ def MortaliteSarraV3(j, data, paramITK, paramVariete):
     )
 
     return data
-
-
-
-
-
-

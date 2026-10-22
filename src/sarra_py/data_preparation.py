@@ -1,82 +1,163 @@
-from os import listdir
-from os.path import isfile, join
 import pandas as pd
 import datetime
 import rasterio
 import os
+from pathlib import Path
 import rioxarray
-from tqdm import tqdm as tqdm
+from tqdm.auto import tqdm
 import numpy as np
 import yaml
 import xarray as xr
 import astral
 from astral.sun import sun
 from astral import LocationInfo
+from functools import lru_cache
+
+
+_INPUT_VARIABLE_METADATA = {
+    'rain': {
+        "long_name": 'Daily rainfall',
+        "units": 'mm',
+        "description": 'Rainfall depth accumulated during each day (TAMSAT).',
+    },
+    'tpMoy': {
+        "long_name": 'Mean daily air temperature',
+        "units": 'degC',
+        "description": 'Daily mean air temperature at 2 m (AgERA5).',
+    },
+    'ET0': {
+        "long_name": 'Reference evapotranspiration',
+        "units": 'mm/day',
+        "description": 'Daily reference evapotranspiration from the local AgERA5 ET0Hargeaves rasters.',
+    },
+    'rg': {
+        "long_name": 'Daily global solar radiation',
+        "units": 'MJ/m2/day',
+        "description": 'AgERA5 daily solar radiation flux after the local raster values are divided by 1000.',
+    },
+    'profRu': {
+        "long_name": 'Raster-derived root-zone depth',
+        "units": 'mm',
+        "description": 'Root-zone depth raster reprojected to the weather grid and converted from cm to mm.',
+    },
+    'soil_type': {
+        "long_name": 'Soil class identifier',
+        "units": '1',
+        "description": 'Class code used to look up soil properties; zero denotes an unmapped class.',
+    },
+    'epaisseurProf': {
+        "long_name": 'Deep soil reservoir thickness',
+        "units": 'mm',
+        "description": 'Thickness of the deep soil reservoir from the soil-class lookup table.',
+    },
+    'epaisseurSurf': {
+        "long_name": 'Surface soil reservoir thickness',
+        "units": 'mm',
+        "description": 'Thickness of the surface soil reservoir from the soil-class lookup table.',
+    },
+    'stockIniProf': {
+        "long_name": 'Initial deep reservoir water stock',
+        "units": 'mm',
+        "description": 'Initial water depth stored in the deep soil reservoir.',
+    },
+    'stockIniSurf': {
+        "long_name": 'Initial surface reservoir water stock',
+        "units": 'mm',
+        "description": 'Initial water depth stored in the surface soil reservoir.',
+    },
+    'runoff_threshold': {
+        "long_name": 'Rainfall threshold for runoff',
+        "units": 'mm',
+        "description": 'Daily rainfall threshold used to trigger the runoff calculation.',
+    },
+    'runoff_rate': {
+        "long_name": 'Runoff fraction',
+        "units": '1',
+        "description": 'Runoff coefficient from the soil table, converted from percent to a fraction.',
+    },
+    'ru': {
+        "long_name": 'Soil available-water capacity per metre',
+        "units": 'mm/m',
+        "description": 'Plant-available water capacity per metre of soil depth.',
+    },
+    'RZPAWC': {
+        "long_name": 'Root-zone plant-available water capacity',
+        "units": 'mm',
+        "description": 'Raster-derived plant-available water capacity over the root-zone depth.',
+    },
+}
+
+
+def _describe_input_variables(data, *names):
+    """Attach display metadata without discarding raster attributes."""
+    for name in names:
+        data[name].attrs.update(_INPUT_VARIABLE_METADATA[name])
 
 
 
 
 
 def build_rainfall_files_df(rainfall_path, date_start, duration):
-    """
-    This function builds a dataframe containing the list of rainfall files
-    from the provided path, and the given date_start and duration.
-    
-    Helper function used in get_grid_size() and load_TAMSAT_data().
+    """List daily TIFF rasters in date order and require complete coverage."""
+    if duration <= 0:
+        raise ValueError("duration must be positive")
 
-    Args:
-        rainfall_path (_type_): _description_
+    date_end = date_start + datetime.timedelta(days=duration)
+    rows = []
+    with os.scandir(rainfall_path) as entries:
+        for entry in entries:
+            if not entry.is_file() or not entry.name.lower().endswith(".tif"):
+                continue
+            parts = os.path.splitext(entry.name)[0].rsplit("_", 3)
+            if len(parts) != 4:
+                raise ValueError(f"Cannot read date from raster filename: {entry.name}")
+            try:
+                file_date = datetime.date(*(int(part) for part in parts[1:]))
+            except ValueError as exc:
+                raise ValueError(f"Cannot read date from raster filename: {entry.name}") from exc
+            if date_start <= file_date < date_end:
+                rows.append((entry.name, file_date))
 
-    Returns:
-        _type_: _description_
-    """
-    #rainfall_files = [f for f in listdir(rainfall_path) if isfile(join(rainfall_path, f))]
-    # version that should be quicker
-    rainfall_files = [f for f in listdir(rainfall_path)]# if isfile(join(rainfall_path, f))]
-    rainfall_files_df = pd.DataFrame({"filename":rainfall_files}).sort_values("filename").reset_index(drop=True)
-
-    rainfall_files_df["date"] = rainfall_files_df.apply(
-        lambda x: datetime.date(
-            int(x["filename"].replace(".tif","").split("_")[-3]),
-            int(x["filename"].replace(".tif","").split("_")[-2]),
-            int(x["filename"].replace(".tif","").split("_")[-1]),
-        ),
-        axis=1,
-    )
-
-    rainfall_files_df = rainfall_files_df[(rainfall_files_df["date"]>=date_start) & (rainfall_files_df["date"]<date_start+datetime.timedelta(days=duration))].reset_index(drop=True)
-
-    return rainfall_files_df
- 
+    files = pd.DataFrame(rows, columns=["filename", "date"])
+    files = files.sort_values(["date", "filename"]).reset_index(drop=True)
+    expected_dates = [date_start + datetime.timedelta(days=i) for i in range(duration)]
+    if files["date"].tolist() != expected_dates:
+        missing_dates = sorted(set(expected_dates) - set(files["date"]))
+        duplicate_dates = files.loc[files["date"].duplicated(), "date"].tolist()
+        raise ValueError(
+            f"Incomplete daily rasters in {rainfall_path}: "
+            f"missing dates {missing_dates}, duplicate dates {duplicate_dates}"
+        )
+    return files
 
 
+def _ensure_daily_time(data, date_start, duration):
+    """Align positional time indices or reject conflicting calendar dates."""
+    if "time" not in data.sizes:
+        return
+    if data.sizes["time"] != duration:
+        raise ValueError("Existing time dimension does not match duration")
+    expected = np.datetime64(date_start.isoformat(), "D") + np.arange(duration)
+    values = np.asarray(data["time"].values)
+    if np.issubdtype(values.dtype, np.datetime64):
+        if not np.array_equal(values.astype("datetime64[D]"), expected):
+            raise ValueError("Existing time coordinates do not match requested dates")
+    elif values.dtype.kind in "iu" and np.array_equal(values, np.arange(duration)):
+        data.coords["time"] = expected.astype("datetime64[ns]")
+    else:
+        raise ValueError("Existing time coordinates must be dates or consecutive indices from zero")
 
 
 def get_grid_size(rainfall_path, date_start, duration):
-    """
-    This function loads the list of rainfall files corresponding to the given
-    date_start and duration, loads the first rainfall file, and returns its grid
-    size, as dimensions of the rainfall grid define the output resolution of the
-    model.
+    """Return (y rows, x columns) of the first requested rainfall raster.
 
-    Args:
-        TAMSAT_path (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """    
+    Require one date-coded TIFF for each day in the requested period."""
 
     rainfall_files_df = build_rainfall_files_df(rainfall_path, date_start, duration)
 
-    # checking coherence between date_start and duration and available rainfall data
-    if rainfall_files_df["date"].iloc[-1] != date_start+datetime.timedelta(days=duration-1) :
-        raise ValueError("The date range may not be covered by the available rainfall data ; please check rainfall entry files.")
-
     # loading the first rainfall file to get the grid size
-    src = rasterio.open(os.path.join(rainfall_path,rainfall_files_df.loc[0,"filename"]))
-    array = src.read(1)
+    with rasterio.open(os.path.join(rainfall_path, rainfall_files_df.loc[0, "filename"])) as src:
+        array = src.read(1)
     grid_width = array.shape[0]
     grid_height = array.shape[1]
 
@@ -86,37 +167,30 @@ def get_grid_size(rainfall_path, date_start, duration):
 
 
 def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
-    """
-    This function loops over the rainfall raster files, and loads them into a
-    xarray DataArray, which is then added to the rain data dictionary. It is
-    tailored to the TAMSAT rainfall data files, hence its name.
+    """Add daily rainfall in mm to data and return the same Dataset.
 
-    Args:
-        data (_type_): _description_
-        TAMSAT_path (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
+    Require one date-coded TIFF per day on a consistent grid. Declared GeoTIFF
+    NoData values are decoded to NaN before metadata are replaced. Missing
+    rainfall is retained as missing, never interpolated or replaced by zero.
+    Finite values without a NoData declaration remain measurements."""
 
     TAMSAT_files_df = build_rainfall_files_df(TAMSAT_path, date_start, duration)
-
-    for i in range(len(TAMSAT_files_df)):
-
-        dataarray = rioxarray.open_rasterio(os.path.join(TAMSAT_path,TAMSAT_files_df.loc[i,"filename"]))
-        dataarray = dataarray.squeeze("band").drop_vars(["band", "spatial_ref"])
-        dataarray.attrs = {}
-
+    _ensure_daily_time(data, date_start, duration)
+    arrays = []
+    for filename in TAMSAT_files_df["filename"]:
+        raster = rioxarray.open_rasterio(os.path.join(TAMSAT_path, filename), masked=True)
         try:
-            dataarray_full = xr.concat([dataarray_full, dataarray],"time")
-        except:
-            dataarray_full = dataarray
+            daily = raster.squeeze("band").drop_vars(["band", "spatial_ref"])
+            daily.attrs = {}
+            arrays.append(daily.load())
+        finally:
+            raster.close()
 
-    dataarray_full.rio.write_crs(4326,inplace=True)
+    dates = np.asarray(TAMSAT_files_df["date"], dtype="datetime64[ns]")
+    dataarray_full = xr.concat(arrays, dim=xr.IndexVariable("time", dates), join="exact")
+    dataarray_full.rio.write_crs(4326, inplace=True)
     data["rain"] = dataarray_full
-    data["rain"].attrs = {"units":"mm", "long_name":"rainfall"}
+    _describe_input_variables(data, "rain")
 
     return data
 
@@ -124,26 +198,25 @@ def load_TAMSAT_data(data, TAMSAT_path, date_start, duration):
 
 
 def load_TAMSAT_data_fast(data, rainfall_data_path, date_start, duration):
-    """
-    This function loops over the rainfall raster files, and loads them into a
-    xarray DataArray, which is then added to the rain data dictionary. It is
-    tailored to the TAMSAT rainfall data files, hence its name.
+    """Load daily TAMSAT rainfall rasters with ``xarray.open_mfdataset``.
 
-    Args:
-        data (_type_): _description_
-        TAMSAT_path (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
+    Uses the same local date-coded convention as `load_TAMSAT_data`, removes
+    the raster band dimension, and stores `band_data` as daily rainfall.
+    Declared NoData values are decoded to NaN; missing rainfall is not filled.
 
-    Returns:
-        _type_: _description_
+    Source status: code-observed local loader.
     """
 
     rainfall_data_path_df = build_rainfall_files_df(rainfall_data_path, date_start, duration)
-    dataarray_full = xr.open_mfdataset([os.path.join(rainfall_data_path,rainfall_data_path_df.loc[i,"filename"]) for i in range(len(rainfall_data_path_df))], concat_dim="time", combine="nested", chunks={"x":100,"y":100})
+    _ensure_daily_time(data, date_start, duration)
+    dataarray_full = xr.open_mfdataset([os.path.join(rainfall_data_path,rainfall_data_path_df.loc[i,"filename"]) for i in range(len(rainfall_data_path_df))], concat_dim="time", combine="nested", chunks={"x":100,"y":100}, mask_and_scale=True)
     dataarray_full = dataarray_full.squeeze("band").drop_vars(["band"])
+    dataarray_full = dataarray_full.assign_coords(
+        time=np.asarray(rainfall_data_path_df["date"], dtype="datetime64[ns]")
+    )
     dataarray_full.rio.write_crs(4326,inplace=True)
     data["rain"] = dataarray_full["band_data"]
+    _describe_input_variables(data, "rain")
 
     return data
 
@@ -151,43 +224,32 @@ def load_TAMSAT_data_fast(data, rainfall_data_path, date_start, duration):
 
 
 
-def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
-    """
-    This function loops over the AgERA5 raster files, and loads them into 
-    xarray DataArray, which are then added to the data dictionary.
+def _list_agera5_files(data_path, date_start, duration):
+    """Select complete daily raster series for each AgERA5 folder."""
+    variables = sorted(entry.name for entry in os.scandir(data_path) if entry.is_dir())
+    forcing_variables = {
+        "2m_temperature_24_hour_mean", "ET0Hargeaves", "solar_radiation_flux_daily"
+    }
+    files = {
+        variable: build_rainfall_files_df(os.path.join(data_path, variable), date_start, duration)
+        for variable in variables if variable in forcing_variables
+    }
+    return variables, files
 
-    Args:
-        data (_type_): _description_
-        AgERA5_data_path (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
 
-    Returns:
-        _type_: _description_
-    """
-    # TODO : make the file listing error-proof regarding the structure of the folder and the file extensions
+def load_AgERA5_data(data, AgERA5_data_path, date_start, duration, progress=True):
+    """Add temperature, ET0 and radiation to a rainfall grid.
 
-    # getting list of variables
-    AgERA5_variables = [path.split("/")[-1] for path in [x[0] for x in os.walk(AgERA5_data_path)][1:]]
-
-    # building a dictionary of dataframes containing the list of files for each variable
-    AgERA5_files_df_collection = {}
-
-    for variable in AgERA5_variables:
-        #AgERA5_files = [f for f in listdir(os.path.join(AgERA5_data_path,variable)) if isfile(join(os.path.join(AgERA5_data_path,variable), f))]
-        # alternate version that should be quicker
-        AgERA5_files = [f for f in listdir(os.path.join(AgERA5_data_path,variable))]
-        AgERA5_files_df_collection[variable] = pd.DataFrame({"filename":AgERA5_files})
-
-        AgERA5_files_df_collection[variable]["date"] = AgERA5_files_df_collection[variable].apply(
-            lambda x: datetime.date(
-                int(x["filename"].replace(".tif","").split("_")[-3]),
-                int(x["filename"].replace(".tif","").split("_")[-2]),
-                int(x["filename"].replace(".tif","").split("_")[-1]),
-            ),
-            axis=1,
-        )
-
+    Read complete daily TIFF series, reproject to data and divide local
+    radiation values by 1000 before storing rg."""
+    AgERA5_variables, AgERA5_files_df_collection = _list_agera5_files(
+        AgERA5_data_path, date_start, duration
+    )
+    _ensure_daily_time(data, date_start, duration)
+    required = {"2m_temperature_24_hour_mean", "ET0Hargeaves", "solar_radiation_flux_daily"}
+    missing = sorted(required - AgERA5_files_df_collection.keys())
+    if missing:
+        raise ValueError(f"Missing AgERA5 forcing folders: {', '.join(missing)}")
 
     # building a dictionary of correspondance between AgERA5 variables and SARRA variables
     AgERA5_SARRA_correspondance = {
@@ -200,32 +262,39 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
         'vapour_pressure_24_hour_mean':None,
     }
 
-    # loading the data
-    for variable in tqdm(AgERA5_variables) :
-        print(variable)
-        if AgERA5_SARRA_correspondance[variable] != None :
-
-            try:
-                del dataarray_full
-            except:
-                pass
-            
-            for i in range(duration) :
-                dataarray = rioxarray.open_rasterio(os.path.join(AgERA5_data_path,variable,AgERA5_files_df_collection[variable].loc[i,"filename"]))
-                dataarray = dataarray.rio.reproject_match(data, nodata=np.nan)
-                dataarray = dataarray.squeeze("band").drop_vars(["band"])
-                # TODO: add dataarray.attrs = {} to precise units and long_name
-
+    # Show only the three variables actually loaded into the model dataset.
+    load_variables = [
+        variable for variable in AgERA5_variables
+        if AgERA5_SARRA_correspondance.get(variable) is not None
+    ]
+    labels = {
+        "2m_temperature_24_hour_mean": "temperature",
+        "ET0Hargeaves": "ET0",
+        "solar_radiation_flux_daily": "radiation",
+    }
+    with tqdm(load_variables, desc="AgERA5 climate", unit="variable", disable=not progress) as bar:
+        for variable in bar:
+            if progress:
+                bar.set_postfix_str(labels.get(variable, variable), refresh=False)
+            files = AgERA5_files_df_collection[variable]
+            arrays = []
+            for filename in files["filename"]:
+                raster = rioxarray.open_rasterio(os.path.join(AgERA5_data_path, variable, filename))
                 try:
-                    dataarray_full = xr.concat([dataarray_full, dataarray],"time")
-                except:
-                    dataarray_full = dataarray
+                    daily = raster.rio.reproject_match(data, nodata=np.nan)
+                    arrays.append(daily.squeeze("band").drop_vars(["band"]).load())
+                finally:
+                    raster.close()
 
-            # storing the variable in the data dictionary
+            dates = np.asarray(files["date"], dtype="datetime64[ns]")
+            dataarray_full = xr.concat(arrays, dim=xr.IndexVariable("time", dates), join="exact")
+
+            # Store the model input under its SARRA-Py variable name.
             data[AgERA5_SARRA_correspondance[variable]] = dataarray_full
             
     # unit conversion for solar radiation (kJ/m2 as provided by AgERA5 to MJ/m2/day)
     data["rg"] = data["rg"]/1000
+    _describe_input_variables(data, "tpMoy", "ET0", "rg")
     
     return data
 
@@ -234,43 +303,22 @@ def load_AgERA5_data(data, AgERA5_data_path, date_start, duration):
 
 
 def load_AgERA5_data_fast_dask(data, AgERA5_data_path, date_start, duration):
+    """Load AgERA5 forcing rasters used by SARRA-Py notebooks.
+
+    Fast variant using `open_mfdataset`; maps local folders to `tpMoy`, `ET0`
+    and `rg`, reprojects to the base grid, and divides `rg` by 1000.
+
+    Source status: code-observed local conversion; AgERA5 source units should
+    be verified against preprocessing.
     """
-    This function loops over the AgERA5 raster files, and loads them into 
-    xarray DataArray, which are then added to the data dictionary.
-
-    Args:
-        data (_type_): _description_
-        AgERA5_data_path (_type_): _description_
-        date_start (_type_): _description_
-        duration (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    # TODO : make the file listing error-proof regarding the structure of the folder and the file extensions
-
-    # getting list of variables
-    AgERA5_variables = [path.split("/")[-1] for path in [x[0] for x in os.walk(AgERA5_data_path)][1:]]
-
-    # building a dictionary of dataframes containing the list of files for each variable
-    AgERA5_files_df_collection = {}
-
-    for variable in AgERA5_variables:
-        #AgERA5_files = [f for f in listdir(os.path.join(AgERA5_data_path,variable)) if isfile(join(os.path.join(AgERA5_data_path,variable), f))]
-        # alternate version that should be quicker
-        AgERA5_files = [f for f in listdir(os.path.join(AgERA5_data_path,variable))]
-        AgERA5_files_df_collection[variable] = pd.DataFrame({"filename":AgERA5_files})
-
-        AgERA5_files_df_collection[variable]["date"] = AgERA5_files_df_collection[variable].apply(
-            lambda x: datetime.date(
-                int(x["filename"].replace(".tif","").split("_")[-3]),
-                int(x["filename"].replace(".tif","").split("_")[-2]),
-                int(x["filename"].replace(".tif","").split("_")[-1]),
-            ),
-            axis=1,
-        )
-
-        AgERA5_files_df_collection[variable] = AgERA5_files_df_collection[variable][(AgERA5_files_df_collection[variable]["date"]>=date_start) & (AgERA5_files_df_collection[variable]["date"]<date_start+datetime.timedelta(days=duration))].reset_index(drop=True)
+    AgERA5_variables, AgERA5_files_df_collection = _list_agera5_files(
+        AgERA5_data_path, date_start, duration
+    )
+    _ensure_daily_time(data, date_start, duration)
+    required = {"2m_temperature_24_hour_mean", "ET0Hargeaves", "solar_radiation_flux_daily"}
+    missing = sorted(required - AgERA5_files_df_collection.keys())
+    if missing:
+        raise ValueError(f"Missing AgERA5 forcing folders: {', '.join(missing)}")
 
     # building a dictionary of correspondance between AgERA5 variables and SARRA variables
     AgERA5_SARRA_correspondance = {
@@ -285,7 +333,7 @@ def load_AgERA5_data_fast_dask(data, AgERA5_data_path, date_start, duration):
 
     # loading the data
     for variable in tqdm(AgERA5_variables) :
-        if AgERA5_SARRA_correspondance[variable] != None :
+        if AgERA5_SARRA_correspondance.get(variable) is not None:
 
             try:
                 del dataarray_full
@@ -306,6 +354,9 @@ def load_AgERA5_data_fast_dask(data, AgERA5_data_path, date_start, duration):
 
             dataarray_full = xr.open_mfdataset([os.path.join(AgERA5_data_path,variable,AgERA5_files_df_collection[variable].loc[i,"filename"]) for i in range(len(AgERA5_files_df_collection[variable]))], concat_dim="time", combine="nested", chunks={"x":1000,"y":1000})
             dataarray_full = dataarray_full.squeeze("band").drop_vars(["band"])
+            dataarray_full = dataarray_full.assign_coords(
+                time=np.asarray(AgERA5_files_df_collection[variable]["date"], dtype="datetime64[ns]")
+            )
             dataarray_full = dataarray_full.rio.reproject_match(data, nodata=np.nan)
 
             
@@ -317,6 +368,7 @@ def load_AgERA5_data_fast_dask(data, AgERA5_data_path, date_start, duration):
             
     # unit conversion for solar radiation (kJ/m2 as provided by AgERA5 to MJ/m2/day)
     data["rg"] = data["rg"]/1000
+    _describe_input_variables(data, "tpMoy", "ET0", "rg")
     
     return data
 
@@ -329,18 +381,7 @@ def load_AgERA5_data_fast_dask(data, AgERA5_data_path, date_start, duration):
 
 
 def load_paramVariete(file_paramVariete) :
-    """
-    This function loads the parameters of the variety from the yaml file.
-
-    Args:
-        file_paramVariete (_type_): _description_
-
-    Raises:
-        exception: _description_
-
-    Returns:
-        _type_: _description_
-    """
+    """Load variety parameters from ../data/params/variety relative to cwd."""
     with open(os.path.join('../data/params/variety/',file_paramVariete), 'r') as stream:
         paramVariete = yaml.safe_load(stream)
     if paramVariete["feuilAeroBase"] == 0.1 :
@@ -352,18 +393,21 @@ def load_paramVariete(file_paramVariete) :
 
 
 def load_paramITK(file_paramITK):
-    """
-    This function loads the ITK parameters from the yaml file.
+    """Load management YAML and normalize DateSemis to a Python date.
 
-    Args:
-        file_paramITK (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Accept quoted date strings and YAML-native date/timestamp values. Relative
+    filenames resolve under ../data/params/itk; absolute paths are supported.
     """
     with open(os.path.join('../data/params/itk/',file_paramITK), 'r') as stream:
         paramITK = yaml.safe_load(stream)
-    paramITK["DateSemis"] = datetime.datetime.strptime(paramITK["DateSemis"], "%Y-%m-%d").date()
+    sowing_date = paramITK["DateSemis"]
+    if isinstance(sowing_date, datetime.datetime):
+        sowing_date = sowing_date.date()
+    elif isinstance(sowing_date, str):
+        sowing_date = datetime.datetime.strptime(sowing_date, "%Y-%m-%d").date()
+    elif not isinstance(sowing_date, datetime.date):
+        raise ValueError("DateSemis must be a date or an ISO date string")
+    paramITK["DateSemis"] = sowing_date
     return paramITK
 
 
@@ -371,15 +415,7 @@ def load_paramITK(file_paramITK):
 
 
 def load_paramTypeSol(file_paramTypeSol):
-    """
-    This function loads the soil parameters from the yaml file.
-
-    Args:
-        file_paramTypeSol (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
+    """Load soil parameters from ../data/params/soil relative to cwd."""
     with open(os.path.join('../data/params/soil/',file_paramTypeSol), 'r') as stream:
         paramTypeSol = yaml.safe_load(stream)     
     return paramTypeSol
@@ -389,18 +425,10 @@ def load_paramTypeSol(file_paramTypeSol):
 
 
 def load_YAML_parameters(file_paramVariete, file_paramITK, file_paramTypeSol):
-    """
-    This function loads the parameters from the yaml files.
-    It is a wrapper for the three functions above.
+    """Return (variety, management, soil) mappings from legacy YAML loaders.
 
-    Args:
-        file_paramVariete (_type_): _description_
-        file_paramITK (_type_): _description_
-        file_paramTypeSol (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
+    Accept absolute paths or filenames under ../data/params; preserve the
+    existing variety adjustment based on management NI."""
     paramVariete = load_paramVariete(file_paramVariete)
     paramITK = load_paramITK(file_paramITK)
     paramTypeSol = load_paramTypeSol(file_paramTypeSol)
@@ -416,6 +444,7 @@ def load_YAML_parameters(file_paramVariete, file_paramITK, file_paramTypeSol):
 
 
 def initialize_default_irrigation(data):
+    """Add a zero daily irrigation variable with the same grid as `rain`."""
     # default irrigation scheme 
     data["irrigation"] = data["rain"] * 0
     data["irrigation"].attrs = {"units":"mm", "long_name":"irrigation"}
@@ -424,43 +453,26 @@ def initialize_default_irrigation(data):
 
 
 
-def load_iSDA_soil_data(data, grid_width, grid_height): 
+def load_iSDA_soil_data(data, grid_width, grid_height, assets_dir=None):
 
-    """
-    This function loads iSDA soil data and crop to the area of interest remark :
-    it would be nice to try to modulate the percentage of runoff according to
-    slope
+    """Add soil depth and class-based properties to data on its grid.
 
-    First, this function loads the iSDA soil data, crops it to the area of
-    interest and resamples it to match the grid resolution. The iSDA soil class
-    raster map obtained is passed to the xarray dataset as a new variable.
-
-    For the sake of example, the file that is used here already has been
-    downsampled at TAMSAT resolution. Its specs are available on the CIRAD
-    Dataverse at the following adress :
-    https://doi.org/10.1038/s41598-021-85639-y
-
-    Second, a correspondance table matching the iSDA soil classes to the soil
-    physical properties is loaded. Maps of soil physical properties are then
-    created and added to the xarray dataset.
-
-    Returns:
-        _type_: _description_
-    """
+    Read local data/assets rasters and the soil class table; return data."""
     # load soil depth data, using the same code as in the load_iSDA_soil_data_alternate function
-    soil_depth_file_path = "../data/assets/gyga_af_erzd__m_1km.tif"
+    assets = Path(assets_dir) if assets_dir is not None else Path("../data/assets")
+    soil_depth_file_path = assets / "gyga_af_erzd__m_1km.tif"
     dataarray = rioxarray.open_rasterio(soil_depth_file_path)
     dataarray = dataarray.astype('float32') # converting to float32 to allow for NaNs
     dataarray = dataarray.rio.reproject_match(data, nodata=np.nan) # reprojecting to match the base data
     dataarray = dataarray.squeeze("band").drop_vars(["band"]) # removing the band dimension and variable
     dataarray = dataarray * 10 # converting from cm to mm
     data["profRu"] = dataarray # we add the soil depth data to the base data
-    data["profRu"].attrs = {"units": "mm", "long_name": "Soil root zone depth (mm) adapted from Africa SoilGrids RZD"}
+    _describe_input_variables(data, "profRu")
     del dataarray # we delete the temporary dataarray
 
 
     # load raster data
-    soil_type_file_path = "../data/assets/iSDA_at_TAMSAT_resolution_zeroclass_1E6.tif"
+    soil_type_file_path = assets / "iSDA_at_TAMSAT_resolution_zeroclass_1E6.tif"
     dataarray = rioxarray.open_rasterio(soil_type_file_path)
 
     # # determine the boundaries of the data xarray before cropping
@@ -476,15 +488,15 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
     # resample to match the grid resolution
     dataarray = dataarray.rio.reproject_match(data, nodata=np.nan)
     dataarray = dataarray.squeeze("band").drop_vars(["band"])
-    dataarray.attrs = {"units":"arbitrary", "long_name":"soil_type"}
 
     # add soil type identifier to the dataset
     data["soil_type"] = dataarray
     data["soil_type"] = data["soil_type"] / 1000000 # conversion from 1E6 to 1E0
     data["soil_type"] = data["soil_type"].astype("float32")
+    _describe_input_variables(data, "soil_type")
 
     # load correspondance table
-    path_soil_type_correspondance = "../data/assets/TypeSol_Moy13_HWSD.csv"
+    path_soil_type_correspondance = assets / "TypeSol_Moy13_HWSD.csv"
     df_soil_type_correspondance = pd.read_csv(path_soil_type_correspondance, sep=";", skiprows=1)
 
     # correspondance between soil properties naming in the csv file and in the dataset
@@ -505,10 +517,10 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
         soil_types_converted = np.reshape([dict_values[x.astype(int)] for x in data["soil_type"].to_numpy().flatten()], (grid_width, grid_height))
         data[soil_variable] = (data["soil_type"].dims,soil_types_converted)
         data[soil_variable] = data[soil_variable].astype("float32")
-        # TODO: add dataarray.attrs = {} to precise units and long_name
 
     # converting pourcRuiss to decimal %
     data["runoff_rate"] = data["runoff_rate"] / 100
+    _describe_input_variables(data, *soil_variables)
 
     return data
 
@@ -517,27 +529,9 @@ def load_iSDA_soil_data(data, grid_width, grid_height):
 
 def load_iSDA_soil_data_alternate(data, grid_width, grid_height): 
 
-    """
-    This function loads iSDA soil data and crop to the area of interest remark :
-    it would be nice to try to modulate the percentage of runoff according to
-    slope
+    """Add soil depth, class properties and raster-derived ru to data.
 
-    First, this function loads the iSDA soil data, crops it to the area of
-    interest and resamples it to match the grid resolution. The iSDA soil class
-    raster map obtained is passed to the xarray dataset as a new variable.
-
-    For the sake of example, the file that is used here already has been
-    downsampled at TAMSAT resolution. Its specs are available on the CIRAD
-    Dataverse at the following adress :
-    https://doi.org/10.1038/s41598-021-85639-y
-
-    Second, a correspondance table matching the iSDA soil classes to the soil
-    physical properties is loaded. Maps of soil physical properties are then
-    created and added to the xarray dataset.
-
-    Returns:
-        _type_: _description_
-    """
+    Read local data/assets files and return data on the input grid."""
     # loading soil depth data
     # soil data is Africa SoilGrids - Root zone depth (cm) 
     # reference of the dataset is https://data.isric.org/geonetwork/srv/fre/catalog.search#/metadata/c77d1209-56e9-4cac-b76e-bbf6c7e3a617
@@ -549,18 +543,18 @@ def load_iSDA_soil_data_alternate(data, grid_width, grid_height):
     dataarray = dataarray.squeeze("band").drop_vars(["band"]) # removing the band dimension and variable
     dataarray = dataarray * 10 # converting from cm to mm
     data["profRu"] = dataarray # we add the soil depth data to the base data
-    data["profRu"].attrs = {"units": "mm", "long_name": "Soil root zone depth (mm) adapted from Africa SoilGrids RZD"}
+    _describe_input_variables(data, "profRu")
     del dataarray # we delete the temporary dataarray
 
 
     # defining the soil surface reservoir depth with default values
     data["epaisseurSurf"] = 200 * xr.ones_like(data["profRu"])
-    data["epaisseurSurf"].attrs = {"units": "mm", "long_name": "Soil surface reservoir depth (mm)"}
+    _describe_input_variables(data, "epaisseurSurf")
 
 
     # defining the initial water stock in the deep surface reservoir
     data["stockIniProf"] = 0 * xr.ones_like(data["profRu"])
-    data["stockIniProf"].attrs = {"units": "mm", "long_name": "Initial water stock in the deep surface reservoir (mm)"}
+    _describe_input_variables(data, "stockIniProf")
 
 
     # loading soil texture data
@@ -571,11 +565,11 @@ def load_iSDA_soil_data_alternate(data, grid_width, grid_height):
     dataarray = rioxarray.open_rasterio(soil_texture_class_file_path)
     dataarray = dataarray.rio.reproject_match(data, nodata=np.nan) # reprojecting to match the base data
     dataarray = dataarray.squeeze("band").drop_vars(["band"]) # removing the band dimension and variable
-    dataarray.attrs = {"units":"arbitrary", "long_name":"soil_type"} # adding attributes
 
     data["soil_type"] = dataarray # add soil type identifier to the dataset
     data["soil_type"] = data["soil_type"] / 1000000 # conversion from 1E6 to 1E0
     data["soil_type"] = data["soil_type"].astype("float32")
+    _describe_input_variables(data, "soil_type")
 
     # load correspondance table
     path_soil_type_correspondance = "../data/assets/TypeSol_Moy13_HWSD.csv"
@@ -583,8 +577,10 @@ def load_iSDA_soil_data_alternate(data, grid_width, grid_height):
 
     # correspondance between soil properties naming in the csv file and in the dataset
     soil_variables = {
-        "runoff_threshold" : "SeuilRuiss", # utilisé dans bilan_hydro.estimate_runoff pour le calcul de lr
-        "runoff_rate" : "PourcRuiss", # utilisé dans bilan_hydro.estimate_runoff pour le calcul de lr
+        "epaisseurProf": "EpaisseurProf",
+        "stockIniSurf": "StockIniSurf",
+        "runoff_threshold": "SeuilRuiss",
+        "runoff_rate": "PourcRuiss",
     }
 
     # create maps of soil properties and add them to the dataset
@@ -594,10 +590,10 @@ def load_iSDA_soil_data_alternate(data, grid_width, grid_height):
         soil_types_converted = np.reshape([dict_values[x.astype(int)] for x in data["soil_type"].to_numpy().flatten()], (grid_width, grid_height))
         data[soil_variable] = (data["soil_type"].dims,soil_types_converted)
         data[soil_variable] = data[soil_variable].astype("float32")
-        # TODO: add dataarray.attrs = {} to precise units and long_name
 
     # converting pourcRuiss to decimal %
     data["runoff_rate"] = data["runoff_rate"] / 100
+    _describe_input_variables(data, *soil_variables)
     del dataarray # we delete the temporary dataarray
 
 
@@ -607,12 +603,13 @@ def load_iSDA_soil_data_alternate(data, grid_width, grid_height):
     dataarray = dataarray.astype('float32')
     dataarray = dataarray.rio.reproject_match(data, nodata=np.nan) # reprojecting to match the base data
     dataarray = dataarray.squeeze("band").drop_vars(["band"]) # removing the band dimension and variable
-    dataarray.attrs = {"units":"mm", "long_name":"Root zone plant available water capacity (mm)"} # adding attributes
-    data["RZPAWC"] = dataarray # add soil type identifier to the dataset
+    data["RZPAWC"] = dataarray
+    _describe_input_variables(data, "RZPAWC")
     del dataarray # we delete the temporary dataarray
 
     #calculating RU (mm/m)
     data["ru"] = data["RZPAWC"] / (data["profRu"]/1000)
+    _describe_input_variables(data, "ru")
 
     return data
 
@@ -621,15 +618,13 @@ def load_iSDA_soil_data_alternate(data, grid_width, grid_height):
 
 
 def calc_day_length(day, lat):
-    """
-    This function calculates the day length for a given day and latitude.
+    """Compute daylight duration for one date and latitude.
 
-    Args:
-        day (_type_): _description_
-        lat (_type_): _description_
+    Uses Astral sunrise/sunset daylight and fixes longitude to 0.0; the result
+    is returned in hours.
 
-    Returns:
-        _type_: _description_
+    Source status: source-related to Astral daylight calculation; longitude
+    convention is a SARRA-Py implementation choice.
     """
     # print(day, lat)
     coords = LocationInfo(latitude=float(lat), longitude=0.0)
@@ -639,24 +634,60 @@ def calc_day_length(day, lat):
 
 
 
+def _normalize_day_length_date(date_start):
+    """Normalize a day-length start date for the LRU cache key."""
+    if isinstance(date_start, datetime.datetime):
+        return date_start.date().isoformat()
+    if isinstance(date_start, datetime.date):
+        return date_start.isoformat()
+    if hasattr(date_start, "item"):
+        return _normalize_day_length_date(date_start.item())
+    return str(date_start)
+
+
+@lru_cache(maxsize=64)
+def _cached_day_length_matrix(date_start_key, duration, latitudes):
+    """Compute or reuse daylight hours for each day and latitude."""
+    date_start = datetime.date.fromisoformat(date_start_key)
+    vectorized_func = np.vectorize(calc_day_length)
+
+    days = np.array(
+        [date_start + datetime.timedelta(days=i) for i in range(duration)],
+        dtype=object,
+    )[..., np.newaxis]
+    latitudes_array = np.asarray(latitudes, dtype=float)[np.newaxis, ...]
+
+    return np.asarray(vectorized_func(days, latitudes_array), dtype=float)
+
+
+def _broadcast_day_length_to_rain(day_length_by_latitude, rain):
+    """Broadcast a `(time, y)` day-length matrix to the rainfall grid."""
+    if "time" not in rain.dims or "y" not in rain.dims:
+        raise ValueError("rain must have 'time' and 'y' dimensions to compute day length")
+
+    shape = [1] * rain.ndim
+    shape[rain.dims.index("time")] = rain.shape[rain.dims.index("time")]
+    shape[rain.dims.index("y")] = rain.shape[rain.dims.index("y")]
+
+    values = day_length_by_latitude.reshape(shape)
+    return np.broadcast_to(values, rain.shape).copy()
+
+
 
 
 def calc_day_length_raster_fast(data, date_start, duration):
+    """Add a cached day-length raster to a simulation dataset.
 
-    vectorized_func = np.vectorize(calc_day_length)
+    Computes daylight from date and `y` latitude, then broadcasts it to the
+    shape of `rain`. The dataset is mutated in place.
 
-    days = np.array([date_start + datetime.timedelta(days=i) for i in range(duration)])[...,np.newaxis]
-    latitudes = np.array(data["y"])[np.newaxis,...]
+    Source status: code-observed grid broadcast around Astral day length.
+    """
 
-    result = vectorized_func(days, latitudes)
-
-    # we will first define an empty array of the same shape as the rain array
-    data["dureeDuJour"] = (data["rain"].dims, np.zeros(data["rain"].shape))
-    data["dureeDuJour"].values = np.repeat(result[...,np.newaxis], data["dureeDuJour"].shape[2], axis=2)
+    latitudes = tuple(float(value) for value in np.asarray(data["y"].values))
+    date_start_key = _normalize_day_length_date(date_start)
+    result = _cached_day_length_matrix(date_start_key, int(duration), latitudes)
+    values = _broadcast_day_length_to_rain(result, data["rain"])
+    data["dureeDuJour"] = (data["rain"].dims, values)
 
     return data
-
-
-
-
-

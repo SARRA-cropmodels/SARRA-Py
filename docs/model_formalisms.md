@@ -1,59 +1,646 @@
-# Model formalisms
+# SARRA-Py Model Formalisms
 
-As for the rest of the SARRA family of models, SARRA-Py is a crop simulation model that uses three main processes in a daily loop: 
+## Scope And Status
 
-1. Water balance : estimation of evapotranspiration, water stress index, via three reservoirs
+This document describes the active scientific and technical formalisms observed
+in the current SARRA-Py code. It is a maintained model overview, not a complete
+agronomic validation report.
 
-2. Carbon balance : based on the concept of "big leaf", conversion of solar energy into assimilates under water stress constraints, and repartition into biomass
+SARRA-Py is a daily spatial crop model run from notebook workflows on xarray
+inputs and outputs. The public default is `engine="numpy"`; `engine="xarray"` remains available.
+Both execution engines return xarray datasets and use the same model equations.
 
-3. Phenology : evolution of phenological stages (emergence, vegetative stage, flowering, maturation) and associated processes (germination, juvenile mortality, distribution modes of biomasses, etc.).
+## Validation Status Legend
 
-## Water balance
+| Status | Meaning |
+|---|---|
+| Code-observed | The equation or behaviour is directly observed in active SARRA-Py code. No exact source match is claimed. |
+| Source-related | The equation belongs to, or is consistent with, a known modelling family, but differs in variables, units, reservoirs, timing or implementation details. |
+| Validated | The equation, variables, units and behaviour have been checked against a source and examples/tests. This status is not used for any full SARRA-Py formalism in this document yet. |
+| Open validation point | The active code is documented, but a scientific or numerical question must be answered before stronger wording or refactoring. |
 
-The SARRA-Py water balance process considers soil as a collection of reservoirs of varying sizes: surface, deep, and a dynamic root reservoir. Each reservoir is an entity that is homogeneous in terms of simulated processes or variables that describe its properties such as infiltration/surface runoff, drainage, storage capacity, and water consumption.
+## State And Time Step
 
-The flux is simulated by filling the reservoir to its maximum capacity, traditionally the field capacity, except for groundwater phenomena where it is filled to saturation. Beyond that, the water overflows to the next reservoir, downward vertical flux. The water that overflows from the last reservoir is considered drainage. The capillary rise process is not simulated.
+Implemented in: `sarra_py/models.py::run_model`,
+`sarra_py/models.py::_run_loop`.
 
-Three representations of the reservoirs are used to estimate available water for evaporation, transpiration, and water storage processes :
+Dynamic variables are simulated on a daily time axis and a spatial grid. The
+simulation start date selects the first weather day; `DateSemis` selects sowing.
+Starting the weather series before sowing lets the water balance evolve during
+the pre-sowing period.
 
-* a fixed-size surface reservoir, that manages the soil evaporation process,
-* a deep reservoir, on which moisture front is simulated ; this allows: 1) to limit the rooting depth to the moisture front, 2) to store water not yet accessible by roots, 3) to block rooting in the case of hard soils,
-* and a root reservoir that evolves based on the rooting speed of roots during their development phases and simulates water availability for plant transpiration.
+Most scientific functions mutate the model state in place and often propagate the
+current value from day `j` to the end of the simulation with `j:`.
 
-The overall water balance equation is:
+State convention used in this document:
 
-`stock(d+1) = stock(d) + (rain + irrigation) - runoff - drainage - (tr + evap)`
+- `X_j_before`: value available at the start of day `j`.
+- `X_j_after`: value after the current process on day `j`.
+- `X_{j+1}`: value available to the next daily step.
 
-where stock is the water stored in the reservoirs, runoff is a function of water input and soil texture, drainage is overflow from the deep reservoir, tr is transpiration, and evap is evaporation.
+The process order inside the daily loop is part of the numerical definition:
 
-The size of the root reservoir prospected by roots evolves based on the daily rooting speed defined for each phenological phase and can be blocked by the moisture front or reduced in case of strong hydric stress.
+1. Phenology and accumulated thermal time.
+2. Irrigation, rainfall input, mulch interception, runoff and reservoir filling.
+3. Soil evaporation, transpiration and water consumption.
+4. Carbon assimilation, biomass partitioning, LAI and yield.
+5. Photoperiodism, mortality and nitrogen indicator.
 
-## Carbon balance
+Status: **Code-observed**.
 
-The carbon balance in SARRA-Py is based on a big-leaf approach. The photosynthetically active radiation (PAR) to be transformed into assimilates based on photosynthetic activity is estimated from 1) calculating the intercepted fraction of PAR (deduced via the Beer law from the plot-level leaf area index (LAI) and leaf geometry (factor kdf)), and 2) applying a conversion rate.
+## Variable And Unit Table
 
-The conversion rate is considered constant throughout the cycle, and is higher than commonly given since it aims at representing all produced assimilates, whereas conversion rates traditionally used in other models only take into account the increase in aerial biomass, without root biomass or maintenance respiration. This photosynthetic activity is constrained constrained by the availability of water and nutrients, representing processes such as stomatal regulation.
+Units are taken from dataset attributes, code comments and active calculations.
+When a unit is uncertain, the table marks it as an open validation point instead
+of guessing.
 
-Assimilates are then allocated between biomasses following rules that vary depending on the phases :
+| Variable | Meaning | Unit/status | Main functions |
+|---|---|---|---|
+| `tpMoy` | Mean daily temperature | deg C | `calculate_daily_thermal_time`, `update_assimPot`, `calculate_maintainance_respiration` |
+| `ET0` | Reference evapotranspiration | mm day-1 | `estimate_soil_potential_evaporation`, `estimate_potential_plant_transpiration` |
+| `rg` | Global radiation | MJ m-2 day-1 after loader conversion | `load_AgERA5_data*`, `initialize_simulation` |
+| `rain` | Rainfall | mm day-1 | `load_TAMSAT_data*`, `compute_total_available_water` |
+| `irrigTotDay` | Daily irrigation total | mm day-1 | `compute_daily_irrigation`, `compute_total_available_water` |
+| `ddj` | Daily thermal time | degree-days day-1 | `calculate_daily_thermal_time`, `calculate_once_daily_thermal_time` |
+| `sdj` | Accumulated thermal time | degree-days | `calculate_sum_of_thermal_time`, `EvalPhenoSarrahV3` |
+| `dureeDuJour` | Daylight duration | hours | `calc_day_length_raster_fast`, `update_photoperiodism` |
+| `lai` | Leaf area index | m2 m-2 | `calculate_leaf_area_index`, `estimate_ltr` |
+| `ltr` | Non-intercepted light fraction | unitless | `estimate_ltr`, `estimate_kce` |
+| `kcp` | Crop transpiration coefficient | unitless | `estimate_kcp`, `estimate_potential_plant_transpiration` |
+| `kce` | Soil evaporation coefficient | unitless | `estimate_kce`, `estimate_soil_potential_evaporation` |
+| `fesw` | Surface evaporable water fraction | unitless | `estimate_fesw`, `estimate_soil_evaporation` |
+| `ftsw` | Root reservoir filling fraction | unitless | `estimate_ftsw`, `estimate_cstr` |
+| `pFact` | Depletion fraction threshold | unitless | `estimate_pFact`, `estimate_cstr` |
+| `cstr` | Water-stress coefficient | unitless | `estimate_cstr`, `estimate_plant_transpiration` |
+| `trPot` | Potential plant transpiration | mm day-1 | `estimate_potential_plant_transpiration` |
+| `tr` | Actual plant transpiration | mm day-1 | `estimate_plant_transpiration`, `ConsoResSep` |
+| `evapPot` | Potential soil evaporation | mm day-1 | `estimate_soil_potential_evaporation` |
+| `evap` | Actual soil evaporation demand | mm day-1 | `estimate_soil_evaporation`, `ConsoResSep` |
+| `biomasseTotale` | Total crop biomass | kg ha-1 in variable metadata | `update_total_biomass`, `estimate_critical_nitrogen_concentration` |
+| `assimPot` | Potential assimilation | metadata says kg ha-1; daily flux implied by equation | `update_assimPot` |
+| `assim` | Actual assimilation | metadata says kg ha-1; daily flux implied by equation | `update_assim` |
+| `rdt` | Grain yield | kg ha-1 | `update_yield_during_filling_phase` |
+| `Ncrit` | Critical nitrogen indicator | unit undetermined; not set in metadata | `estimate_critical_nitrogen_concentration` |
 
-* A portion of the assimilates is consumed without producing biomass for the maintenance of living tissues, known as maintenance respiration.
+## Phenology
 
-* From emergence to flowering, biomass is split into root biomass and aerial biomass, which is further divided into leaf and stem biomass using allometric relationships.
+Implemented in: `sarra_py/bilan_pheno.py::EvalPhenoSarrahV3`,
+`calculate_daily_thermal_time`, `calculate_once_daily_thermal_time`,
+`calculate_sum_of_thermal_time`, `update_photoperiodism`,
+`MortaliteSarraV3`.
 
-* After flowering, the available assimilates allow for seed filling.
+The crop cycle uses phases `0` to `7`: no crop, initialization/germination,
+vegetative development, photoperiod-sensitive phase, reproductive phase,
+filling/maturation steps and harvest.
 
-The overall equation of the carbon balance is defined as:
+Thermal transitions mainly compare accumulated thermal time `sdj` with variety
+thresholds `SDJLevee`, `SDJBVP`, `SDJRPR`, `SDJMatu1` and `SDJMatu2`.
 
-`total biomass (d+1) = biomass (d) + assimilates - maintenance respiration`
+Active daily thermal-time equation using mean temperature `T = tpMoy`:
 
-`total biomass = root biomass + leaf biomass + stem biomass + grain biomass`
+```text
+if T <= TOpt2:
+    ddj = max(min(TOpt1, T), TBase) - TBase
+else:
+    ddj = (TOpt1 - TBase)
+          * (1 - ((min(TLim, T) - TOpt2) / (TLim - TOpt2)))
+```
 
-The value of LAI, being the ratio of the limb surface to the ground surface, can then be updated from the leaf biomass based on the specific leaf area (SLA). SLA is considered to be decreasing with the age of the leaf, due to its thickening. Other factors contribute to leaf thickening, including exposure levels to radiation and competition for assimilates Additionally, its dynamics vary depending on plant type (monocotyledons and dicotyledons). The leaf surface area is nonetheless a genetic characteristic that can be defined by minimum and maximum values. In this model, minimum and maximum values, as well as linear decrease rate of SLA are taken into consideration.
+Temperatures are in degrees C and `ddj` is in degree-days day-1.
 
-Finally, the grain yield potential is defined as a fixed fraction of the aerial biomass (genetic potential). It can be diminished by various processes during the reproductive phase, water stress (which result in reduced biomass during the critical phase). The grain yield is mainly dependent on the grain filling phase, where water is the main constraint and the grain demand is the highest and considered a priority. The grain yield is calculated based on the temperature of the day and the defined temperature sum for this phase, multiplied by the grain yield potential. For species with continuous flowering, the grain yield is calculated daily and can be affected by the flowering process.
+Status: **Code-observed** for the active `tpMoy` equation. The [SARRA-H formalism](https://sarra-h.teledetection.fr/?page_id=13) describes the rising, optimum and declining thermal response, but does not establish the exact input-temperature convention used here.
 
-The influence of seeding density is also taken into account, where a linear relationship is applied for low densities and an asymptotic relationship for high densities. The carbon balance calculations for biomass, yield and LAI are simulated daily with an optimal density and converted from the actual density to the optimal density using the asymptotic relationship.
+Open validation point: older comments mention a Tmin/Tmax formulation. The
+active mean-temperature equation should not be described as scientifically
+validated until that choice is confirmed.
 
-## Phenology 
+## Photoperiodism
 
-Phenology is the study of the growth and development of plants and it is a crucial component of SARRA-Py. The crop growth cycle is traditionally divided into four phases: juvenile vegetative phase (BVP), photoperiod-sensitive phase (PSP), reproductive phase (RPR), and maturation phase (Matu). SARRA-Py divides these phases into seven stages to optimize calculation and control methods. These stages are determined by the sum of degree days and the length of the day, and are defined by different thresholds (temperature, PP function). The PSP phase depends on the photoperiod sensitivity of the variety, which varies with the latitude and sowing date. The RPR and maturation phases are the most sensitive to constraints and have a significant impact on yield in cereal crops. The degree days are calculated based on the temperature range between the base temperature, lethal temperature, and optimum temperatures for plant development.
+Implemented in: `sarra_py/data_preparation.py::calc_day_length_raster_fast`,
+`sarra_py/bilan_pheno.py::update_photoperiodism`.
+
+Day length is computed from date and latitude, then broadcast to the rainfall
+grid. During phase 3, the active code computes:
+
+```text
+thermal_time_since_previous_phase = max(0.01, sdj - seuilTempPhasePrec)
+time_above_critical_day_length = max(0, dureeDuJour - PPCrit)
+sumPP = 100  # on phase-3 entry
+sumPP = (1000 / thermal_time_since_previous_phase) ** PPExp
+        * time_above_critical_day_length / (SeuilPP - PPCrit)
+phasePhotoper = 0 if numPhase == 3 and sumPP < PPsens
+```
+
+Status: **Source-related**. This is related to the sorghum "Impatience" model
+family, but this document does not claim exact implementation of Dingkuhn et
+al. (2008) until the code equation and thresholds are matched to the source.
+
+Open validation point: confirm `PPExp`, `PPsens`, `PPCrit`, `SeuilPP`, the reset
+to 100 and the exact phase timing.
+
+## Water Balance
+
+Implemented in: `sarra_py/bilan_hydro.py::fill_tanks`,
+`compute_total_available_water`, `compute_runoff`, `compute_soil_evaporation`,
+`compute_transpiration`, `ConsoResSep`.
+
+The conceptual balance is:
+
+```text
+stock(d+1) = stock(d) + inputs - runoff - drainage - evaporation - transpiration
+```
+
+The active code uses overlapping reservoirs, so this is not a one-to-one
+identity for a single variable.
+
+Reservoir table:
+
+| Reservoir | Stock variable | Capacity variable | Unit | Inflows | Outflows/bounds | Main update functions |
+|---|---|---|---|---|---|---|
+| Surface reservoir | `surface_tank_stock` | `surface_tank_capacity` | mm | `available_water` after mulch/runoff | soil evaporation, shallow-root transpiration; capped at capacity | `update_surface_tank_stock`, `subtract_evap_from_surface_tank_stock`, `subtract_transpiration_from_surface_tank_stock_according_to_root_tank_stock` |
+| Total/deep reservoir | `total_tank_stock` | `total_tank_capacity` | mm | `eauTranspi`, second-cycle carry-over | drainage, evaporation, transpiration | `update_total_tank_stock`, `compute_drainage`, `subtract_*_from_total_tank_stock` |
+| Root-accessible reservoir | `root_tank_stock` | `root_tank_capacity` | mm | root growth and reservoir filling rules | transpiration and evaporation adjustments | `EvolRurCstr2`, `update_root_tank_stock`, `update_root_tank_stock_step_2` |
+| Humectation front | `humectation_front` | bounded by `total_tank_capacity` | mm equivalent | reservoir filling / carry-over rules | bounds root growth capacity | `apply_humectation_front_boundaries`, end-of-season helpers |
+
+Status: **Code-observed** for the reservoir mechanics. The reservoir approach is
+**Source-related** to SARRA-H/SARRA family water-balance formalisms.
+
+## Soil Evaporation
+
+Implemented in: `sarra_py/bilan_hydro.py::estimate_fesw`,
+`estimate_kce`, `estimate_soil_potential_evaporation`,
+`estimate_soil_evaporation`, `compute_soil_evaporation`.
+
+```text
+fesw = surface_tank_stock / surface_tank_capacity
+kce = ltr * mulch * exp(-coefMc * surfMc * biomMc / 1000)
+evapPot = ET0 * kce
+evap = min(evapPot * fesw**2, surface_tank_stock)
+```
+
+Units: `ET0`, `evapPot`, `evap`, `surface_tank_stock` and
+`surface_tank_capacity` are millimetres for the daily step; `kce` and `fesw`
+are unitless. `estimate_fesw`, `estimate_kce` and
+`estimate_soil_potential_evaporation` write day `j`; `estimate_soil_evaporation`
+propagates `evap` from day `j` onward with `j:`.
+
+### Nonlinear Evaporative Efficiency
+
+The squared `fesw` response can be interpreted as a nonlinear soil evaporative
+efficiency function:
+
+```text
+E_actual = min(E_potential * f(theta), available_surface_water)
+f(theta) = water_availability_index**n
+```
+
+In SARRA-Py:
+
+```text
+water_availability_index = fesw
+n = 2
+```
+
+This is similar in abstract form to power-law bare-soil evaporation reductions
+used in land surface models such as Noah LSM, where direct soil evaporation is
+scaled by normalized top-layer soil water raised to an empirical exponent. In
+that modelling family, an exponent near 2 represents a quadratic decline of
+bare-soil evaporation as the near-surface layer dries.
+
+For SARRA-Py, this remains an interpretation of the active code rather than a
+validated source match. It may be a simple way to represent dry-surface-layer
+effects when the modelled surface reservoir is thicker or more averaged than
+the physically evaporating top millimetres.
+
+### Difference From FAO-56
+
+FAO-56 supports the general concept that soil evaporation decreases as the
+evaporation layer dries. However, the FAO-56 dual crop coefficient method
+commonly expresses stage-2 evaporation reduction through a depletion-based `Kr`
+term using variables such as `De`, `TEW` and `REW`. SARRA-Py does not track
+those FAO-56 variables in this equation.
+
+Status: **Code-observed** for the active `fesw**2` equation; **Source-related,
+not validated** for the Noah-like power-law interpretation; **Source-related**
+only at family level for FAO-56 evaporation reduction concepts. Do not document
+this equation as an exact Noah LSM, FAO-56 or SARRA-H implementation.
+
+Open validation points: exponent `n = 2`, mulch coefficients/units, and
+division by zero when capacities or mulch biomass are zero.
+
+## Transpiration And Water Stress
+
+Implemented in: `sarra_py/bilan_hydro.py::estimate_ftsw`,
+`estimate_pFact`, `estimate_cstr`, `estimate_potential_plant_transpiration`,
+`estimate_plant_transpiration`.
+
+```text
+ftsw = root_tank_stock / root_tank_capacity
+pFact = PFactor + 0.04 * (5 - kcp * ET0)
+pFact = clip(pFact, 0.1, 0.8)
+cstr = clip(ftsw / (1 - pFact), 0, 1)
+trPot = kcp * ET0
+tr_demand = trPot * cstr
+tr = min(tr_demand, max(root_tank_stock, 0))
+root_tank_stock_after_transpiration = max(root_tank_stock - tr, 0)
+```
+
+The transpiration cap uses the root stock after evaporation. If demand is
+5 mm and 3 mm remain available, transpiration is 3 mm and the root stock is
+reduced to 0 mm. This rule was confirmed for SARRA-Py on 2026-10-08.
+
+Status: **Source-related**. [FAO-56, chapter 8](https://www.fao.org/4/X0490E/x0490e0e.htm) gives the `p + 0.04 (5 - ETc)` adjustment and a depletion-based `Ks`. SARRA-Py uses `kcp * ET0` as demand and reservoir filling (`ftsw`) rather than FAO root-zone depletion. This is not an exact FAO-56 implementation.
+
+## Root Reservoir And Humectation Front
+
+Implemented in: `sarra_py/bilan_hydro.py::EvolRurCstr2`,
+`initialize_delta_root_tank_capacity`, `update_delta_root_tank_capacity`,
+`update_root_tank_capacity`, `update_root_tank_stock`.
+
+```text
+delta_root_tank_capacity = vRac / 1000 * ru
+if root_tank_capacity > surface_tank_capacity:
+    delta_root_tank_capacity *= min(cstr + 0.3, 1.0)
+delta_root_tank_capacity =
+    min(delta_root_tank_capacity, humectation_front - root_tank_capacity)
+```
+
+The wetting-front cap has no zero floor in this function. When roots extend
+below the surface reservoir, the following stock updater adds the capacity
+increment to accessible root stock in the same step. Thus the newly accessible
+capacity is treated as filled at this point in the code. It remains unknown
+whether this should represent water already present in newly explored soil.
+
+Status: **Source-related** to SARRA-H reservoir and humectation-front
+formalisms at family level; exact stock/capacity updates are **Code-observed**.
+
+Open validation point: `update_root_tank_stock` mixes stock and capacity terms,
+including adding `delta_root_tank_capacity` to `root_tank_stock`.
+
+## Runoff, Drainage And Crop-Residue Mulch
+
+Implemented in: `sarra_py/bilan_hydro.py::estimate_runoff`,
+`compute_runoff`, `compute_water_captured_by_mulch`,
+`update_available_water_after_mulch_filling`, `update_mulch_water_stock`,
+`fill_mulch`, `estimate_kce`, `estimate_FEMcW_and_update_mulch_water_stock`,
+`compute_drainage`.
+
+Runoff:
+
+```text
+if rain > runoff_threshold:
+    candidate = max((available_water - runoff_threshold) * runoff_rate, 0)
+    runoff = min(candidate, max(available_water, 0))
+else:
+    runoff = 0
+```
+
+Status: **Code-observed**. The trigger uses rainfall while the amount uses
+`available_water`, which can include irrigation and post-mulch adjustments.
+
+**Runoff bounds in version 0.2.0.** The previous amount
+was unbounded. With 30 mm of rainfall, a 20 mm threshold, a runoff rate of
+0.27 and 28.50639 mm intercepted by mulch, it produced -4.99673 mm of runoff.
+Subtracting that negative amount increased available water artificially.
+The corrected equation bounds runoff between zero and the nonnegative water
+remaining after interception. For this case, runoff is now 0 mm and 1.49361 mm
+remain available. The rainfall trigger and the coefficient formula are
+retained; the bounds apply in both calculation engines. Missing values remain
+missing in the amount calculation. Regression tests cover the mulched case,
+ordinary runoff, the rainfall trigger and the upper water-availability bound.
+
+Open scientific question: whether the trigger should use rainfall or water
+remaining after interception, especially when irrigation is present.
+
+### Crop-Residue Mulch Formalism
+
+The active mulch module represents three Scopel-style residue effects:
+interception and storage of incoming water, reduction of soil evaporation by
+cover/radiation interception, and indirect runoff reduction because runoff is
+computed after mulch interception has reduced `available_water`.
+
+```text
+mulch_cover = 1 - exp(-surfMc / 1000 * biomMc)
+
+water_captured_by_mulch =
+    min(
+        available_water * mulch_cover,
+        humSatMc * biomMc / 10000 - mulch_water_stock
+    )
+
+kce = ltr * mulch * exp(-coefMc * surfMc * biomMc / 1000)
+```
+
+Units observed in code and metadata: `available_water`,
+`water_captured_by_mulch` and `mulch_water_stock` are millimetres for the daily
+step; `biomMc` metadata says kg ha-1; `kce` and `mulch` are unitless. The units
+of `surfMc`, `coefMc` and `humSatMc`, and the `/1000` and `/10000` conversions,
+should be verified against the parameter source.
+
+| Concept | Scopel-style role | SARRA-Py variable or expression | Status | Notes |
+|---|---|---|---|---|
+| Surface residue biomass | Amount of residue mulch on the soil surface | `biomMc` | Code-observed | Metadata says kg ha-1. |
+| Exponential residue cover | Converts residue biomass to cover/interception fraction | `1 - exp(-surfMc / 1000 * biomMc)` | Source-related | Strongly consistent with empirical residue-cover formalisms; coefficients need unit validation. |
+| Incoming water intercepted by residue | Rainfall-oriented residue interception | `available_water * mulch_cover` | Source-related | SARRA-Py uses `available_water`, which may include rainfall plus irrigation. |
+| Maximum residue water storage | Water-holding capacity of residues | `humSatMc * biomMc / 10000` | Source-related | `/10000` conversion should be verified. |
+| Current residue water stock | Water stored in mulch | `mulch_water_stock` | Code-observed | Propagated from day `j` onward after filling/evaporation updates. |
+| Captured water | Storage-limited intercepted water | `min(available_water * cover, max_storage - mulch_water_stock)` | Source-related | Can become negative if stock exceeds nominal storage; needs validation. |
+| Mulch evaporation | Evaporation from residue water stock | `mulch_water_stock -= ltr * ET0 * FEMcW**2` | Source-related | `FEMcW` denominator can divide by zero when `biomMc == 0`. |
+| Radiation / soil evaporation reduction | Residue cover reduces soil evaporation coefficient | `exp(-coefMc * surfMc * biomMc / 1000)` inside `kce` | Source-related | Combined with canopy `ltr` and static `mulch` factor. |
+| Runoff reduction | Residues reduce runoff by intercepting incoming water first | runoff uses post-mulch `available_water` | Code-observed indirect effect | Runoff trigger still uses `rain > runoff_threshold`. |
+
+Status: **Source-related, relatively high confidence**, for relationship with
+the empirical crop-residue mulch module described by Scopel et al. (2004),
+especially exponential residue cover, storage-limited interception and mulch
+effects on evaporation/runoff. It is not documented as an exact Scopel/STICS
+implementation because coefficients, unit conversions and update order have not
+been fully matched.
+
+Open validation point: Scopel et al. describe residue interception primarily
+for rainfall, while SARRA-Py applies the interception term to `available_water`,
+which may include irrigation. Validate irrigated and saturated-mulch scenarios
+before strengthening the source claim.
+
+## Carbon Balance
+
+Implemented in: `sarra_py/bilan_carbo.py::estimate_ltr`,
+`estimate_KAssim`, `estimate_conv`, `update_assimPot`, `update_assim`,
+`calculate_maintainance_respiration`, `update_total_biomass`.
+
+Light interception and potential assimilation:
+
+```text
+ltr = exp(-kdf * lai)
+PAR = 0.5 * rg
+conversion = txConversion if NI is defined, else conv
+assimPot = PAR * (1 - exp(-kdf * lai)) * conversion * 10
+```
+
+Water stress on assimilation:
+
+```text
+assim = assimPot * tr / trPot  # when trPot > 0
+assim = 0                      # when trPot <= 0
+```
+
+Maintenance respiration and total biomass:
+
+```text
+respMaint = kRespMaint * (biomasseTotale + biomasseFeuille)
+            * 2**((tpMoy - tempMaint) / 10)
+respMaint = 0 if numPhase > 4 and biomasseFeuille == 0
+biomasseTotale(d+1) = biomasseTotale(d) + assim - respMaint
+```
+
+The [SARRA-H formalism](https://sarra-h.teledetection.fr/?page_id=13) describes Beer-law light interception, a PAR fraction of 0.5, a Q10 factor of 2 and extra leaf weighting in maintenance respiration. The phase-5 zero-leaf exception and the precise biomass pool are implementation details that still need scientific review.
+
+Status: **Source-related** for Beer-Lambert interception and big-leaf /
+radiation-use-efficiency crop modelling. The PAR fraction `0.5`, the conversion
+factor `10`, phase-dependent `KAssim` and `NI` response are **Code-observed**
+SARRA-Py details requiring calibration/source confirmation.
+
+Open validation point: `assimPot` metadata says kg ha-1, while the equation and
+daily loop imply a daily flux. Confirm whether to document kg ha-1 day-1 or the
+historical SARRA unit convention.
+
+## Biomass Partition, LAI And Yield
+
+Implemented in: `sarra_py/bilan_carbo.py::update_aboveground_biomass`,
+`update_root_biomass`, `EvalFeuilleTigeSarrahV4`,
+`calculate_canopy_specific_leaf_area`, `calculate_leaf_area_index`,
+`update_potential_yield`, `update_potential_yield_delta`,
+`estimate_reallocation`, `update_yield_during_filling_phase`.
+
+Aboveground biomass during phases 2-4:
+
+```text
+biomasseAerienne =
+    min(0.9, aeroTotPente * biomasseTotale + aeroTotBase)
+    * biomasseTotale
+```
+
+Root biomass:
+
+```text
+biomasseRacinaire = biomasseTotale - biomasseAerienne
+```
+
+Leaf/stem partitioning uses empirical phase-dependent rules, including:
+
+```text
+bM = feuilAeroBase - 0.1
+cM = ((feuilAeroPente * 1000) / bM + 0.78) / 0.75
+biomasseFeuille =
+    (0.1 + bM * cM ** ((biomasseAerienne - rdt) / 1000))
+    * (biomasseAerienne - rdt)
+biomasseTige = biomasseAerienne - biomasseFeuille - rdt
+```
+
+SLA is updated from old/new leaf biomass ratios and clipped to
+`[slaMin, slaMax]`. The active LAI updater uses:
+
+```text
+lai = biomasseFeuille * sla  # phases 2-6
+lai = 0                      # phases <= 1 or > 6
+```
+
+Potential yield at phase-5 entry:
+
+```text
+delta = biomTotStadeFloraison - biomTotStadeIp
+rdtPot = KRdtPotA * delta + KRdtPotB + KRdtBiom * biomTotStadeFloraison
+if phaseDevVeg < 6: rdtPot = min(rdtPot, 2 * biomasseTige)
+```
+
+Daily potential filling demand:
+
+```text
+dRdtPot = max(
+    rdtPot * (ddj / SDJMatu1) * (tr / trPot),
+    respMaint * 0.15
+)  # phase 5 and trPot > 0; otherwise the daily demand is zero
+```
+
+The SARRA-H formalism relates yield potential to biomass gained between
+panicle initiation and flowering, and grain filling to thermal time.
+The additional `KRdtBiom` term, stem-biomass cap and
+`0.15 * respMaint` floor are documented from the active code;
+an exact public source match has not been established.
+
+Yield filling:
+
+```text
+rdt = rdt + min(dRdtPot, max(0, deltaBiomasseAerienne) + reallocation)
+```
+
+Status: **Code-observed**. These equations are SARRA-Py/SARRA-H related, but
+this document does not claim a verified public equation match for potential
+yield, daily filling demand or empirical leaf/stem coefficients.
+
+Open validation points: empirical coefficients, zero-biomass divisions in SLA,
+division by `trPot`, and scientific source for yield-demand equations.
+
+## Nitrogen Indicator
+
+Implemented in:
+`sarra_py/bilan_carbo.py::estimate_critical_nitrogen_concentration`.
+
+```text
+Ncrit = 5.35 * (biomasseTotale / 1000)**(-0.44)
+```
+
+If `biomasseTotale` is kg ha-1, division by 1000 converts it to t ha-1.
+The power law is evaluated only for positive biomass. `Ncrit` is `NaN` at zero
+or negative biomass, where the dilution curve is undefined. The code does not
+assign units to `Ncrit`, and no downstream agronomic use was identified in the
+current daily loop beyond storing the diagnostic value.
+
+Status: **Source-related** only. The equation resembles critical nitrogen
+dilution curves such as Justes et al. (1994), but the coefficient, exponent,
+crop scope and total-biomass basis must be confirmed before calling it an exact
+implementation. Treat `Ncrit` as an internal indicator until units and use are
+validated.
+
+Open validation point: confirm the coefficient, exponent, biomass pool and
+units of the positive-biomass curve. Zero and negative biomass are intentionally
+represented as `NaN`.
+
+## Data Preparation Formalisms
+
+Implemented in: `sarra_py/data_preparation.py` and
+`sarra_py/remote_data.py`. File format and source units determine the
+preparation route; the daily model receives the same named variables either way.
+
+- In the local GeoTIFF workflow, dated TAMSAT rainfall files establish `rain`,
+  the daily dates and the target grid. The AgERA5 adapter adds `tpMoy`, `ET0`
+  and `rg` on that grid. It divides the local radiation raster values by
+  `1000`, assuming those files contain kJ m-2 day-1.
+- In the downloaded NetCDF workflow, `prepare_remote_inputs` reads TAMSAT
+  `rfe_filled` and AgERA5 v2 fields. It converts mean temperature from K to
+  degrees C and radiation from J m-2 day-1 to MJ m-2 day-1 by dividing by
+  `1_000_000`. The AgERA5 fields are reprojected to the TAMSAT grid. This
+  route uses the AgERA5 v2 Penman-Monteith ET0 product.
+- Soil preparation derives the required gridded fields from the configured
+  soil assets. A caller can instead supply a prepared `xarray.Dataset` with
+  the required weather and soil variables; `run_simulation` does not
+  reproject that dataset.
+- Day length is computed from date and latitude when `dureeDuJour` is absent.
+  The helper uses longitude 0.0 and broadcasts the result to the grid.
+
+Status: **Code-observed** for file handling and conversions. The assumed units
+of local preprocessed files, provenance of soil assets and suitability of the
+chosen resampling method remain validation points. See the
+[API input contract](usage_api_cli.md#input-contract) and
+[spatialization strategy](spatialization_strategy.md) for the run boundary.
+
+## References And Source Status
+
+References below are grouped by use. Bibliographic details marked TODO should
+be verified before adding exact titles, DOIs, URLs or page numbers.
+
+### Direct SARRA Or SARRA-H Sources
+
+- [SARRA-H/O formalism](https://sarra-h.teledetection.fr/?page_id=13): primary model documentation for the reservoir concept, canopy light interception, maintenance respiration and phenological response shapes. The active SARRA-Py equations remain checked against code separately.
+- Dingkuhn et al. 2003; Baron et al. 2005; Kouressy et al. 2008; Lalou et al.
+  2019. TODO: verify bibliographic details and which equations correspond to
+  active SARRA-Py functions before citing as exact sources.
+
+### FAO And Water Stress
+
+- Allen, Pereira, Raes and Smith (1998), FAO Irrigation and Drainage Paper 56.
+  Used as **Source-related** for p-factor, `Ks`-like stress, dual crop
+  coefficient and soil-evaporation reduction families, not as an exact
+  implementation claim.
+
+### Land Surface Soil Evaporation
+
+- Noah LSM soil evaporation formalism. TODO: verify exact bibliographic details
+  and equation form before adding a precise citation. Used here only as
+  **Source-related** context for power-law direct soil evaporation reductions
+  based on normalized top-layer soil water, not as an implementation claim.
+
+### Photoperiodism
+
+- Dingkuhn et al. (2008). Used as **Source-related** for the sorghum
+  "Impatience" model family.
+- Folliard et al. 2004. TODO: verify details before citing beyond family-level
+  context.
+
+### Mulch
+
+- Scopel, E., Da Silva, F. A. M., Corbeels, M., Affholder, F. and Maraux, F.
+  (2004). Modelling crop residue mulching effects on water use and production
+  of maize under semi-arid and humid tropical conditions. Agronomie, 24,
+  383-395. Used as **Source-related** for crop-residue interception, mulch
+  evaporation, radiation interception and runoff-reduction concepts; not as an
+  exact SARRA-Py equation match.
+- Ranaivoson et al. 2017. TODO: verify details before using beyond broad mulch
+  context.
+
+### Radiation And Biomass
+
+- Monteith (1977); Sinclair and Muchow (1999). Used as broad
+  **Source-related** references for radiation-use-efficiency and big-leaf
+  modelling concepts, not for SARRA-Py conversion factors.
+
+### Nitrogen
+
+- Justes et al. (1994). Used as **Source-related** for critical nitrogen
+  dilution curves. The active SARRA-Py `Ncrit` equation is not documented here
+  as an exact implementation.
+
+## Water-input and root-growth conventions
+
+The following conventions are shared by the NumPy and xarray engines.
+
+### Prescribed and automatic irrigation
+
+`irrigation[t]` is the prescribed daily water input in mm. It is applied even
+when `irrigAuto=False` and outside active crop phases. Without an input series,
+the public API supplies zero irrigation. Daily rainfall plus `irrigTotDay`
+provides water to the existing interception and infiltration routines.
+
+With automatic irrigation enabled, the existing scheduling rule is retained.
+For crop phases 1 through 5 and a tank filling fraction below `irrigAutoTarget`:
+
+```text
+automatic_supplement = min(max(0.9 * (capacity - stock) - irrigation, 0), maxIrrig)
+irrigTotDay = irrigation + automatic_supplement
+```
+
+Otherwise the automatic supplement is zero. `maxIrrig` caps the automatic
+supplement, not the prescribed dose. The decision precedes today's rainfall
+and does not directly compensate today's evapotranspiration. An undefined
+filling fraction in an empty inactive tank does not trigger supplementation.
+
+### Initial soil water
+
+`stockIniSurf` and `stockIniProf` are the initial water stocks (mm) in the
+surface and deeper soil compartments, respectively. Initialization now sets:
+
+```text
+surface_tank_stock = stockIniSurf
+total_tank_stock = stockIniSurf + stockIniProf
+```
+
+The previous total stock and initial humectation front use this total.
+The surface and root reservoirs overlap: root storage must not be added to
+this sum. Root-accessible storage continues to follow the existing root
+initialization and daily access rules. Previously the surface input was
+ignored; nonzero initial surface moisture can now affect sowing and growth.
+
+### Rainfall GeoTIFF missing values
+
+Both local TAMSAT GeoTIFF loaders decode the file's declared NoData value,
+including finite sentinels such as -9999, to `NaN`. Existing NaNs remain missing.
+They do not interpolate missing rain or replace it with dry weather (zero).
+Valid zero rainfall remains zero. An undeclared finite sentinel cannot be
+identified automatically and must be corrected in the source dataset.
+
+### Phase-6 rooting
+
+`update_root_growth_speed` now applies the cultivar parameter `VRacMatu2`
+(mm/day) during phase 6, following the owner's explicit confirmation. Previously
+phase 6 inherited the last phase-5 speed. For example, `VRacMatu1=25` and
+`VRacMatu2=2` now select 2 rather than 25 mm/day in phase 6. Phases 0 and 7
+retain zero speed. Existing soil-depth and root-access limits still apply.

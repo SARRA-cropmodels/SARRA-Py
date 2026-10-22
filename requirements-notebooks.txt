@@ -1,0 +1,13 @@
+# Optional environment for the repository example notebooks.
+jupyterlab
+ipywidgets
+ipython
+cftime
+geopandas
+joblib
+plotly
+scipy
+scikit-learn
+seaborn
+statsmodels
+bayesian-optimization

@@ -211,9 +211,11 @@ def compute_daily_irrigation(j, data, paramITK):
     to the irrigation tank. If the above conditions are not met, the computed
     value is 0.
 
-    Then, we calculate the total irrigation of the day by summing the estimated
-    irrigation need (`irrigation`) with the previous irrigation history of the
-    day (`irrigTotDay`).
+    Prescribed irrigation (`irrigation`, mm/day) is always applied. The
+    automatic supplement subtracts this prescribed dose from 90% of the tank
+    deficit before clipping to [0, maxIrrig]. Their sum is `irrigTotDay`.
+    This reservoir-filling rule is evaluated before today's rainfall; it does
+    not directly compensate today's evapotranspiration.
 
     Note : the logic of this function has not yet been validated in SARRA-Py, as
     simulations are mainly based on rainfed conditions.
@@ -227,11 +229,15 @@ def compute_daily_irrigation(j, data, paramITK):
         data: A xarray dataset with the updated irrigationTotDay field.
     """
 
+    # Empty inactive tanks have an undefined filling ratio; they do not trigger
+    # automatic irrigation. Preserve that decision without a 0/0 warning.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        filling_ratio = (data["irrigation_tank_stock"][j, :, :] /
+                         data["irrigation_tank_capacity"][j, :, :])
     condition = (data["irrigAuto"][j, :, :] == True) & \
         (data["numPhase"][j, :, :] > 0) & \
         (data["numPhase"][j, :, :] < 6) & \
-        (data["irrigation_tank_stock"][j, :, :] / data["irrigation_tank_capacity"][j,:,:] \
-            < paramITK["irrigAutoTarget"])
+        (filling_ratio < paramITK["irrigAutoTarget"])
         
     data["irrigTotDay"][j, :, :] = xr.where(
         condition,
@@ -257,9 +263,11 @@ def compute_irrigation_state(j, data, paramITK):
     """
     This wrapper function computes the irrigation state for a given day,
     including the size and filling of the irrigation tank and the irrigation
-    demand. It is computed only if `paramITK["irrigAuto"] == True` ; this means
-    that irrigAuto shall be the same all over the grid, which is a reasonable
-    assumption
+    demand. Prescribed irrigation is applied independently of `irrigAuto`.
+    Automatic tank updates and supplementation run only when
+    `paramITK["irrigAuto"] == True`; that management switch is grid-wide.
+    Without automatic mode, an absent irrigation field means zero irrigation
+    for callers of the lower-level daily routines.
 
     It has been Translated from the procedure EvalIrrigPhase, of the original
     Pascal codes bileau.pas and exmodules2.pas. Calculation precision is not
@@ -289,6 +297,11 @@ def compute_irrigation_state(j, data, paramITK):
         data = update_irrigation_tank_stock(j, data)
         data = update_irrigation_tank_capacity(j, data)
         data = compute_daily_irrigation(j, data, paramITK)
+    else:
+        # Assign the prescribed daily dose once, including outside crop phases.
+        data["irrigTotDay"][j, :, :] = (
+            data["irrigation"][j, :, :] if "irrigation" in data else 0
+        )
 
     return data
 
@@ -328,43 +341,18 @@ def compute_total_available_water(j, data):
 
 
 def compute_water_captured_by_mulch(j, data, paramITK):
-    """
-    This function computes the height of water captured by the mulch.
-    
-    For this, we multiply the 'available_water' (rain + irrigation, in mm) by an
-    exponential function taking both into consideration the mulch covering
-    capacity (surfMc, ha/t) and mulch biomass (biomMc, kg/ha), representing the
-    fraction of soil covered by mulch. If the fraction is 0 (no mulch), the
-    value of water_captured_by_mulch is 0. 
-    
-    The value of water_captured_by_mulch is bounded by the maximum capacity of
-    the mulch to gather water (humSatMc, kg H2O/kg biomass), minus stock of
-    water already present in it (mulch_water_stock, mm).
+    """Estimate incoming water intercepted by crop-residue mulch.
 
-    Note : the logic of this function has not yet been validated in SARRA-Py, as
-    simulations are mainly based on situations without mulch.
+    ``cover = 1 - exp(-surfMc / 1000 * biomMc)``
+    ``captured = min(available_water * cover, humSatMc * biomMc / 10000 - mulch_water_stock)``
 
-    Notes from CB, 2014 :
-    Hypotheses : A chaque pluie, on estime la quantité d'eau pour saturer le
-    couvert. On la retire à l'eauDispo (pluie + irrig). On calcule la capacité
-    maximum de stockage fonction de la biomasse et du taux de saturation
-    rapportée en mm (humSatMc en kg H2O/kg de biomasse). La pluie est en mm : 1
-    mm = 1 litre d'eau / m2 1 mm = 10 tonnes d'eau / hectare = 10 000 kg/ha La
-    biomasse est en kg/ha pour se rapporter à la quantité de pluie captée en mm
-    Kg H2O/kg Kg/ha et kg/m2 on divise par 10 000 (pour 3000 kg/ha à humSat 2.8
-    kg H2O/kg on a un stockage max de 0.84 mm de pluie !?) Cette capacité à
-    capter est fonction du taux de couverture du sol calculé comme le LTR SurfMc
-    est spécifié en ha/t (0.39), on rapporte en ha/kg en divisant par 1000 On
-    retire alors les mm d'eau captées à la pluie incidente. Le ruisselement est
-    ensuite calculé avec l'effet de contrainte du mulch
+    Water variables are daily millimetres; `biomMc` metadata says kg/ha. Mutates
+    `data["water_captured_by_mulch"]` for day `j` only.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed equation, strongly source-related to the
+    Scopel et al. (2004) empirical crop-residue interception/storage formalism.
+    SARRA-Py uses `available_water`, which may include irrigation, so this is
+    not an exact Scopel/STICS implementation.
     """
 
     data["water_captured_by_mulch"][j,:,:] = np.minimum(
@@ -376,22 +364,13 @@ def compute_water_captured_by_mulch(j, data, paramITK):
 
 
 def update_available_water_after_mulch_filling(j, data):
-    """
-    This function updates available water after mulch filling.
-    
-    As some water is captured by the mulch (rain or irrigation water falling on
-    it), the available_water is updated by subtracting the captured water
-    (water_captured_by_mulch, mm) from the total available water
-    (available_water, mm), to represent the remaining available water after
-    capture by the mulch. This value is bounded by 0, as the available water
-    cannot be negative.
+    """Subtract mulch-intercepted water from daily available water.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
+    `available_water` and `water_captured_by_mulch` are daily millimetres. The
+    remaining water is bounded at zero and propagated from day `j` onward.
 
-    Returns:
-        _type_: _description_
+    Source status: code-observed; related to Scopel-style residue interception,
+    with SARRA-Py using rainfall plus irrigation when present.
     """
 
     data["available_water"][j:,:,:] =  np.maximum(data["available_water"][j,:,:] - data["water_captured_by_mulch"][j,:,:], 0) 
@@ -400,17 +379,13 @@ def update_available_water_after_mulch_filling(j, data):
 
 
 def update_mulch_water_stock(j, data):
-    """
-    This function updates the water stock in mulch.
+    """Add intercepted water to the crop-residue mulch water stock.
 
-    The water stock in mulch is updated by adding the captured water (water_captured_by_mulch, mm)
+    `water_captured_by_mulch` and `mulch_water_stock` are millimetres. The
+    updated stock is propagated from day `j` onward.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed stock update, strongly source-related to
+    Scopel et al. (2004) residue water-storage concepts.
     """
 
     data["mulch_water_stock"][j:,:,:] = (data["mulch_water_stock"][j,:,:] + data["water_captured_by_mulch"][j,:,:])
@@ -421,14 +396,13 @@ def update_mulch_water_stock(j, data):
 
 def fill_mulch(j, data, paramITK):
 
-    """
-    This wrapper function computes the filling of the mulch for a given day.
+    """Run daily crop-residue interception and mulch-stock filling.
 
-    It has been translated from the procedure PluieIrrig, of the original Pascal codes
-    bileau.pas and exmodules2.pas
+    The sequence intercepts `available_water`, subtracts captured water before
+    runoff, and stores it in `mulch_water_stock`.
 
-    For more details, it is advised to refer to the works of Eric Scopel (UR
-    AIDA), and the PhD dissertation of Fernando Maceina. 
+    Source status: source-related to Scopel et al. (2004) crop-residue mulch
+    effects; exact coefficients and unit conversions remain SARRA-Py details.
     """
 
     data = compute_water_captured_by_mulch(j, data, paramITK)
@@ -439,29 +413,23 @@ def fill_mulch(j, data, paramITK):
 
 
 def estimate_runoff(j, data):
-    """
-    This function evaluates the water runoff (mm).
-    
-    If the quantity of rain (mm) is above the runoff_threshold (mm), runoff is
-    computed as the difference between the available water (mm) and the
-    runoff_threshold  multiplied by the runoff_rate (%). Else, runoff value is
-    set to 0.
+    """Estimate daily runoff from a rainfall threshold and runoff fraction.
 
-    runoff_threshold and runoff_rate are defined in load_iSDA_soil_data
-    
-    Question : should runoff be computed taking in consideration water captured by
-    mulch to account for mulch effect on runoff mitigation ?
+    The rainfall threshold triggers runoff. The amount is bounded between
+    zero and the nonnegative water remaining after mulch interception.
+    See docs/model_formalisms.md for the equation and correction history.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-    Returns:
-        _type_: _description_
+    Source status: code-observed. The rainfall trigger versus available-water
+    amount remains an open validation point.
     """
     
+    available = data["available_water"][j,:,:]
+    candidate = np.maximum(
+        (available - data["runoff_threshold"]) * data["runoff_rate"], 0,
+    )
     data["runoff"][j,:,:] = xr.where(
         data["rain"][j,:,:] > data["runoff_threshold"],
-        (data["available_water"][j,:,:]  - data["runoff_threshold"]) * data["runoff_rate"],
+        np.minimum(candidate, np.maximum(available, 0)),
         0,
     )
 
@@ -487,22 +455,11 @@ def update_available_water_after_runoff(j, data):
 
 
 def compute_runoff(j, data):
-    """
-    Translated from the procedure PluieIrrig, of the original Pascal codes
-    bileau.pas, exmodules1.pas and exmodules2.pas
+    """Run daily runoff and subtract it from available water.
 
-    Notes from CB, 2014 :
-    On a regroupé avant la pluie et l'irrigation (a cause de l'effet Mulch)
-    si mulch on a enlevé l'eau captée
-    oN CALCUL SIMPLEMENT LE RUISSELLEMENT EN FN DE SEUILS
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramTypeSol (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    The wrapper is called after mulch interception, so residue cover can reduce
+    runoff indirectly by reducing `available_water`. The rainfall threshold
+    trigger itself is unchanged.
     """
 
     data = estimate_runoff(j, data)
@@ -595,6 +552,9 @@ def initialize_delta_root_tank_capacity(j, data):
 
     Returns:
         xarray.Dataset: The updated input data with the daily root capacity variation calculated and stored.
+
+    Source status: SARRA-H-related rooting concept; the 0.3 offset is
+    code-observed and needs calibration provenance.
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
@@ -644,6 +604,9 @@ def update_delta_root_tank_capacity(j, data):
     Args:
         j (_type_): _description_
         data (_type_): _description_
+
+    Code-observed: this cap has no zero floor when the front is behind
+    the current root capacity.
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
@@ -702,81 +665,33 @@ def update_root_tank_capacity(j, data):
 
 
 def update_root_tank_stock(j, data):
-    """
-    This functions update the quantity of water of the root tank ('root_tank_stock', mm).
-        
-    For each pixel at a developmental stage different from zero, and that is not
-    at initialization phase ('changePhase = 1' and 'numPhase = 1'), and for
-    which the 'root_tank_capacity' is greater than 'surface_tank_capacity' (meaning
-    that roots go beyond the surface water storage capacity), 'root_tank_stock'
-    is incremented by delta_root_tank_capacity.
-    
-    However, if 'root_tank_capacity' is lesser than 'surface_tank_capacity' (meaning
-    that roots do not plunge into the deep reservoir), 'root_tank_stock' is
-    updated to be equal to surface_tank_stock minus 1/10th of the
-    surface_tank_capacity, multiplied by the ratio between root_tank_capacity
-    and surface_tank_capacity. That is to say "we take at the prorata of depth
-    and surface stock".
-    
-    For any other day, root_tank_stock is unchanged.
+    """Update the water stock considered accessible to roots.
 
-    ? Why is the tank stock incremented instead of root tank capacity ? If the
-    ? root tank capacity is incremented, that makes sense as we add to the root
-    ? tank capacity the capacity newly gained through delta_root_tank_capacity.
-    ? There is no sense in incrementing the root tank stock with the
-    ? delta_root_tank_capacity, as the delta root tank capacity, representing
-    ? growing of roots is independant of the quantity of water in the soil.
-    ? However, the delta root tank capacity is blocked by hum the humidity front.
-    ? Still, humidity front only grows and limits the maximum growth of roots, and
-    ? is not involved in root water stock.
- 
-    ? Also, if the roots do not go in the deep reservoir, there is an increase in
-    ? root tank stock. Considering this is a mistake and that root_tank_capacity
-    ? should be increased, this would mean root tank capacity is increased by a
-    ? value that depends on the filling of the surface tank first
-    ? (surface_tank_stock minus 1/10th of the surface_tank_capacity, that would be
-    ? about the bound water), times the ratio between root_tank_capacity and
-    ? surface_tank_capacity. This would mean if when there is few roots the
-    ? increase in root tank capacity is small, and if roots are close to passing
-    ? into the deep reservoir, the increase in root tank capacity nears the
-    ? surface_tank_stock. Again, there is no sense in increasing the root tank
-    ? capacity with such value however this would be ok for root_tank_stock...
- 
-    ? Overall there seems to be a mixup between the objectives of the two parts of
-    ? this function ?
- 
-    ? at the moment this function is applied, root_tank_capacity is already
-    ? updated to take into consideration the root growth from the day, limited by
-    ? both the water stress and the depth of the humectation front. i still do not
-    ? understand why we would increase root tank stock, as we do not have
-    ? supplementary water. it would be like creating water from nowhere.
- 
-    ? so until further notice i will let this function as it is, but i will keep
-    ? in mind that it is probably wrong.
+    For deep roots, the current code adds `delta_root_tank_capacity` to
+    `root_tank_stock`. For shallow roots, it derives accessible stock from the
+    surface reservoir minus 10% bound water, prorated by root capacity.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
+    Source status: code-observed. The stock/capacity mix is an open validation
+    point and should not be treated as scientifically validated.
 
-    Returns:
-        _type_: _description_
+    In the deep-root branch the added capacity enters accessible stock
+    immediately. Whether this represents existing deeper water is unresolved.
     """
 
     condition = (data["numPhase"][j,:,:] > 0) & \
-        np.invert((data["changePhase"][j,:,:] == 1) & (data["numPhase"][j,:,:] == 1)),
+        np.invert((data["changePhase"][j,:,:] == 1) & (data["numPhase"][j,:,:] == 1))
     
 
-    data["root_tank_stock"][j:,:,:] = xr.where(
+    data["root_tank_stock"][j:,:,:] = np.where(
         condition,
-        xr.where(
+        np.where(
             (data["root_tank_capacity"][j,:,:] > data["surface_tank_capacity"]),
             data["root_tank_stock"][j,:,:] + data["delta_root_tank_capacity"][j,:,:],
             np.maximum(
                 ((data["surface_tank_stock"][j,:,:] - data["surface_tank_capacity"] * 1/10) * \
                 (data["root_tank_capacity"][j,:,:] / data["surface_tank_capacity"])),
                 0),
-        ).expand_dims("time", axis=0), 
-        
+        ),
         data["root_tank_stock"][j,:,:],
     )
 
@@ -1625,35 +1540,15 @@ def fill_tanks(j, data):
 
 
 def estimate_fesw(j, data):
-    """
-    This function estimates the fraction of evaporable soil water (fesw, mm).
-    fesw is defined as the ratio of water stock in the surface tank over 110% of
-    the surface tank capacity.
-    
-    It is adapted from the EvalFESW procedure, from bileau.pas and
-    bhytypeFAO.pas files from the original FORTRAN code.
+    """Compute the surface water availability index for soil evaporation.
 
-    Depuis thèse Alhassane : "FESW = fraction d'eau évaporable dans le sol (en
-    %), calculée à partir du taux d'humidité du sol (en %) à la capacité de
-    rétention et 1/2 du taux d'humidité du sol au pF 4.2 (Allen et al., 1998)"
+    ``fesw = surface_tank_stock / surface_tank_capacity``
 
-    in Alhassane thesis, FESW = (Stock CR - 0,5 Stock pF 4,2) x H) so is calculated taking only 
-    half of the surface reservoir 
+    Both reservoir variables are in millimetres; `fesw` is unitless. The
+    function mutates `data["fesw"]` for day `j` only.
 
-    ? Why is it calculated over 110% of surface_tank_capacity ?
-
-    ? it seems the 110% thingy comes from the update_surface_tank_stock
-    ? function where it is allowed to fill the surface tank up to 110% of its
-    ? capacity. but this does not make se,se to me.
-
-    ? in this case, fesw can take values between 0 and 1
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed SARRA-Py index, used by the Noah-like
+    power-law evaporation response. It is not a FAO-56 `Kr` term.
     """
 
     # data["fesw"][j,:,:] = data["surface_tank_stock"][j,:,:] / (1.1 * data["surface_tank_capacity"])
@@ -1666,38 +1561,17 @@ def estimate_fesw(j, data):
 
 
 def estimate_kce(j, data, paramITK):
-    """
-    This function estimates the coefficient of evaporation from the soil (kce).
+    """Estimate the soil-evaporation coefficient.
 
-    This approach takes into consideration three factors acting on limitation of
-    kce :
+    ``kce = ltr * mulch * exp(-coefMc * surfMc * biomMc / 1000)``
 
-    1) ltr : plant cover, 1 = no plant cover, 0 = full plant cover
-    2) Mulch - permanent covering effect : we consider a value of 1.0 for no
-    covering, and 0.0 is full covering with plastic sheet ; this mulch parameter
-    has been used in previous versions of the model where evolution of mulch
-    biomass was not explicitely taken into consideration, can be used in the
-    case of crops with self-mulching phenomena, where a standard mulch parameter
-    value of 0.7 can be applied.
-    3) Mulch - evolutive covering effect BiomMc : biomass of mulch  
+    `kce` is unitless and combines canopy shading, a static mulch factor and an
+    exponential mulch biomass term. The function mutates `data["kce"]` for day
+    `j` only.
 
-    This function has been adapted from EvalKceMC procedure, bileau.pas and
-    exmodules 2.pas from the original FORTRAN code. In its spirit, it looks like
-    it has been adapted from the dual crop coefficient from the FAO56 paper. But
-    this is still to confirm on a point of view of the history of the model.
-
-    Depuis thèse Alhassane : "LTR = fraction de radiation non interceptée par le
-    couvert = [exp(-k*LAI)] où k = coefficient d'extinction de la lumière qui
-    est fonction des propriétés géométriques du couvert et LAI = indice de
-    surface foliaire"
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed equation, strongly source-related to
+    Scopel-style residue effects on radiation interception and soil evaporation;
+    not an exact Scopel/STICS or FAO-56 implementation.
     """
 
     data["kce"][j,:,:] = data["ltr"][j,:,:] * paramITK["mulch"] * \
@@ -1710,28 +1584,14 @@ def estimate_kce(j, data, paramITK):
 
 
 def estimate_soil_potential_evaporation(j, data):
-    """
-    This function computes estimation of potential soil evaporation (mm,
-    evapPot). 
+    """Compute potential soil evaporation for the current day.
 
-    It performs its computations solely from the evaporation forcing driven by
-    climatic demand, limited by the coefficient of evaporation from the soil
-    (kce).
-    
-    Note : difference in humectation of the top and bottom tanks is not taken
-    into consideration in this approach.  The
-  
-    This function has been adapted from DemandeSol procedure, from bileau.pas
-    and exmodules 1 & 2.pas file from the original FORTRAN code.
+    ``evapPot = ET0 * kce``
 
-    in Alhassane thesis, EvapPot = Kmulch x ETo x LTR ; here kce = kmulch x LTR so this formalism is respected
+    `ET0` and `evapPot` are daily water depths in millimetres and `kce` is
+    unitless. The function mutates `data["evapPot"]` for day `j` only.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed.
     """
 
     data["evapPot"][j,:,:] = data["ET0"][j,:,:] * data["kce"][j,:,:]
@@ -1743,44 +1603,18 @@ def estimate_soil_potential_evaporation(j, data):
 
 
 def estimate_soil_evaporation(j, data):
-    """
-    This function computes estimation of soil evaporable water (`evap`, mm). It uses
-    the potential soil evaporation (`evapPot`, mm) and the fraction of evaporable soil
-    water (`fesw`), bounded by the `surface_tank_stock` (mm).
+    """Estimate actual soil evaporation from potential demand and surface water.
 
-    We remind `fesw` is defined as the ratio of water stock in the surface tank
-    over 110% of the surface tank capacity, meaning it will be equal to 1 when
-    the surface tank is full, and 0 when the surface tank is empty.
+    ``evap = min(evapPot * fesw**2, surface_tank_stock)``
 
-    This approach is somewhat comparable to the soil evaporation reduction
-    coefficient kr approach presented in FAO56 paper, to the exception the soil
-    evaporation reduction coefficient kr is built using two linear functions
-    where the squared fesw approach uses a square function. Furthermore, the kr
-    approach function is build using REW and TEW values that are specific to the
-    type of soil, whereas the squared fesw approach uses a generic function that
-    is not soil specific.
+    `evapPot` and `evap` are millimetres for the daily step; `fesw` is unitless
+    and `surface_tank_stock` is in millimetres. The function mutates
+    `data["evap"]` from day `j` onward (`j:`).
 
-    in Alhassane thesis, evap is called EVj for "evaporation journanière", and
-    is calculated as Evj = EvapPot x FESW. More details are available in the PhD
-    dissertation of Alhassane https://hdl.handle.net/20.500.12177/1576 
-    
-    The `estimate_effective_evaporation_from_evaporable_water` function computed
-    later in the daily cycle uses the `evap` value to determine the effective
-    evaporation (`consoRur`, mm) on the quantity of water in the surface tank
-    (`surface_tank_stock`, mm). 
-
-    It has been adapted from the EvapRuSurf procedure, from bileau.pas and
-    exmodules 1 & 2.pas file from the original FORTRAN code.
-
-    ? evaporation is bounded by the surface tank stock, which means it is meant
-    ? to happen only in the depth described by the surface_tank 
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed equation; source-related, not validated, to
+    Noah-like power-law bare-soil evaporative efficiency functions. This is not
+    an exact FAO-56 soil evaporation implementation, and exponent 2 remains
+    empirical.
     """
 
 
@@ -1793,6 +1627,8 @@ def estimate_soil_evaporation(j, data):
 
 
 def compute_soil_evaporation(j, data, paramITK):
+    """Run the daily soil evaporation sequence and mutate the model state."""
+
     data = estimate_fesw(j, data) 
     data = estimate_kce(j, data, paramITK)
     data = estimate_soil_potential_evaporation(j, data)
@@ -1801,26 +1637,17 @@ def compute_soil_evaporation(j, data, paramITK):
     return data
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK):
-    """
-    This function calculates the fraction of evaporable water from the mulch
-    (FEMcW).
+    """Update mulch evaporable-water fraction and mulch water stock.
 
-    If the mulch water stock is greater than 0, then we compute FEMcW, which we
-    consider to be equal to the filling ratio of the mulch water capacity. We
-    then update the mulch water stock by removing the water height equivalent to
-    the climate forcing demand, modulated by FEMcW and the plant cover (ltr).
+    `FEMcW` is the mulch filling ratio. The current code subtracts
+    `ltr * ET0 * FEMcW**2` from `mulch_water_stock`, bounded at zero.
 
-    This function is adapted from the procedure EvapMC, from bileau.pas and
-    exmodules 2.pas file from the original FORTRAN code.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramITK (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed equation, source-related to the mulch
+    evaporation component of Scopel et al. (2004). Zero mulch biomass and unit
+    conversions remain open validation points.
     """
 
     data["FEMcW"][j,:,:] = np.where(
@@ -1844,28 +1671,16 @@ def estimate_FEMcW_and_update_mulch_water_stock(j, data, paramITK):
 
 
 
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def estimate_ftsw(j, data):
-    """
-    This function estimates the fraction of transpirable soil water (ftsw) from
-    the root reservoir. 
+    """Estimate the fraction of transpirable soil water.
 
-    It is based on the EvalFTSW procedure, from the bileau.pas, exmodules 1 &
-    2.pas, risocas.pas, riz.pas files from the original FORTRAN code.
+    ``ftsw = root_tank_stock / root_tank_capacity``
 
-    d'après alhassane thesis, "La fraction d'eau transpirable par la plante ou
-    "fraction of transpirable soil water (FTSW)" a été calculée une fois par
-    semaine durant le cycle de la variété : FTSW = ((Stock - pF4.2)/(RU x
-    profondeur racinaire)) x profondeur racinaire Avec : Stock = stock d'eau du
-    sol dans la zone racinaire (mm), pF4.2 = point de flétrissement et RU =
-    réserve utile (mm/msol). Ces variables sont fonction de la profondeur
-    racinaire, donc de la croissance de la culture"
+    If `root_tank_capacity <= 0`, the current code sets `ftsw` to 0.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed reservoir filling fraction.
     """
 
     data["ftsw"][j:,:,:] = np.where(
@@ -1881,20 +1696,14 @@ def estimate_ftsw(j, data):
 
 
 def estimate_potential_plant_transpiration(j, data):
-    """
-    This function computes the potential transpiration from the plant.
+    """Compute potential plant transpiration.
 
-    Computation is based on the climate forcing (ET0), as well as the kcp coefficient.
+    ``trPot = kcp * ET0``
 
-    This code is based on the DemandePlante procedure, from the bileau.pas, bhytypeFAO.pas, and
-    exmodules 1 & 2.pas files from the original FORTRAN code.
+    `ET0` and `trPot` are daily water depths in millimetres. `kcp` is computed
+    from SARRA-Py canopy state.
 
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: source-related to crop-coefficient transpiration concepts.
     """
     # ggroup 51
     data["trPot"][j,:,:] = (data["kcp"][j,:,:] * data["ET0"][j,:,:])
@@ -1939,67 +1748,17 @@ def estimate_potential_plant_transpiration(j, data):
 
 
 def estimate_pFact(j, data, paramVariete):
-    """_summary_
+    """Estimate the depletion fraction threshold used for water stress.
 
-    This function computes the pFactor, which is a bound coefficient used in the
-    computation of cstr from ftsw. This coefficient delimits the portion of the
-    FTSW below which water stress starts to influence the transpiration.
+    ``pFact = PFactor + 0.04 * (5 - kcp * ET0)``
+    ``pFact = clip(pFact, 0.1, 0.8)``
 
-    FAO reference for critical FTSW value for transpiration response (0 =
-    stomata respond immediately if FTSW<1; 0.5 for most of the crops)
+    This is close to FAO-56 p-factor adjustment, expressed with SARRA-Py
+    reservoir variables. Legacy code bounded `kcp` to at least 1; active code
+    does not.
 
-    pFact is bounded in [0.1, 0.8].
-
-    For details see https://agritrop.cirad.fr/556855/1/document_556855.pdf
-
-    This function is based on the CstrPFactor procedure, from bileau.pas,
-    exmodules 1 & 2.pas, risocas.pas files, from the original FORTRAN code.
-
-    d'après alhassane :
-
-    "Selon Allen et al., (1998), on peut également appliquer la méthode de
-    calculs développée par la FAO, dite du pFactor, basée sur les notions de
-    réserve d'eau facilement utilisable (RFU) et difficilement utilisable (RDU)
-    définies par un point d'inflexion, si on considère que la dynamique de
-    consommation hydrique de la plante diffère selon la demande climatique (ETo)
-    et la fraction d'eau du sol transpirable (FTSW). En effet, pfactor est un
-    coefficient utilisé pour le calcul du taux de transpiration et qui s'obtient
-    en divisant la réserve d'eau du sol utilisable par les racines par la
-    réserve totale disponible dans la zone racinaire de la plante (Allen et al.,
-    1998). On l'obtient également par la formule suivante :
-
-    pfactor = parP + 0,04 x (5 - ETM)
-    
-    Avec : parP = paramètre spécifique à
-    l'espèce, qui exprime le seuil critique d'humidité du sol à partir duquel le
-    stress hydrique réduit linéairement la transpiration (Doorenbos et Kassam,
-    1979)."
-
-    #! this function seems quite arbitrary and would need verifications regarding the underlying assumptions
-
-    ok so this function comes from FAO56 paper, https://www.fao.org/3/x0490e/x0490e0e.htm#chapter%208%20%20%20etc%20under%20soil%20water%20stress%20conditions
-    table 22 annex 2
-
-    FAO56 uses the RAW/TAW formalism where RAW = p TAW 
-    with TAW being the total available water in the root zone TAW = 1000(q FC - q WP) Zr 
-    corresponding to the root tank capacity
-    and RAW being calculated as RAW = p TAW 
-    p average fraction of Total Available Soil Water (TAW) that can be depleted from the root zone before moisture stress (reduction in ET) occurs
-
-    "A value of 0.50 for p is commonly used for many crops"
-    "A numerical approximation for adjusting p for ETc rate is p = pTable 22 + 0.04 (5 - ETc) where the adjusted p is limited to 0.1 £ p £ 0.8 and ETc is in mm/day"
-
-    in the legacy code, ETc is computed with np.maximum(data["kcp"][j,:,:], 1) * data["ET0"][j,:,:]
-    however why is kcp bound to 1 ?
-    there seem to be no reason of keeping this bound.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-        paramVariete (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: source-related to FAO-56 p-factor adjustment, not exact
+    FAO-56 implementation.
     """
     # we keep these lines for legacy reference
     # data["pFact"][j:,:,:] = paramVariete["PFactor"] + \
@@ -2023,31 +1782,14 @@ def estimate_pFact(j, data, paramVariete):
 
 
 def estimate_cstr(j, data):
-    """
-    This function computes the water stress coefficient cstr.
+    """Estimate the daily water-stress coefficient.
 
-    It uses ftsw and pFact. cstr is bounded in [0, 1].
+    ``cstr = clip(ftsw / (1 - pFact), 0, 1)``
 
-    This function is based on the CstrPFactor procedure, from bileau.pas,
-    exmodules 1 & 2.pas, risocas.pas files, from the original FORTRAN code.
+    Related to FAO-56 `Ks`, but uses reservoir filling (`ftsw`) rather than
+    depletion. `estimate_pFact` currently keeps `pFact` below 1.
 
-    in FAO56 paper RAW being calculated as RAW = p TAW and TAW is 
-    p average fraction of Total Available Soil Water (TAW) that can be depleted from the root zone before moisture stress (reduction in ET) occurs
-
-    donc pour avoir la proportion de remplissage correspondant à la limite de stress hydrique, il faut faire
-    1 - pFact
-
-    et donc quand ftsw est inférieur à 1 - pFact, on est en stress hydrique et cstr est inférieur à 1
-    et quand ftsw est au dessus de 1 - pFact, on est pas en stress hydrique et cstr est égal à 1
-
-    en fait cstr correspond au coefficient Ks de FAO56 (figure 42 FAO56)
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: source-related to FAO-56 water-stress coefficient family.
     """
     #group 55
     data["cstr"][j:,:,:] = np.minimum((data["ftsw"][j,:,:] / (1 - data["pFact"][j,:,:])), 1)
@@ -2060,26 +1802,15 @@ def estimate_cstr(j, data):
 
 
 def estimate_plant_transpiration(j, data):
-    """
+    """Scale potential transpiration by water stress.
 
-    This function computes the adjusted plant transpiration (tr, mm) from the
-    plant, by adjusting the potential transpiration (trPot, mm) with cstr.
+    ``tr = trPot * cstr``
 
-    This function adjusts the potential transpiration (trPot, mm) that was
-    calculated through trPot = kcp * ET0, by adding the stress coefficient cstr
-    (that corresponds to Ks in the FAO56 paper) Thus we obtain an adjusted plant
-    transpiration tr, which corresponds to ETc_adj in the FAO56 (see equation
-    80).
+    `trPot` and `tr` are daily water depths in millimetres; `cstr` is
+    dimensionless.
 
-    This function is based on the EvalTranspi procedure, from bileau.pas,
-    bhytypeFAO.pas, exmodules 1 & 2.pas, from the original FORTRAN code.
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-
-    Returns:
-        _type_: _description_
+    Source status: code-observed, source-related to stress-adjusted
+    transpiration concepts.
     """
 
     data["tr"][j:,:,:] = data["trPot"][j,:,:] * data["cstr"][j,:,:]
@@ -2088,6 +1819,8 @@ def estimate_plant_transpiration(j, data):
 
 
 def compute_transpiration(j, data, paramVariete):
+    """Run the daily transpiration and water-stress calculation sequence."""
+
     # we can take out the estimate_kcTot function
 
     data = estimate_ftsw(j, data)
@@ -2291,45 +2024,24 @@ def subtract_effective_evaporation_from_root_tank_stock(j, data):
 
 
 def update_plant_transpiration(j, data):
+    """Limit actual transpiration to accessible root water for day j.
+
+    At this point tr is demand after stress (trPot * cstr) and the
+    root stock already reflects soil evaporation. If demand exceeds stock,
+    actual transpiration is capped at the nonnegative stock in millimetres.
+
+    The earlier residual expression could turn a 5 mm demand with 3 mm
+    available into 0 mm transpiration; the active cap gives 3 mm.
     """
-    This function updates the value of plant transpiration (`tr`, mm) according
-    to the quantity of water in the root tank (`root_tank_stock`, mm).
-
-    If the transpiration (which as this point on the daily cycle equals `trPot *
-    cstr`) is higher than the root tank stock (which at this point has been
-    updated to reflect the effective evaporation), then plant transpiration is
-    updated to be equal to the difference between the root tank stock and the
-    plant transpiration.
-    
-    Else, its value is unmodified.
-
-    #? However, if this test is true, this always leads to transpiration value = 0.
-    #? We may want to rethink it to check if it does what it was supposed to.
-    
-    #? Instead it would make more sense to bound tr by the value of root tank stock, 
-    #? meaning the maximum quantity of water that can be transpired by the plant 
-    #? is limited by the quantity of water accessible to roots...
-
-    Args:
-        j (_type_): _description_
-        data (_type_): _description_
-    Returns:
-        _type_: _description_
-    """
-
-    data["tr"][j:,:,:] = np.where(
-        data["tr"][j,:,:] > data["root_tank_stock"][j,:,:],
-        np.maximum(data["root_tank_stock"][j,:,:] - data["tr"][j,:,:], 0),
-        #! il peut être intéressant d'introduire dans la prochaine version
-        #! le correctif suivant :
-        # data["root_tank_stock"][j,:,:],
+    data["tr"][j:,:,:] = np.minimum(
         data["tr"][j,:,:],
+        np.maximum(data["root_tank_stock"][j,:,:], 0),
     )
     return data
 
 
-
-
+# NumPy evaluates masked branches before np.where selects valid cells.
+@np.errstate(divide="ignore", invalid="ignore")
 def subtract_transpiration_from_surface_tank_stock_according_to_root_tank_stock(j, data):
 
     """
